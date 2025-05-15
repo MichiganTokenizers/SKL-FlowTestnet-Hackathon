@@ -46,10 +46,23 @@ def add_cors_headers(response):
     return response
 
 # Initialize the database
-def init_db():
+def init_db(force_create=False):
     try:
         with sqlite3.connect('keeper.db') as conn:
             cursor = conn.cursor()
+            
+            if force_create:
+                print("Forcing recreation of all tables...")
+                # Drop existing tables
+                tables = ["sessions", "leagues", "users", "players", "rosters", 
+                          "contracts", "transactions", "traded_picks", "drafts"]
+                for table in tables:
+                    try:
+                        cursor.execute(f"DROP TABLE IF EXISTS {table}")
+                        print(f"Dropped table {table}")
+                    except Exception as e:
+                        print(f"Error dropping table {table}: {str(e)}")
+            
             cursor.execute('''CREATE TABLE IF NOT EXISTS sessions
                               (wallet_address TEXT PRIMARY KEY, session_token TEXT)''')
             cursor.execute('''CREATE TABLE IF NOT EXISTS leagues
@@ -69,6 +82,15 @@ def init_db():
                                name TEXT,
                                position TEXT,
                                team TEXT,
+                               created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                               updated_at DATETIME)''')
+            cursor.execute('''CREATE TABLE IF NOT EXISTS rosters
+                              (sleeper_roster_id TEXT,
+                               league_id TEXT,
+                               owner_id TEXT,
+                               players TEXT,
+                               settings TEXT,
+                               metadata TEXT,
                                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                                updated_at DATETIME)''')
             cursor.execute('''CREATE TABLE IF NOT EXISTS contracts
@@ -117,19 +139,32 @@ def init_db():
 init_db()
 
 def get_current_season():
-    """Retrieve the current season's year and in-season status."""
-    conn = sqlite3.connect('keeper.db')  
-    conn.row_factory = sqlite3.Row         # Allows column name access
-    cursor = conn.cursor()
-    cursor.execute('SELECT CurrentSeason, IsOffseason FROM Season')
-    season = cursor.fetchone()             # Fetch the single row
-    conn.close()
-    if season:
+    """Retrieve the current season's year and in-season status from the season_curr table."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT current_year, IsOffSeason FROM season_curr LIMIT 1')
+        season_data = cursor.fetchone()
+        conn.close()
+        
+        if season_data:
+            return {
+                'year': season_data['current_year'],
+                'is_offseason': season_data['IsOffSeason'] == 1
+            }
+        else:
+            # Default values if season_curr table is not set up
+            return {
+                'year': 2025,
+                'is_offseason': True
+            }
+    except Exception as e:
+        print(f"Error getting current season data: {e}")
+        # Default values in case of error
         return {
-            'year': season['CurrentSeason'],
-            'is_offseason': season['IsOffseason'] == 1
+            'year': 2025,
+            'is_offseason': True
         }
-    return None
 
 def calculate_penalty(contract, current_year, is_offseason):
     """Calculate the penalty for waiving a player based on season status."""
@@ -611,6 +646,9 @@ def fetch_all_data():
         return jsonify({'success': False, 'error': 'No session token'}), 401
     
     try:
+        print(f"DEBUG: Processing /sleeper/fetchAll request, method: {request.method}")
+        print(f"DEBUG: Headers: {request.headers}")
+        
         with sqlite3.connect('keeper.db') as conn:
             cursor = conn.cursor()
             
@@ -618,16 +656,26 @@ def fetch_all_data():
             cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
             session_data = cursor.fetchone()
             if not session_data:
+                print("DEBUG: Invalid session token")
                 return jsonify({'success': False, 'error': 'Invalid session'}), 401
             
             wallet_address = session_data[0]
+            print(f"DEBUG: Wallet address: {wallet_address}")
             
             # Trigger full data pull
-            sleeper_service.fetch_all_data(wallet_address)
+            print("DEBUG: Calling sleeper_service.fetch_all_data()")
+            result = sleeper_service.fetch_all_data(wallet_address)
+            print(f"DEBUG: Result from fetch_all_data: {result}")
+            
+            if not result.get('success', False):
+                print(f"DEBUG: fetch_all_data failed: {result.get('error', 'Unknown error')}")
+                return jsonify(result), 500
             
             return jsonify({'success': True, 'message': 'Full data pull triggered successfully'})
     except Exception as e:
-        print(f"Error in /sleeper/fetchAll: {str(e)}")
+        print(f"ERROR in /sleeper/fetchAll: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
 
 # League local data route
@@ -1017,6 +1065,118 @@ def get_league_users(league_id):
         
     except Exception as e:
         print(f"Error in /sleeper/league/{league_id}/users: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+# Season settings endpoints
+@app.route('/season/settings', methods=['GET'])
+def get_season_settings():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        # Verify session
+        with sqlite3.connect('keeper.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            # Get season settings
+            cursor.execute('SELECT current_year, IsOffSeason, updated_at FROM season_curr LIMIT 1')
+            season_data = cursor.fetchone()
+            
+            if not season_data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No season settings found'
+                }), 404
+            
+            return jsonify({
+                'success': True,
+                'season': {
+                    'year': season_data['current_year'],
+                    'is_offseason': season_data['IsOffSeason'] == 1,
+                    'updated_at': season_data['updated_at']
+                }
+            })
+    except Exception as e:
+        print(f"Error in /season/settings: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+@app.route('/season/settings', methods=['POST'])
+def update_season_settings():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Invalid request data'}), 400
+        
+        year = data.get('year')
+        is_offseason = data.get('is_offseason')
+        
+        if year is None and is_offseason is None:
+            return jsonify({'success': False, 'error': 'No settings provided to update'}), 400
+        
+        # Verify session
+        with sqlite3.connect('keeper.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            # Get current settings
+            cursor.execute('SELECT current_year, IsOffSeason FROM season_curr LIMIT 1')
+            current_settings = cursor.fetchone()
+            
+            if current_settings:
+                # Use current values for any missing parameters
+                if year is None:
+                    year = current_settings['current_year']
+                if is_offseason is None:
+                    is_offseason = current_settings['IsOffSeason'] == 1
+            else:
+                # Default values if no current settings
+                if year is None:
+                    year = 2025
+                if is_offseason is None:
+                    is_offseason = True
+            
+            # Convert is_offseason to integer
+            is_offseason_int = 1 if is_offseason else 0
+            
+            # Update settings
+            cursor.execute('DELETE FROM season_curr')
+            cursor.execute('''
+                INSERT INTO season_curr (current_year, IsOffSeason, updated_at)
+                VALUES (?, ?, datetime("now"))
+            ''', (year, is_offseason_int))
+            
+            conn.commit()
+            
+            return jsonify({
+                'success': True,
+                'message': 'Season settings updated successfully',
+                'season': {
+                    'year': year,
+                    'is_offseason': is_offseason_int == 1
+                }
+            })
+    except Exception as e:
+        print(f"Error in update_season_settings: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500

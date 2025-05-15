@@ -159,6 +159,21 @@ class SleeperService:
                 # Step 2: Process each league
                 for league in leagues:
                     league_id = league.get("league_id")
+                    print(f"DEBUG: Processing league {league_id}")
+                    
+                    # Get current season and off-season status from season_curr table
+                    cursor.execute('SELECT current_year, IsOffSeason FROM season_curr LIMIT 1')
+                    season_data = cursor.fetchone()
+                    
+                    if season_data:
+                        current_year = season_data[0]
+                        is_off_season = season_data[1]
+                        # Convert numeric is_off_season to text status
+                        season_status = "off" if is_off_season == 1 else "in"
+                    else:
+                        # Default values if season_curr table is not set up
+                        current_year = league.get("season")
+                        season_status = league.get("status")
                     
                     # Store league details
                     cursor.execute('''
@@ -176,8 +191,8 @@ class SleeperService:
                         league_id,
                         sleeper_user_id,
                         league.get("name"),
-                        league.get("season"),
-                        league.get("status"),
+                        current_year,  # Use value from season_curr
+                        season_status, # Use value from season_curr
                         json.dumps(league.get("settings", {}))
                     ))
                     
@@ -298,6 +313,7 @@ class SleeperService:
                         ))
                 
                 # Step 8: Get and store player data
+                print("DEBUG: Starting player data import...")
                 players_data = self.get_players()
                 if players_data:
                     print(f"DEBUG: Retrieved {len(players_data)} players from Sleeper API")
@@ -307,9 +323,13 @@ class SleeperService:
                     player_ids_on_rosters = set()
                     
                     # Get all roster players
-                    cursor.execute('SELECT players FROM rosters')
-                    roster_players = cursor.fetchall()
-                    print(f"DEBUG: Found {len(roster_players)} roster records")
+                    try:
+                        cursor.execute('SELECT players FROM rosters')
+                        roster_players = cursor.fetchall()
+                        print(f"DEBUG: Found {len(roster_players)} roster records")
+                    except Exception as e:
+                        print(f"DEBUG: Error querying rosters table: {str(e)}")
+                        roster_players = []
                     
                     for roster in roster_players:
                         if roster[0]:
@@ -328,17 +348,47 @@ class SleeperService:
                     print(f"DEBUG: Total unique players found on rosters: {len(player_ids_on_rosters)}")
                     self.logger.info(f"Found {len(player_ids_on_rosters)} players on rosters")
                     
-                    # If no players found on rosters, try to save a few example players
-                    if not player_ids_on_rosters and players_data:
-                        print("DEBUG: No players found on rosters, adding example players")
-                        # Get 5 example player IDs (quarterbacks)
-                        example_players = []
-                        for player_id, player_data in players_data.items():
-                            if player_data.get('position') == 'QB' and len(example_players) < 5:
-                                example_players.append(player_id)
+                    # If no players found on rosters, use a sample set of top players
+                    if not player_ids_on_rosters:
+                        print("DEBUG: No players found on rosters, adding top players")
+                        top_players = []
+                        positions = ['QB', 'RB', 'WR', 'TE']
                         
-                        player_ids_on_rosters = example_players
-                        print(f"DEBUG: Adding {len(example_players)} example players")
+                        # Get top 25 players for each position
+                        for position in positions:
+                            print(f"DEBUG: Selecting top players for position {position}")
+                            count = 0
+                            for player_id, player_data in players_data.items():
+                                if player_data.get('position') == position and count < 25:
+                                    if not player_data.get('active', True):
+                                        continue
+                                    top_players.append(player_id)
+                                    count += 1
+                                    if count >= 25:
+                                        break
+                            print(f"DEBUG: Added {count} {position} players")
+                        
+                        player_ids_on_rosters = top_players
+                        print(f"DEBUG: Adding {len(top_players)} top players")
+                    
+                    # Check if players table exists
+                    try:
+                        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='players'")
+                        table_exists = cursor.fetchone() is not None
+                        if not table_exists:
+                            print("DEBUG: players table doesn't exist, creating it")
+                            cursor.execute('''
+                                CREATE TABLE IF NOT EXISTS players (
+                                    sleeper_player_id TEXT UNIQUE,
+                                    name TEXT,
+                                    position TEXT,
+                                    team TEXT,
+                                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                                    updated_at DATETIME
+                                )
+                            ''')
+                    except Exception as e:
+                        print(f"DEBUG: Error checking/creating players table: {str(e)}")
                     
                     # Insert each player that's on a roster
                     players_added = 0
@@ -363,6 +413,8 @@ class SleeperService:
                                     player_data.get('team'),
                                 ))
                                 players_added += 1
+                                if players_added % 20 == 0:
+                                    print(f"DEBUG: Added {players_added} players so far")
                             except Exception as e:
                                 self.logger.error(f"Error inserting player {player_id}: {str(e)}")
                                 print(f"DEBUG: Error inserting player {player_id}: {str(e)}")
@@ -373,6 +425,7 @@ class SleeperService:
                     self.logger.info(f"Added {players_added} players to the database")
                 else:
                     print("DEBUG: No player data returned from Sleeper API")
+                    return {"success": False, "error": "Could not retrieve player data from Sleeper API"}
                 
                 conn.commit()
                 self.logger.info(f"Successfully fetched and stored all data for user {sleeper_user_id}")
