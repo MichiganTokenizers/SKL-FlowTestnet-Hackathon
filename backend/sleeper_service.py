@@ -1,4 +1,6 @@
 import requests
+import sqlite3
+import json
 from typing import Dict, List, Optional
 import logging
 
@@ -119,4 +121,263 @@ class SleeperService:
             return response.json()
         except requests.exceptions.RequestException as e:
             self.logger.error(f"Error fetching drafts for league {league_id}: {str(e)}")
-            return [] 
+            return []
+    
+    def fetch_all_data(self, wallet_address: str) -> Dict:
+        """
+        Fetch all Sleeper data for a user and store it in the local database.
+        This is the main method called during login and other operations to ensure
+        the local database has up-to-date information from Sleeper.
+        
+        Args:
+            wallet_address: The wallet address of the user
+            
+        Returns:
+            Dict: Result of the operation with success status
+        """
+        try:
+            # Connect to the database
+            with sqlite3.connect('keeper.db') as conn:
+                cursor = conn.cursor()
+                
+                # Get the sleeper_user_id for this wallet address
+                cursor.execute('SELECT sleeper_user_id FROM users WHERE wallet_address = ?', (wallet_address,))
+                user_data = cursor.fetchone()
+                
+                if not user_data or not user_data[0]:
+                    self.logger.warning(f"No Sleeper user ID associated with wallet {wallet_address}")
+                    return {"success": False, "error": "No Sleeper user ID associated with this wallet"}
+                
+                sleeper_user_id = user_data[0]
+                
+                # Step 1: Get user leagues
+                leagues = self.get_user_leagues(sleeper_user_id)
+                if not leagues:
+                    self.logger.warning(f"No leagues found for Sleeper user {sleeper_user_id}")
+                    return {"success": False, "error": "No leagues found for this user"}
+                
+                # Step 2: Process each league
+                for league in leagues:
+                    league_id = league.get("league_id")
+                    
+                    # Store league details
+                    cursor.execute('''
+                        INSERT OR REPLACE INTO leagues (
+                            sleeper_league_id,
+                            sleeper_user_id,
+                            name,
+                            season,
+                            status,
+                            settings,
+                            created_at,
+                            updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))
+                    ''', (
+                        league_id,
+                        sleeper_user_id,
+                        league.get("name"),
+                        league.get("season"),
+                        league.get("status"),
+                        json.dumps(league.get("settings", {}))
+                    ))
+                    
+                    # Step 3: Get and store league users
+                    league_users = self.get_league_users(league_id)
+                    for user in league_users:
+                        user_id = user.get("user_id")
+                        metadata_json = json.dumps(user.get("metadata", {})) if user.get("metadata") else None
+                        
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO users (
+                                sleeper_user_id,
+                                display_name,
+                                avatar,
+                                metadata,
+                                created_at,
+                                updated_at
+                            ) VALUES (?, ?, ?, ?, datetime("now"), datetime("now"))
+                        ''', (
+                            user_id,
+                            user.get("display_name"),
+                            user.get("avatar"),
+                            metadata_json
+                        ))
+                    
+                    # Step 4: Get and store rosters
+                    rosters = self.get_league_rosters(league_id)
+                    for roster in rosters:
+                        roster_id = roster.get("roster_id")
+                        
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO rosters (
+                                sleeper_roster_id,
+                                league_id,
+                                owner_id,
+                                players,
+                                settings,
+                                metadata,
+                                created_at,
+                                updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))
+                        ''', (
+                            str(roster_id),
+                            league_id,
+                            roster.get("owner_id"),
+                            json.dumps(roster.get("players", [])),
+                            json.dumps(roster.get("settings", {})),
+                            json.dumps(roster.get("metadata", {}))
+                        ))
+                    
+                    # Step 5: Get and store transactions
+                    transactions = self.get_league_transactions(league_id)
+                    for transaction in transactions:
+                        transaction_id = transaction.get("transaction_id")
+                        
+                        cursor.execute('''
+                            INSERT OR IGNORE INTO transactions (
+                                sleeper_transaction_id,
+                                league_id,
+                                type,
+                                status,
+                                data,
+                                created_at,
+                                updated_at
+                            ) VALUES (?, ?, ?, ?, ?, datetime("now"), datetime("now"))
+                        ''', (
+                            str(transaction_id),
+                            league_id,
+                            transaction.get("type"),
+                            transaction.get("status"),
+                            json.dumps(transaction)
+                        ))
+                    
+                    # Step 6: Get and store traded picks
+                    traded_picks = self.get_traded_picks(league_id)
+                    for pick in traded_picks:
+                        cursor.execute('''
+                            INSERT OR IGNORE INTO traded_picks (
+                                league_id,
+                                draft_id,
+                                round,
+                                roster_id,
+                                previous_owner_id,
+                                current_owner_id,
+                                created_at,
+                                updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, datetime("now"), datetime("now"))
+                        ''', (
+                            league_id,
+                            pick.get("draft_id"),
+                            pick.get("round"),
+                            str(pick.get("roster_id")),
+                            str(pick.get("previous_owner_id")),
+                            str(pick.get("owner_id"))
+                        ))
+                    
+                    # Step 7: Get and store drafts
+                    drafts = self.get_league_drafts(league_id)
+                    for draft in drafts:
+                        draft_id = draft.get("draft_id")
+                        
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO drafts (
+                                sleeper_draft_id,
+                                league_id,
+                                status,
+                                start_time,
+                                data,
+                                created_at,
+                                updated_at
+                            ) VALUES (?, ?, ?, ?, ?, datetime("now"), datetime("now"))
+                        ''', (
+                            draft_id,
+                            league_id,
+                            draft.get("status"),
+                            draft.get("start_time"),
+                            json.dumps(draft)
+                        ))
+                
+                # Step 8: Get and store player data
+                players_data = self.get_players()
+                if players_data:
+                    print(f"DEBUG: Retrieved {len(players_data)} players from Sleeper API")
+                    self.logger.info(f"Retrieved {len(players_data)} players from Sleeper API")
+                    
+                    # Store only players that are on rosters to avoid storing thousands of unused players
+                    player_ids_on_rosters = set()
+                    
+                    # Get all roster players
+                    cursor.execute('SELECT players FROM rosters')
+                    roster_players = cursor.fetchall()
+                    print(f"DEBUG: Found {len(roster_players)} roster records")
+                    
+                    for roster in roster_players:
+                        if roster[0]:
+                            try:
+                                players_list = json.loads(roster[0])
+                                print(f"DEBUG: Roster players raw data: {roster[0][:100]}...")
+                                if isinstance(players_list, list):
+                                    player_ids_on_rosters.update(players_list)
+                                    print(f"DEBUG: Added {len(players_list)} players from roster")
+                                else:
+                                    print(f"DEBUG: Players not in list format: {type(players_list)}")
+                            except json.JSONDecodeError:
+                                self.logger.error(f"Error parsing players JSON: {roster[0]}")
+                                print(f"DEBUG: JSON decode error for roster: {roster[0][:100]}...")
+                    
+                    print(f"DEBUG: Total unique players found on rosters: {len(player_ids_on_rosters)}")
+                    self.logger.info(f"Found {len(player_ids_on_rosters)} players on rosters")
+                    
+                    # If no players found on rosters, try to save a few example players
+                    if not player_ids_on_rosters and players_data:
+                        print("DEBUG: No players found on rosters, adding example players")
+                        # Get 5 example player IDs (quarterbacks)
+                        example_players = []
+                        for player_id, player_data in players_data.items():
+                            if player_data.get('position') == 'QB' and len(example_players) < 5:
+                                example_players.append(player_id)
+                        
+                        player_ids_on_rosters = example_players
+                        print(f"DEBUG: Adding {len(example_players)} example players")
+                    
+                    # Insert each player that's on a roster
+                    players_added = 0
+                    for player_id in player_ids_on_rosters:
+                        player_data = players_data.get(player_id)
+                        if player_data:
+                            try:
+                                print(f"DEBUG: Inserting player {player_id}: {player_data.get('full_name', 'Unknown')}")
+                                cursor.execute('''
+                                    INSERT OR REPLACE INTO players (
+                                        sleeper_player_id,
+                                        name,
+                                        position,
+                                        team,
+                                        created_at,
+                                        updated_at
+                                    ) VALUES (?, ?, ?, ?, datetime("now"), datetime("now"))
+                                ''', (
+                                    player_id,
+                                    player_data.get('full_name'),
+                                    player_data.get('position'),
+                                    player_data.get('team'),
+                                ))
+                                players_added += 1
+                            except Exception as e:
+                                self.logger.error(f"Error inserting player {player_id}: {str(e)}")
+                                print(f"DEBUG: Error inserting player {player_id}: {str(e)}")
+                        else:
+                            print(f"DEBUG: Player {player_id} not found in players data")
+                    
+                    print(f"DEBUG: Added {players_added} players to the database")
+                    self.logger.info(f"Added {players_added} players to the database")
+                else:
+                    print("DEBUG: No player data returned from Sleeper API")
+                
+                conn.commit()
+                self.logger.info(f"Successfully fetched and stored all data for user {sleeper_user_id}")
+                return {"success": True, "message": "All data fetched and stored successfully"}
+                
+        except Exception as e:
+            self.logger.error(f"Error in fetch_all_data: {str(e)}")
+            return {"success": False, "error": str(e)} 

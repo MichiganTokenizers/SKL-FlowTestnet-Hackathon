@@ -5,6 +5,7 @@ import secrets
 from pytonconnect import TonConnect
 from pytonconnect.exceptions import TonConnectError
 from sleeper_service import SleeperService
+import json
 
 # Create Flask app instance at the top
 app = Flask(__name__)
@@ -627,6 +628,397 @@ def fetch_all_data():
             return jsonify({'success': True, 'message': 'Full data pull triggered successfully'})
     except Exception as e:
         print(f"Error in /sleeper/fetchAll: {str(e)}")
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+# League local data route
+@app.route('/league/local', methods=['GET'])
+def get_league_local():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        with sqlite3.connect('keeper.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Get user from session
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            wallet_address = session_data[0]
+            
+            # Get user's sleeper_user_id
+            cursor.execute('SELECT sleeper_user_id FROM users WHERE wallet_address = ?', (wallet_address,))
+            user_data = cursor.fetchone()
+            if not user_data or not user_data['sleeper_user_id']:
+                return jsonify({'success': False, 'error': 'No Sleeper account associated with this wallet'}), 404
+            
+            sleeper_user_id = user_data['sleeper_user_id']
+            
+            # Get leagues for this user
+            cursor.execute('''
+                SELECT l.*, u.display_name as owner_name
+                FROM leagues l
+                LEFT JOIN users u ON l.sleeper_user_id = u.sleeper_user_id
+                WHERE l.sleeper_user_id = ?
+            ''', (sleeper_user_id,))
+            leagues = cursor.fetchall()
+            
+            if not leagues:
+                return jsonify({'success': False, 'error': 'No leagues found for this user'}), 404
+            
+            # Convert leagues to dictionary
+            league_list = []
+            for league in leagues:
+                league_dict = dict(league)
+                
+                # Get rosters for this league
+                cursor.execute('''
+                    SELECT r.*, u.display_name, u.avatar
+                    FROM rosters r
+                    LEFT JOIN users u ON r.owner_id = u.sleeper_user_id
+                    WHERE r.league_id = ?
+                ''', (league['sleeper_league_id'],))
+                rosters = cursor.fetchall()
+                
+                # Convert rosters to list of dictionaries
+                roster_list = []
+                for roster in rosters:
+                    roster_dict = dict(roster)
+                    # Parse JSON fields
+                    for field in ['players', 'settings', 'metadata']:
+                        if roster_dict.get(field) and isinstance(roster_dict[field], str):
+                            try:
+                                roster_dict[field] = json.loads(roster_dict[field])
+                            except:
+                                roster_dict[field] = {}
+                    roster_list.append(roster_dict)
+                
+                league_dict['rosters'] = roster_list
+                
+                # Parse league settings if stored as JSON
+                if league_dict.get('settings') and isinstance(league_dict['settings'], str):
+                    try:
+                        league_dict['settings'] = json.loads(league_dict['settings'])
+                    except:
+                        league_dict['settings'] = {}
+                
+                league_list.append(league_dict)
+            
+            return jsonify({
+                'success': True,
+                'leagues': league_list
+            })
+    except Exception as e:
+        print(f"Error in /league/local: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+# League standings local data route
+@app.route('/league/standings/local', methods=['GET'])
+def get_league_standings_local():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        with sqlite3.connect('keeper.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # Get user from session
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            wallet_address = session_data[0]
+            
+            # Get user's sleeper_user_id
+            cursor.execute('SELECT sleeper_user_id FROM users WHERE wallet_address = ?', (wallet_address,))
+            user_data = cursor.fetchone()
+            if not user_data or not user_data['sleeper_user_id']:
+                return jsonify({'success': False, 'error': 'No Sleeper account associated with this wallet'}), 404
+            
+            sleeper_user_id = user_data['sleeper_user_id']
+            
+            # Get leagues for this user
+            cursor.execute('''
+                SELECT sleeper_league_id
+                FROM leagues
+                WHERE sleeper_user_id = ?
+            ''', (sleeper_user_id,))
+            leagues = cursor.fetchall()
+            
+            if not leagues:
+                return jsonify({'success': False, 'error': 'No leagues found for this user'}), 404
+            
+            # Use first league found for now (can be expanded to handle multiple leagues)
+            league_id = leagues[0]['sleeper_league_id']
+            
+            # Get all rosters with standings data for this league
+            cursor.execute('''
+                SELECT r.*, u.display_name, u.avatar 
+                FROM rosters r
+                LEFT JOIN users u ON r.owner_id = u.sleeper_user_id
+                WHERE r.league_id = ?
+            ''', (league_id,))
+            rosters = cursor.fetchall()
+            
+            # Modified: Return empty standings with success status if no rosters found
+            if not rosters:
+                return jsonify({
+                    'success': True,
+                    'league_id': league_id,
+                    'standings': [],
+                    'message': 'No standings data available yet for this league'
+                })
+            
+            # Process roster data to create standings
+            standings = []
+            for roster in rosters:
+                roster_dict = dict(roster)
+                
+                # Parse JSON fields if they're stored as strings
+                if roster_dict.get('settings') and isinstance(roster_dict['settings'], str):
+                    try:
+                        settings = json.loads(roster_dict['settings'])
+                        # Extract win/loss data from settings
+                        wins = settings.get('wins', 0)
+                        losses = settings.get('losses', 0)
+                        ties = settings.get('ties', 0)
+                        fpts = settings.get('fpts', 0)
+                        fpts_against = settings.get('fpts_against', 0)
+                    except:
+                        wins = losses = ties = fpts = fpts_against = 0
+                else:
+                    # If settings is already a dict or is None
+                    settings = roster_dict.get('settings', {}) or {}
+                    wins = settings.get('wins', 0)
+                    losses = settings.get('losses', 0)
+                    ties = settings.get('ties', 0)
+                    fpts = settings.get('fpts', 0)
+                    fpts_against = settings.get('fpts_against', 0)
+                
+                # Create standings entry
+                standings.append({
+                    'roster_id': roster_dict.get('sleeper_roster_id'),
+                    'owner_id': roster_dict.get('owner_id'),
+                    'display_name': roster_dict.get('display_name', 'Unknown Manager'),
+                    'avatar': roster_dict.get('avatar'),
+                    'wins': wins,
+                    'losses': losses,
+                    'ties': ties,
+                    'fpts': fpts,
+                    'fpts_against': fpts_against,
+                    'record': f"{wins}-{losses}" + (f"-{ties}" if ties > 0 else ""),
+                    'win_pct': (wins + (ties * 0.5)) / max(1, (wins + losses + ties))
+                })
+            
+            # Sort standings by win percentage, then by points
+            standings.sort(key=lambda x: (-x['win_pct'], -x['fpts']))
+            
+            return jsonify({
+                'success': True,
+                'league_id': league_id,
+                'standings': standings
+            })
+    except Exception as e:
+        print(f"Error in /league/standings/local: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+# Sleeper user search endpoint
+@app.route('/sleeper/search', methods=['GET'])
+def search_sleeper_user():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        # Verify session
+        with sqlite3.connect('keeper.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+        
+        # Get username from query params
+        username = request.args.get('username')
+        if not username:
+            return jsonify({'success': False, 'error': 'No username provided'}), 400
+        
+        # Search for user
+        user = sleeper_service.get_user(username)
+        if not user:
+            return jsonify({'success': False, 'error': f'User "{username}" not found'}), 404
+        
+        # Get user's leagues
+        leagues = sleeper_service.get_user_leagues(user['user_id'])
+        
+        # Return user and leagues
+        return jsonify({
+            'success': True,
+            'user': user,
+            'leagues': leagues
+        })
+    except Exception as e:
+        print(f"Error in /sleeper/search: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+# Check if wallet address needs association with Sleeper
+@app.route('/auth/check_association', methods=['GET'])
+def check_association():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        # Verify session and get wallet address
+        with sqlite3.connect('keeper.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            wallet_address = session_data['wallet_address']
+            
+            # Check if wallet address is already associated with a Sleeper account
+            cursor.execute('SELECT sleeper_user_id FROM users WHERE wallet_address = ?', (wallet_address,))
+            user_data = cursor.fetchone()
+            
+            needs_association = not user_data or not user_data['sleeper_user_id']
+            
+            return jsonify({
+                'success': True,
+                'wallet_address': wallet_address,
+                'needs_association': needs_association
+            })
+            
+    except Exception as e:
+        print(f"Error in /auth/check_association: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+# Complete Sleeper association
+@app.route('/auth/complete_association', methods=['POST'])
+def complete_association():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'Invalid request data'}), 400
+        
+        sleeper_user_id = data.get('sleeper_user_id')
+        sleeper_username = data.get('sleeper_username')
+        sleeper_display_name = data.get('sleeper_display_name')
+        sleeper_avatar = data.get('sleeper_avatar')
+        league_id = data.get('league_id')
+        
+        if not sleeper_user_id or not league_id:
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        # Get wallet address from session
+        with sqlite3.connect('keeper.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            wallet_address = session_data['wallet_address']
+            
+            # Update user record with Sleeper information
+            cursor.execute('''
+                UPDATE users
+                SET sleeper_user_id = ?,
+                    username = ?,
+                    display_name = ?,
+                    avatar = ?,
+                    updated_at = datetime("now")
+                WHERE wallet_address = ?
+            ''', (sleeper_user_id, sleeper_username, sleeper_display_name, sleeper_avatar, wallet_address))
+            
+            # Add league association if it doesn't exist
+            cursor.execute('''
+                INSERT OR IGNORE INTO leagues (
+                    sleeper_league_id,
+                    sleeper_user_id,
+                    created_at,
+                    updated_at
+                ) VALUES (?, ?, datetime("now"), datetime("now"))
+            ''', (league_id, sleeper_user_id))
+            
+            conn.commit()
+            
+            # Trigger data pull from Sleeper API
+            sleeper_service.fetch_all_data(wallet_address)
+            
+            return jsonify({
+                'success': True,
+                'message': 'Sleeper account association completed successfully'
+            })
+            
+    except Exception as e:
+        print(f"Error in /auth/complete_association: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+# Get users in a specific league
+@app.route('/sleeper/league/<league_id>/users', methods=['GET'])
+def get_league_users(league_id):
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        # Verify session
+        with sqlite3.connect('keeper.db') as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+        
+        # Get users from the Sleeper API
+        users = sleeper_service.get_league_users(league_id)
+        
+        if not users:
+            return jsonify({'success': False, 'error': f'No users found for league {league_id}'}), 404
+        
+        # Return the users
+        return jsonify({
+            'success': True,
+            'league_id': league_id,
+            'users': users
+        })
+        
+    except Exception as e:
+        print(f"Error in /sleeper/league/{league_id}/users: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
 
 if __name__ == '__main__':
