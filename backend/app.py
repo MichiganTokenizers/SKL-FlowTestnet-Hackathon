@@ -310,6 +310,13 @@ def login():
                 )
                 print("Created new user")
 
+            else:
+                # For existing users, trigger a full data pull from Sleeper
+                print("Existing user detected, triggering full Sleeper data pull")
+                full_data_response = sleeper_service.fetch_all_data(wallet_address)
+                if not full_data_response['success']:
+                    print(f"Failed to fetch full Sleeper data: {full_data_response.get('error', 'Unknown error')}")
+
             # Create session
             cursor.execute('''
                 INSERT OR REPLACE INTO sessions (
@@ -384,64 +391,34 @@ def login_required(f):
 
 # League page route
 @app.route('/league')
-@app.route('/league/<league_id>')
-def league(league_id=None):
+def get_league():
     session_token = request.headers.get('Authorization')
     if not session_token:
         return jsonify({'success': False, 'error': 'No session token'}), 401
-
+    
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Get user from session token
-        cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
-        session_data = cursor.fetchone()
-        if not session_data:
-            return jsonify({'success': False, 'error': 'Invalid session'}), 401
+        db = KeeperDB()
+        with sqlite3.connect('keeper.db') as conn:
+            cursor = conn.cursor()
             
-        # Get user data using wallet address
-        cursor.execute('''SELECT u.rowid, u.wallet_address, u.FirstName, l.LeagueName, COALESCE(t.TeamName, 'No Team') AS TeamName, u.LeagueID 
-                         FROM User u
-                         JOIN League l ON u.LeagueID = l.rowid 
-                         LEFT JOIN Team t ON u.TeamID = t.rowid
-                         WHERE u.wallet_address = ?''', (session_data['wallet_address'],))
-        user_data = cursor.fetchmany(size=1)
-        teams = []
-        if user_data:
-            user_id, wallet_address, first_name, league_name, team_name, league_id = user_data[0]
-            cursor.execute('''SELECT t.rowid, t.TeamName, u.FirstName, u.LastName 
-                             FROM Team t
-                             LEFT JOIN User u ON t.UserID = u.rowid
-                             WHERE t.LeagueID = ?
-                             ORDER BY t.TeamName''', (str(league_id),))
-            teams = cursor.fetchall()
-        else:
-            wallet_address = "Unknown"
-            first_name = "Unknown"
-            league_name = "Unknown"
-            team_name = "Unknown"
-            league_id = None
-            print("No user data found for wallet address:", session_data['wallet_address'])
-        conn.close()    
+            # Get user from session
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            wallet_address = session_data[0]
+            
+            # Get league data from local database
+            league_data = db.get_league_data(wallet_address)
+            
+            if not league_data:
+                return jsonify({'success': False, 'error': 'No league data found'}), 404
+            
+            return jsonify({'success': True, 'league': league_data})
     except Exception as e:
-        print(f"Error fetching data: {e}")
-        wallet_address = "Error fetching wallet address"
-        first_name = "Error"
-        league_name = "Error"
-        team_name = "Error"
-        teams = []
-        if 'conn' in locals():
-            conn.close()
-    print(f"Template variables: wallet_address={wallet_address}, first_name={first_name}, league_name={league_name}, team_name={team_name}, teams={teams}")
-    return render_template('league.html', 
-                         wallet_address=wallet_address, 
-                         first_name=first_name, 
-                         league_name=league_name, 
-                         team_name=team_name, 
-                         teams=teams,
-                         selected_league_id=league_id)
-
+        print(f"Error in /league: {str(e)}")
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
 
 # Waive player route
 @app.route('/waive_player', methods=['POST'])
@@ -527,63 +504,34 @@ def waive_player():
 # League connection route
 @app.route('/league/connect', methods=['POST'])
 def connect_league():
-    session_token = request.headers.get('Authorization')
-    if not session_token:
-        return jsonify({'success': False, 'error': 'No session token'}), 401
-
-    try:
-        data = request.get_json()
-        sleeper_league_id = data.get('sleeperLeagueId')
-        
-        if not sleeper_league_id:
-            return jsonify({'success': False, 'error': 'Missing Sleeper league ID'}), 400
-
-        with sqlite3.connect('keeper.db') as conn:
-            cursor = conn.cursor()
-            
-            # Get user from session
-            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
-            session_data = cursor.fetchone()
-            if not session_data:
-                return jsonify({'success': False, 'error': 'Invalid session'}), 401
-
-            # Create league association
-            cursor.execute('''
-                INSERT INTO leagues (
-                    sleeper_league_id,
-                    created_at
-                ) VALUES (?, datetime("now"))''',
-                (sleeper_league_id,)
-            )
-            
-            # Update user with league ID
-            cursor.execute('''
-                UPDATE users 
-                SET sleeper_league_id = ?
-                WHERE wallet_address = ?''',
-                (sleeper_league_id, session_data['wallet_address'])
-            )
-            
-            conn.commit()
-
-        return jsonify({'success': True})
-
-    except Exception as e:
-        print(f"Error in /league/connect: {str(e)}")
-        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+    data = request.get_json()
+    league_id = data.get('leagueId')
+    wallet_address = data.get('walletAddress')
+    
+    if not league_id or not wallet_address:
+        return jsonify({'error': 'Missing leagueId or walletAddress'}), 400
+    
+    # Save league connection
+    db = KeeperDB()
+    db.connect_league(wallet_address, league_id)
+    
+    # Trigger full data pull for the league
+    sleeper_service.fetch_all_data(wallet_address)
+    
+    return jsonify({'message': 'League connected successfully'}), 200
 
 # Sleeper integration routes
 
 # League teams route
-@app.route('/league/teams', methods=['GET'])
+@app.route('/league/teams')
 def get_league_teams():
     session_token = request.headers.get('Authorization')
     if not session_token:
         return jsonify({'success': False, 'error': 'No session token'}), 401
-
+    
     try:
+        db = KeeperDB()
         with sqlite3.connect('keeper.db') as conn:
-            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
             # Get user from session
@@ -591,55 +539,94 @@ def get_league_teams():
             session_data = cursor.fetchone()
             if not session_data:
                 return jsonify({'success': False, 'error': 'Invalid session'}), 401
-
-            # Get user's league
-            cursor.execute('''
-                SELECT l.sleeper_league_id, l.league_name, l.season, l.draft_date, l.trade_deadline
-                FROM leagues l
-                JOIN users u ON u.sleeper_league_id = l.sleeper_league_id
-                WHERE u.wallet_address = ?
-            ''', (session_data['wallet_address'],))
-            league_data = cursor.fetchone()
-
-            if not league_data:
-                return jsonify({'success': False, 'error': 'No league found'}), 404
-
-            # Get all teams in the league
-            cursor.execute('''
-                SELECT 
-                    t.id,
-                    t.team_name as name,
-                    u.username as manager,
-                    t.wins,
-                    t.losses,
-                    t.ties
-                FROM teams t
-                LEFT JOIN users u ON t.manager_id = u.id
-                WHERE t.league_id = ?
-                ORDER BY t.team_name
-            ''', (league_data['sleeper_league_id'],))
             
-            teams = cursor.fetchall()
-            teams_list = [{
-                'id': team['id'],
-                'name': team['name'],
-                'manager': team['manager'] or 'Unassigned',
-                'record': f"{team['wins']}-{team['losses']}" + (f"-{team['ties']}" if team['ties'] > 0 else "")
-            } for team in teams]
-
-            return jsonify({
-                'success': True,
-                'teams': teams_list,
-                'league': {
-                    'leagueName': league_data['league_name'],
-                    'season': league_data['season'],
-                    'draftDate': league_data['draft_date'],
-                    'tradeDeadline': league_data['trade_deadline']
-                }
-            })
-
+            wallet_address = session_data[0]
+            
+            # Get team data from local database
+            team_data = db.get_team_data(wallet_address)
+            
+            if not team_data:
+                return jsonify({'success': False, 'error': 'No team data found'}), 404
+            
+            return jsonify({'success': True, 'teams': team_data})
     except Exception as e:
         print(f"Error in /league/teams: {str(e)}")
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+@app.route('/sleeper/import', methods=['POST'])
+def import_sleeper_data():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        db = KeeperDB()
+        with sqlite3.connect('keeper.db') as conn:
+            cursor = conn.cursor()
+            
+            # Get user from session
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            wallet_address = session_data[0]
+            
+            # Check if local data exists
+            league_data = db.get_league_data(wallet_address)
+            
+            if league_data:
+                return jsonify({'success': True, 'message': 'Local data already exists', 'league': league_data})
+            
+            # If no local data, trigger full data pull
+            sleeper_service.fetch_all_data(wallet_address)
+            
+            return jsonify({'success': True, 'message': 'Data imported successfully'})
+    except Exception as e:
+        print(f"Error in /sleeper/import: {str(e)}")
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+@app.route('/auth/associate_sleeper', methods=['POST'])
+def associate_sleeper():
+    data = request.get_json()
+    wallet_address = data.get('walletAddress')
+    sleeper_id = data.get('sleeperId')
+    
+    if not wallet_address or not sleeper_id:
+        return jsonify({'error': 'Missing walletAddress or sleeperId'}), 400
+    
+    db = KeeperDB()
+    db.associate_sleeper(wallet_address, sleeper_id)
+    
+    # Trigger full data pull for the associated Sleeper account
+    sleeper_service.fetch_all_data(wallet_address)
+    
+    return jsonify({'message': 'Sleeper account associated successfully'}), 200
+
+@app.route('/sleeper/fetchAll', methods=['POST'])
+def fetch_all_data():
+    session_token = request.headers.get('Authorization')
+    if not session_token:
+        return jsonify({'success': False, 'error': 'No session token'}), 401
+    
+    try:
+        with sqlite3.connect('keeper.db') as conn:
+            cursor = conn.cursor()
+            
+            # Get user from session
+            cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
+            session_data = cursor.fetchone()
+            if not session_data:
+                return jsonify({'success': False, 'error': 'Invalid session'}), 401
+            
+            wallet_address = session_data[0]
+            
+            # Trigger full data pull
+            sleeper_service.fetch_all_data(wallet_address)
+            
+            return jsonify({'success': True, 'message': 'Full data pull triggered successfully'})
+    except Exception as e:
+        print(f"Error in /sleeper/fetchAll: {str(e)}")
         return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
 
 if __name__ == '__main__':

@@ -7,6 +7,25 @@ function LeagueConnect({ sessionToken, onSuccess }) {
     const [isLoading, setIsLoading] = useState(false);
     const navigate = useNavigate();
 
+    const fetchAllSleeperData = async () => {
+        try {
+            const response = await fetch('http://localhost:5000/sleeper/fetchAll', {
+                method: 'GET',
+                headers: {
+                    'Authorization': sessionToken
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                console.log('All Sleeper data fetched and stored successfully.');
+            } else {
+                console.error('Failed to fetch all Sleeper data:', data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching all Sleeper data:', error);
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsLoading(true);
@@ -26,6 +45,7 @@ function LeagueConnect({ sessionToken, onSuccess }) {
 
             const data = await response.json();
             if (data.success) {
+                await fetchAllSleeperData(); // Fetch all data after successful connection
                 onSuccess();
                 navigate('/league');
             } else {

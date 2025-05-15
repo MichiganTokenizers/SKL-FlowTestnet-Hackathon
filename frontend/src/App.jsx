@@ -82,6 +82,25 @@ function AppContent() {
         }
     };
 
+    const fetchAllSleeperData = async () => {
+        try {
+            const response = await fetch('http://localhost:5000/sleeper/fetchAll', {
+                method: 'GET',
+                headers: {
+                    'Authorization': sessionToken
+                }
+            });
+            const data = await response.json();
+            if (data.success) {
+                console.log('All Sleeper data fetched and stored successfully.');
+            } else {
+                console.error('Failed to fetch all Sleeper data:', data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching all Sleeper data:', error);
+        }
+    };
+
     useEffect(() => {
         if (connected && tonWallet && !sessionToken) {
             const login = async () => {
@@ -103,6 +122,11 @@ function AppContent() {
                         localStorage.setItem('sessionToken', data.sessionToken);
                         setSessionToken(data.sessionToken);
                         setIsNewUser(data.isNewUser);
+                        
+                        // Fetch all Sleeper data after login
+                        if (!data.isNewUser) {
+                            await fetchAllSleeperData();
+                        }
                         
                         // Redirect based on user status
                         if (data.isNewUser) {

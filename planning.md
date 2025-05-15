@@ -1,157 +1,86 @@
-# Supreme Keeper League - Project Planning Document
+# Supreme Keeper League - Project Plan
 
 ## Overview
-The Supreme Keeper League is a fantasy football platform that extends the functionality of Sleeper fantasy football leagues by adding a contract system for players. While Sleeper handles the core fantasy football operations (drafting, lineups, scoring), our platform manages player contracts and keeper rules.
+Supreme Keeper League is a fantasy football platform integrated with the TON blockchain for secure transactions and the Sleeper API for league management. The goal is to create a decentralized, transparent, and user-friendly environment for managing keeper leagues.
 
-### Core Features
-- Integration with Sleeper API for fantasy football operations
-- Player contract management (up to 4 years)
-- Contract waiver penalties
-- TON wallet authentication
-- Team roster management
+## Data Pull Strategy
+- **One-Time Data Pull**: All Sleeper API data will be pulled once during user login or after a new league association. This pull will update the local database (`keeper.db`) with the latest information on users, leagues, teams, rosters, standings, and other relevant data.
+- **Local Data Usage**: After the initial data pull, the application will use data stored in `keeper.db` for all subsequent requests, minimizing repeated calls to Sleeper APIs.
+- **Refresh Mechanism**: A manual refresh option or scheduled task may be implemented to update `keeper.db` when necessary, but this will be an exception rather than the norm.
+- **Backend Endpoints**: New endpoints will be created or existing ones updated to fetch data from `keeper.db` (e.g., `/league/local`, `/league/standings/local`). A specific endpoint `/sleeper/fetchAll` will handle the full data pull from Sleeper APIs.
 
-## Project Scope
-
-### In Scope
-- User authentication via TON wallet
-- League creation and management
-- Player contract tracking
-- Integration with Sleeper API
-- Basic team management
-- Contract waiver system
-- Session management
-- Payment processing (pay leauge fees with Ton wallet)
-
-### Out of Scope
-- Direct fantasy football operations (handled by Sleeper)
-- Real-time scoring (handled by Sleeper)
-
-
-
-## Technical Architecture
-
+## Architecture
 ### Frontend
-- React (Vite) setup
-- Main entry point: `frontend/src/App.jsx`
-- Key components:
-  - Authentication (TON wallet integration)
-  - League management
-  - Team management
-  - Contract management
-  - Profile management
+- **React.js**: For building a dynamic and responsive user interface.
+- **React Router**: For navigation and routing within the single-page application.
+- **TonConnect**: For integrating TON wallet functionalities.
+- **Bootstrap**: For styling and responsive design.
+
+#### Component Structure
+- **Authentication**: TON wallet login, Sleeper account association.
+- **League Management**: Viewing league details, standings, and managing league settings.
+- **Team Management**: Managing rosters, contracts, and transactions.
+- **Contract Management**: Creating, viewing, and managing player contracts.
+- **Profile Management**: User profile and settings.
 
 ### Backend
-- Flask server
-- Main entry point: `app.py`
-- SQLite database (`keeper.db`)
-- Key endpoints:
-  - Authentication
-  - League management
-  - Team management
-  - Contract management
-  - Sleeper API integration
+- **Flask**: Lightweight Python framework for creating API endpoints.
+- **SQLite**: Using `keeper.db` for local data storage after the initial Sleeper API pull.
+- **Sleeper API**: For initial data retrieval during login or league association.
+- **TON Blockchain**: For secure and transparent transactions.
 
-### Data Flow
-1. **Authentication Flow**
-   - User connects TON wallet
-   - Backend verifies wallet address
-   - Session token generated and stored
-   - Session recorded in keeper.db
+#### API Endpoints
+- **Authentication**: `/auth/login`, `/auth/verify`, `/auth/associate_sleeper`
+- **League**: `/league/connect`, `/league/local`, `/league/standings/local`
+- **Team**: `/team/{id}/local`
+- **Sleeper Data Pull**: `/sleeper/fetchAll`, `/sleeper/search`, `/sleeper/league/{id}/users`, `/sleeper/import`
 
-2. **League Management Flow**
-   - League creation/joining
-   - Sleeper league integration
-   - Contract management
-   
+## Database Schema (`keeper.db`)
+- **Users**: Information about users, including wallet address and associated Sleeper user ID.
+- **Leagues**: Details of connected Sleeper leagues.
+- **Teams**: Team information within each league.
+- **Players**: Player data including contracts and status.
+- **Contracts**: Contract details for players.
+- **Transactions**: Records of trades, waivers, etc.
+- **Traded Picks**: Information on traded draft picks.
+- **Drafts**: Draft details and status.
+- **Sessions**: User session tokens for authentication.
 
-3. **Contract Management Flow**
-   - Contract creation after draft
-   - Contract tracking
-   - Waiver processing
-   - Penalty calculation
+## Development Phases
+1. **Setup and Initial Design**
+   - Set up the development environment with React.js, Flask, and necessary libraries.
+   - Design the UI/UX for the platform.
+2. **Core Functionality**
+   - Implement TON wallet authentication.
+   - Develop Sleeper API integration for one-time data pull.
+   - Create local database schema and update backend to store and retrieve data from `keeper.db`.
+3. **Feature Development**
+   - Build components for league, team, and contract management using local data.
+   - Implement transaction system with TON blockchain.
+4. **Testing and Deployment**
+   - Test the application for bugs and performance issues.
+   - Deploy the application to a production environment.
 
-### Database Schema (keeper.db)
-```sql
--- Users table
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY,
-    wallet_address TEXT UNIQUE,
-    created_at TIMESTAMP
-);
-
--- Sessions table
-CREATE TABLE sessions (
-    id INTEGER PRIMARY KEY,
-    user_id INTEGER,
-    session_token TEXT,
-    created_at TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
-);
-
--- Leagues table
-CREATE TABLE leagues (
-    id INTEGER PRIMARY KEY,
-    name TEXT,
-    sleeper_league_id TEXT,
-    creator_id INTEGER,
-    created_at TIMESTAMP,
-    FOREIGN KEY (creator_id) REFERENCES users(id)
-);
-
--- Contracts table
-CREATE TABLE contracts (
-    id INTEGER PRIMARY KEY,
-    league_id INTEGER,
-    player_id TEXT,
-    team_id INTEGER,
-    years INTEGER,
-    start_year INTEGER,
-    created_at TIMESTAMP,
-    FOREIGN KEY (league_id) REFERENCES leagues(id),
-    FOREIGN KEY (team_id) REFERENCES teams(id)
-);
-
--- Teams table
-CREATE TABLE teams (
-    id INTEGER PRIMARY KEY,
-    league_id INTEGER,
-    owner_id INTEGER,
-    name TEXT,
-    created_at TIMESTAMP,
-    FOREIGN KEY (league_id) REFERENCES leagues(id),
-    FOREIGN KEY (owner_id) REFERENCES users(id)
-);
-```
-
-## Development Setup
-1. Frontend (Vite + React)
-   - Node.js environment
-   - React dependencies
-   - TONConnect integration
-
-2. Backend (Flask)
-   - Python environment
-   - Flask dependencies
-   - SQLite database
-   - Sleeper API integration
-
-3. Development Tools
-   - ngrok for public URL generation
-   - TON wallet for testing
-   - Sleeper API credentials
-
-## Security Considerations
-- Secure session management
-- TON wallet authentication
-- API key protection
-- Database security
-- Input validation
-- CORS configuration
+## Challenges and Solutions
+- **Data Synchronization**: Ensuring `keeper.db` stays updated with Sleeper data can be challenging. Solution: Implement a robust one-time pull mechanism with optional refresh capabilities.
+- **Blockchain Integration**: Handling TON transactions securely. Solution: Use TonConnect library and follow best practices for blockchain integration.
+- **User Experience**: Balancing functionality with simplicity. Solution: Use Bootstrap for a clean, responsive design and iterative user feedback.
 
 ## Future Enhancements
-- Advanced statistics
-- Trade management
-- Contract negotiation system
-- League history tracking
-- Enhanced UI/UX
-- Mobile responsiveness improvements 
+- Implement real-time updates for critical data if needed, with careful consideration of API usage.
+- Add support for multiple league associations per user.
+- Enhance contract management with more complex rules and automation.
+
+## Timeline
+- **Week 1-2**: Setup, initial design, and core architecture.
+- **Week 3-4**: Authentication and one-time Sleeper data pull implementation.
+- **Week 5-6**: League and team management features with local data.
+- **Week 7-8**: Contract management and transaction system.
+- **Week 9-10**: Testing, bug fixes, and deployment preparation.
+- **Week 11-12**: Deployment and post-launch monitoring.
+
+## Team Roles
+- **Frontend Developer**: Focus on React.js components and UI/UX.
+- **Backend Developer**: Manage Flask API, database, and Sleeper API integration.
+- **Blockchain Specialist**: Handle TON integration and smart contracts if needed.
+- **QA Engineer**: Ensure the application is bug-free and performs well. 
