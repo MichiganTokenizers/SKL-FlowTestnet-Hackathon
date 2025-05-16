@@ -82,23 +82,42 @@ function AppContent() {
         }
     };
 
-    const fetchAllSleeperData = async () => {
+    const fetchAllSleeperData = async (tokenToUse) => {
+        if (!tokenToUse) {
+            console.error('fetchAllSleeperData called without a token.');
+            return { success: false, error: 'No token provided to fetchAllSleeperData' };
+        }
         try {
             const response = await fetch('http://localhost:5000/sleeper/fetchAll', {
-                method: 'GET',
+                method: 'POST',
                 headers: {
-                    'Authorization': sessionToken
+                    'Authorization': tokenToUse
                 }
             });
-            const data = await response.json();
+            const data = await response.json(); // Always parse JSON to get error message
+            if (!response.ok) { // Check if response status is not OK (2xx)
+                console.error('Failed to fetch all Sleeper data:', data.error || response.statusText);
+                return { success: false, error: data.error || response.statusText, needsAssociation: (response.status === 404 && data.error && data.error.includes("No Sleeper user ID associated")) };
+            }
             if (data.success) {
                 console.log('All Sleeper data fetched and stored successfully.');
+                return { success: true };
             } else {
-                console.error('Failed to fetch all Sleeper data:', data.error);
+                // This case might be redundant if !response.ok covers it
+                console.error('Failed to fetch all Sleeper data (data.success false):', data.error);
+                return { success: false, error: data.error, needsAssociation: (data.error && data.error.includes("No Sleeper user ID associated")) };
             }
         } catch (error) {
-            console.error('Error fetching all Sleeper data:', error);
+            console.error('Error fetching all Sleeper data (catch block):', error);
+            return { success: false, error: error.message };
         }
+    };
+
+    // New function to handle successful association
+    const handleAssociationSuccess = async () => {
+        console.log('Sleeper association successful, backend has fetched data. Navigating to league.');
+        setIsNewUser(false); // User is no longer "new"
+        navigate('/league'); // Directly navigate to league
     };
 
     useEffect(() => {
@@ -117,20 +136,23 @@ function AppContent() {
                         })
                     });
 
-                    const data = await response.json();
-                    if (data.success) {
-                        localStorage.setItem('sessionToken', data.sessionToken);
-                        setSessionToken(data.sessionToken);
-                        setIsNewUser(data.isNewUser);
+                    const loginData = await response.json();
+                    if (loginData.success) {
+                        const newSessionToken = loginData.sessionToken;
+                        localStorage.setItem('sessionToken', newSessionToken);
+                        setSessionToken(newSessionToken);
+                        setIsNewUser(loginData.isNewUser);
                         
-                        // Fetch all Sleeper data after login
-                        if (!data.isNewUser) {
-                            await fetchAllSleeperData();
+                        let associationNeeded = loginData.isNewUser;
+                        if (!loginData.isNewUser) {
+                            const fetchResult = await fetchAllSleeperData(newSessionToken);
+                            if (!fetchResult.success && fetchResult.needsAssociation) {
+                                associationNeeded = true;
+                            }
                         }
                         
-                        // Redirect based on user status
-                        if (data.isNewUser) {
-                            navigate('/league-connect');
+                        if (associationNeeded) {
+                            navigate('/associate-sleeper'); // Or your league-connect route if that handles association
                         } else {
                             navigate('/league');
                         }
@@ -183,7 +205,7 @@ function AppContent() {
                     <Route path="/" element={
                         sessionToken ? (
                             isNewUser ? (
-                                <Navigate to="/league-connect" replace />
+                                <Navigate to="/associate-sleeper" replace />
                             ) : (
                                 <Navigate to="/league" replace />
                             )
@@ -216,10 +238,15 @@ function AppContent() {
                         )
                     } />
                     <Route path="/sleeper-import" element={<SleeperImport />} />
-                    <Route path="/associate-sleeper" element={<AssociateSleeper walletAddress={localStorage.getItem('walletAddress')} />} />
+                    <Route path="/associate-sleeper" element={<AssociateSleeper onAssociationSuccess={handleAssociationSuccess} />} />
                     <Route path="/league-connect" element={
                         sessionToken && isNewUser ? (
-                            <LeagueConnect sessionToken={sessionToken} onSuccess={() => setIsNewUser(false)} />
+                            <LeagueConnect sessionToken={sessionToken} onSuccess={() => {
+                                // After LeagueConnect (if it only creates a user record without sleeper_id)
+                                // we might still need to go to association or directly fetch if it now has sleeper_id
+                                setIsNewUser(false); // Assumption: LeagueConnect makes them not a new user
+                                navigate('/associate-sleeper'); // Or directly to /league if association is handled by LeagueConnect
+                            }} />
                         ) : (
                             <Navigate to="/" replace />
                         )
