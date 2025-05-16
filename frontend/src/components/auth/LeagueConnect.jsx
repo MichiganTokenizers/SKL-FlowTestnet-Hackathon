@@ -10,7 +10,7 @@ function LeagueConnect({ sessionToken, onSuccess }) {
     const fetchAllSleeperData = async () => {
         try {
             const response = await fetch('http://localhost:5000/sleeper/fetchAll', {
-                method: 'GET',
+                method: 'POST',
                 headers: {
                     'Authorization': sessionToken
                 }

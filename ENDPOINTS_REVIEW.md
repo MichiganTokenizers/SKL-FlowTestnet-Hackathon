@@ -23,6 +23,8 @@ This document tracks the review and update status of all backend endpoints in th
 | `/sleeper/league/{id}/users` | GET | Get users in a league | ✅ Implemented | Added for user association flow |
 | `/team/{id}/local` | GET | Get team data from local DB | ❌ Missing | Need to implement |
 | `/waive_player` | POST | Waive a player | ⚠️ Review | Only partially implemented |
+| `/season/settings` | GET | Get current season settings | ✅ Implemented | Returns year and offseason status |
+| `/season/settings` | POST | Update season settings | ✅ Implemented | Update year and/or offseason status |
 
 ## Todo Items
 

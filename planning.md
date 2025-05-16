@@ -17,10 +17,13 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **Bootstrap**: For styling and responsive design.
 
 #### Component Structure
-- **Authentication**: TON wallet login, Sleeper account association.
-- **League Management**: Viewing league details, standings, and managing league settings.
-- **Team Management**: Managing rosters, contracts, and transactions.
-- **Contract Management**: Creating, viewing, and managing player contracts.
+- **Authentication**: TON wallet login, Sleeper account association (linking wallet to Sleeper user ID).
+  - `AssociateSleeper.jsx`: Component to handle user input of Sleeper username and trigger backend association.
+- **League Management**: Viewing league details, standings.
+- **Team Management**: Rosters for the most part will be managed on Sleeper app. 
+   -Waiving player will take place on Sleeper app, but Sleeper API pull will detect the missing contracted player, update contracts with IsActive = 0, penalty_incurred, and penalty_year. 
+   - Trading player on Supreme Keeper League site with options for trading next year's auction money. The trade will have to also take place on Sleeper app with players only.
+- **Contract Management**: Creating, viewing, and managing player contracts. After draft, before start of season, users will be prompted with contract setting page for newly drafted players. Can be accessed/changed up to start of season.
 - **Profile Management**: User profile and settings.
 
 ### Backend
@@ -30,7 +33,7 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **TON Blockchain**: For secure and transparent transactions.
 
 #### API Endpoints
-- **Authentication**: `/auth/login`, `/auth/verify`, `/auth/associate_sleeper`
+- **Authentication**: `/auth/login`, `/auth/verify`, `/auth/associate_sleeper`, `/auth/complete_association` (new endpoint for saving association).
 - **League**: `/league/connect`, `/league/local`, `/league/standings/local`
 - **Team**: `/team/{id}/local`
 - **Sleeper Data Pull**: `/sleeper/fetchAll`, `/sleeper/search`, `/sleeper/league/{id}/users`, `/sleeper/import`
@@ -45,14 +48,20 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **Traded Picks**: Information on traded draft picks.
 - **Drafts**: Draft details and status.
 - **Sessions**: User session tokens for authentication.
+- **season_curr**: One row with current_season and IsOffSeason. Manually controlled.
 
 ## Development Phases
 1. **Setup and Initial Design**
    - Set up the development environment with React.js, Flask, and necessary libraries.
    - Design the UI/UX for the platform.
 2. **Core Functionality**
-   - Implement TON wallet authentication.
-   - Develop Sleeper API integration for one-time data pull.
+   - **Initial User Onboarding and Data Synchronization Flow (Implemented & Verified):**
+     - **TON Wallet Authentication:** Users authenticate via their TON wallet (e.g., using the `/auth/login` route).
+     - **Sleeper Account Association:** Users link their authenticated wallet to their Sleeper username. The `/auth/complete_association` endpoint manages this. Upon successful association:
+       - An internal `sleeper_service.fetch_all_data` function is triggered.
+       - This function executes a comprehensive one-time data pull from the Sleeper API, retrieving all associated user, league, roster, player, and standings information.
+       - All fetched data is then stored in the local `keeper.db`. The database schema, particularly the `rosters` table (with `sleeper_roster_id` as `PRIMARY KEY`) and its `ON CONFLICT` resolution strategy, has been confirmed to operate correctly, ensuring data integrity.
+     - **Local Data Utilization:** Following the initial data synchronization, the frontend application primarily accesses league and team data (e.g., through `/league/local`, `/league/standings/local`) from the local `keeper.db`, thereby minimizing direct calls to the Sleeper API.
    - Create local database schema and update backend to store and retrieve data from `keeper.db`.
 3. **Feature Development**
    - Build components for league, team, and contract management using local data.

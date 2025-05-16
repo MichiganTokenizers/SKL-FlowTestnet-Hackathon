@@ -1,202 +1,117 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './AssociateSleeper.css';
 
-const AssociateSleeper = ({ walletAddress }) => {
-  const [username, setUsername] = useState('');
-  const [leagues, setLeagues] = useState([]);
-  const [selectedLeague, setSelectedLeague] = useState('');
-  const [leagueUsers, setLeagueUsers] = useState([]);
-  const [selectedUser, setSelectedUser] = useState('');
-  const [message, setMessage] = useState({ text: '', type: '' });
+const API_BASE_URL = "http://localhost:5000";
+
+const AssociateSleeper = ({ onAssociationSuccess }) => {
+  const [sleeperUsername, setSleeperUsername] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  const getSessionToken = () => {
-    return sessionStorage.getItem('sessionToken') || localStorage.getItem('sessionToken') || '';
-  };
-
-  const searchSleeperUser = async () => {
-    if (!username.trim()) {
-      setMessage({ text: 'Please enter a Sleeper username.', type: 'error' });
-      return;
-    }
-
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setError(null);
     setIsLoading(true);
-    setMessage({ text: 'Searching for user...', type: '' });
-    try {
-      const response = await fetch(`http://localhost:5000/sleeper/search?username=${username}`, {
-        headers: {
-          'Authorization': getSessionToken()
-        }
-      });
-      const data = await response.json();
-      if (data.success) {
-        const foundLeagues = data.leagues || [];
-        setLeagues(foundLeagues);
-        if (foundLeagues.length > 0) {
-          setMessage({ text: 'User found. Please select a league.', type: 'success' });
-        } else {
-          setMessage({ text: 'No leagues found for this user.', type: 'error' });
-        }
-      } else {
-        setMessage({ text: `Error: ${data.error}`, type: 'error' });
-      }
-    } catch (error) {
-      setMessage({ text: `Error searching for user: ${error.message}`, type: 'error' });
-    } finally {
+
+    if (!sleeperUsername.trim()) {
+      setError('Sleeper username cannot be empty.');
       setIsLoading(false);
-    }
-  };
-
-  const loadLeagueUsers = async (leagueId) => {
-    if (!leagueId) {
-      setLeagueUsers([]);
-      setSelectedUser('');
       return;
     }
 
-    setIsLoading(true);
-    setMessage({ text: 'Loading league users...', type: '' });
-    try {
-      const response = await fetch(`http://localhost:5000/sleeper/league/${leagueId}/users`, {
-        headers: {
-          'Authorization': getSessionToken()
-        }
-      });
-      const data = await response.json();
-      if (data.success) {
-        const users = data.users || [];
-        setLeagueUsers(users);
-        if (users.length > 0) {
-          setMessage({ text: 'Please select your account.', type: 'success' });
-        } else {
-          setMessage({ text: 'No users found in this league.', type: 'error' });
-        }
-      } else {
-        setMessage({ text: `Error: ${data.error}`, type: 'error' });
-      }
-    } catch (error) {
-      setMessage({ text: `Error loading league users: ${error.message}`, type: 'error' });
-    } finally {
+    const sessionToken = localStorage.getItem('sessionToken');
+    if (!sessionToken) {
+      setError('No session token found. Please log in again.');
       setIsLoading(false);
-    }
-  };
-
-  const associateAccount = async () => {
-    if (!selectedLeague || !selectedUser) {
-      setMessage({ text: 'Please select both a league and your account.', type: 'error' });
+      navigate('/'); // Or to a login page
       return;
     }
 
-    setIsLoading(true);
-    setMessage({ text: 'Associating account...', type: '' });
     try {
-      const response = await fetch('http://localhost:5000/auth/associate_sleeper', {
+      const response = await fetch(`${API_BASE_URL}/auth/complete_association`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': getSessionToken()
+          'Authorization': sessionToken 
         },
-        body: JSON.stringify({
-          league_id: selectedLeague,
-          sleeper_user_id: selectedUser
-        })
+        body: JSON.stringify({ sleeperUsername })
       });
+
       const data = await response.json();
-      if (data.success) {
-        setMessage({ text: 'Account associated successfully! Redirecting...', type: 'success' });
-        setTimeout(() => {
-          navigate('/league');
-        }, 2000);
-      } else {
-        setMessage({ text: `Error: ${data.error}`, type: 'error' });
+
+      if (!response.ok) {
+        throw new Error(data.error || `Server responded with ${response.status}`);
       }
-    } catch (error) {
-      setMessage({ text: `Error associating account: ${error.message}`, type: 'error' });
-    } finally {
-      setIsLoading(false);
+
+      if (data.success) {
+        console.log('Sleeper account associated successfully!');
+        if (onAssociationSuccess) {
+          onAssociationSuccess(); // This should trigger data refetch and navigation in App.jsx
+        } else {
+          navigate('/league'); // Fallback navigation
+        }
+      } else {
+        setError(data.error || 'Failed to associate Sleeper account.');
+      }
+    } catch (err) {
+      setError(err.message);
     }
+    setIsLoading(false);
   };
 
-  useEffect(() => {
-    if (selectedLeague) {
-      loadLeagueUsers(selectedLeague);
-    }
-  }, [selectedLeague]);
-
   return (
-    <div className="container">
-      <h1>Associate Sleeper Account</h1>
-      <p>Welcome, {walletAddress}. Please associate your Sleeper account to continue.</p>
-      
-      <div className="form-group">
-        <label htmlFor="username">Sleeper Username:</label>
-        <input
-          type="text"
-          id="username"
-          placeholder="Enter your Sleeper username"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          disabled={isLoading}
-        />
-        <button onClick={searchSleeperUser} disabled={isLoading}>
-          Search
-        </button>
+    <div className="container py-5">
+      <div className="row justify-content-center">
+        <div className="col-md-6">
+          <div className="card">
+            <div className="card-body">
+              <h2 className="card-title text-center mb-4">Link Your Sleeper Account</h2>
+              <p className="text-center text-muted mb-4">
+                To access your league data, please enter your Sleeper username.
+              </p>
+              <form onSubmit={handleSubmit}>
+                <div className="mb-3">
+                  <label htmlFor="sleeperUsername" className="form-label">Sleeper Username</label>
+                  <input 
+                    type="text" 
+                    className="form-control"
+                    id="sleeperUsername"
+                    value={sleeperUsername}
+                    onChange={(e) => setSleeperUsername(e.target.value)}
+                    placeholder="Enter your Sleeper username"
+                    disabled={isLoading}
+                  />
+                </div>
+
+                {error && (
+                  <div className="alert alert-danger" role="alert">
+                    {error}
+                  </div>
+                )}
+
+                <div className="d-grid">
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-lg"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                        Linking...
+                      </>
+                    ) : (
+                      'Link Sleeper Account'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
       </div>
-      
-      {leagues.length > 0 && (
-        <div className="form-group">
-          <label htmlFor="league_id">Select League:</label>
-          <select
-            id="league_id"
-            value={selectedLeague}
-            onChange={(e) => setSelectedLeague(e.target.value)}
-            disabled={isLoading}
-          >
-            <option value="">-- Select a League --</option>
-            {leagues.map((league) => (
-              <option key={league.league_id} value={league.league_id}>
-                {league.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      
-      {leagueUsers.length > 0 && (
-        <div className="form-group">
-          <label htmlFor="sleeper_user_id">Select Your Account:</label>
-          <select
-            id="sleeper_user_id"
-            value={selectedUser}
-            onChange={(e) => setSelectedUser(e.target.value)}
-            disabled={isLoading}
-          >
-            <option value="">-- Select Your Account --</option>
-            {leagueUsers.map((user) => (
-              <option key={user.user_id} value={user.user_id}>
-                {user.display_name} ({user.username || 'N/A'})
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-      
-      <div className="form-group">
-        <button
-          onClick={associateAccount}
-          disabled={isLoading || !selectedLeague || !selectedUser}
-        >
-          Associate Account
-        </button>
-      </div>
-      
-      {message.text && (
-        <div className={`message ${message.type}`}>
-          {message.text}
-        </div>
-      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 const API_BASE_URL = "http://localhost:5000";
 
@@ -8,12 +8,15 @@ function League() {
     const [teams, setTeams] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const navigate = useNavigate();
 
     useEffect(() => {
         const sessionToken = localStorage.getItem('sessionToken');
+        console.log('Session Token being used:', sessionToken ? 'Token exists' : 'No token found');
         if (!sessionToken) {
             setError('Please log in to view league information.');
             setLoading(false);
+            navigate('/');
             return;
         }
 
@@ -21,17 +24,23 @@ function League() {
             headers: { 'Authorization': sessionToken }
         })
             .then(res => {
+                console.log('Response status from /league/local:', res.status);
+                console.log('Response headers:', res.headers);
                 if (!res.ok) {
                     if (res.status === 401) {
                         localStorage.removeItem('sessionToken');
-                        window.location.href = '/login';
+                        setError('Session expired. Please log in again.');
+                        navigate('/');
                         throw new Error('Session expired. Please log in again.');
                     }
-                    throw new Error('Failed to fetch league data');
+                    return res.json().then(data => {
+                        throw new Error(data.error || 'Failed to fetch league data');
+                    });
                 }
                 return res.json();
             })
             .then(data => {
+                console.log('Response data from /league/local:', data);
                 if (data.success) {
                     setUserData({
                         walletAddress: data.walletAddress || 'Unknown',
@@ -50,7 +59,7 @@ function League() {
                 setError(err.message);
                 setLoading(false);
             });
-    }, []);
+    }, [navigate]);
 
     const fetchTeamsData = async (sessionToken) => {
         try {
