@@ -33,6 +33,7 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **TON Blockchain**: For secure and transparent transactions.
 
 #### API Endpoints
+- See `EndPoints_review.md` for a detailed review and current status of all backend API endpoints.
 - **Authentication**: `/auth/login`, `/auth/verify`, `/auth/associate_sleeper`, `/auth/complete_association` (new endpoint for saving association).
 - **League**: `/league/connect`, `/league/local`, `/league/standings/local`
 - **Team**: `/team/{id}/local`
@@ -65,7 +66,11 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
    - Create local database schema and update backend to store and retrieve data from `keeper.db`.
 3. **Feature Development**
    - Build components for league, team, and contract management using local data.
-   - Implement transaction system with TON blockchain.
+   - Implement transaction system with TON blockchain, including:
+     - Enabling users to pay league fees using their TON wallet.
+     - Displaying the payment status of league fees for users.
+     - Logging league fee transactions from the TON blockchain into the local database.
+     - Notifying users of unpaid league fees, with eventual removal from the league if fees remain unpaid by a deadline.
 4. **Testing and Deployment**
    - Test the application for bugs and performance issues.
    - Deploy the application to a production environment.
@@ -79,6 +84,27 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - Implement real-time updates for critical data if needed, with careful consideration of API usage.
 - Add support for multiple league associations per user.
 - Enhance contract management with more complex rules and automation.
+- **League Commissioner Tools:**
+  - Advanced league customization options (scoring, rosters, deadlines, playoff seeding).
+  - Member management tools (invites, removals, ownership transfers).
+  - Commissioner announcement/bulletin board.
+- **Enhanced User Interaction & Engagement:**
+  - In-app/email notifications for key league events.
+  - Trade block and initial trade negotiation facilitation.
+  - Optional league chat/forum features.
+- **Draft Management & Support:**
+  - Draft center for viewing results, traded picks.
+  - Simple pre-draft ranking/planning tools.
+  - Support for auction draft budget tracking.
+- **Historical Data and League History:**
+  - Archive and display past season champions, standings, trades, and contract histories.
+- **User Support and Onboarding:**
+  - Comprehensive FAQ/Help section.
+  - Guidance and resources for using TON wallets.
+- **Deeper Financial/Transaction Transparency:**
+  - League treasury view (fees collected, pot total, payouts).
+  - Detailed, user-accessible audit log for significant league actions.
+- Develop smart contract(s) to automate the payout of league winnings to winners on the TON blockchain.
 
 ## Timeline
 - **Week 1-2**: Setup, initial design, and core architecture.

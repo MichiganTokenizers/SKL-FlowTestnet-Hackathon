@@ -1,30 +1,40 @@
+# Project Tasks
+
+## Active Tasks
+
+- [ ] Review and update `EndPoints_review.md` (Started: 2025-05-17)
+
+## Discovered During Work
+
+## Completed Tasks
+
 # Supreme Keeper League - Development Tasks
 
 ## High Priority Tasks
 
 ### Authentication & User Management
-- [ ] Set up TON wallet connection
-- [ ] Implement session management
-- [ ] Create user registration flow
-- [ ] Add user profile management
-- [ ] Implement logout functionality
-- [ ] Create league connection page for new users
-  - [ ] Design league connection UI
-  - [ ] Add Sleeper league ID input
-  - [ ] Implement league validation
-  - [ ] Add league association logic
-  - [ ] Create success/error handling
-  - [ ] Add loading states
-- [ ] Implement Sleeper Account Association Flow (New Task - 2025-05-15)
-  - [ ] Frontend: Create/Update `AssociateSleeper.jsx` component (UI, state, form handling)
-  - [ ] Frontend: Pass `onAssociationSuccess` callback from `AppContent` to `AssociateSleeper`
-  - [ ] Frontend: `AppContent`'s `handleAssociationSuccess` to re-fetch data and navigate to `/league`
-  - [ ] Backend: Create `/auth/complete_association` route in `app.py`
-  - [ ] Backend: `/auth/complete_association` - validate session, get `sleeperUsername`
-  - [ ] Backend: `/auth/complete_association` - call `sleeper_service.get_user()`
-  - [ ] Backend: `/auth/complete_association` - update `users` table with `sleeper_user_id` and `display_name`
-  - [ ] Backend: `/auth/complete_association` - call `sleeper_service.fetch_all_data()`
-  - [ ] Backend: `/auth/complete_association` - return success/error JSON response
+- [x] Set up TON wallet connection
+- [x] Implement session management
+- [x] Create user registration flow
+- [x] Add user profile management
+- [x] Implement logout functionality
+- [x] Create league connection page for new users
+  - [x] Design league connection UI
+  - [x] Add Sleeper league ID input
+  - [x] Implement league validation
+  - [x] Add league association logic
+  - [x] Create success/error handling
+  - [x] Add loading states
+- [x] Implement Sleeper Account Association Flow (New Task - 2025-05-15)
+  - [x] Frontend: Create/Update `AssociateSleeper.jsx` component (UI, state, form handling)
+  - [x] Frontend: Pass `onAssociationSuccess` callback from `AppContent` to `AssociateSleeper`
+  - [x] Frontend: `AppContent`'s `handleAssociationSuccess` to re-fetch data and navigate to `/league`
+  - [x] Backend: Create `/auth/complete_association` route in `app.py`
+  - [x] Backend: `/auth/complete_association` - validate session, get `sleeperUsername`
+  - [x] Backend: `/auth/complete_association` - call `sleeper_service.get_user()`
+  - [x] Backend: `/auth/complete_association` - update `users` table with `sleeper_user_id` and `display_name`
+  - [x] Backend: `/auth/complete_association` - call `sleeper_service.fetch_all_data()`
+  - [x] Backend: `/auth/complete_association` - return success/error JSON response
 
 ### Database Setup
 - [ ] Create SQLite database schema
