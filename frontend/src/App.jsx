@@ -260,7 +260,7 @@ function AppContent() {
 // Main App Component
 function App() {
     return (
-        <TonConnectUIProvider manifestUrl="https://c724-193-43-135-218.ngrok-free.app/tonconnect-manifest.json">
+        <TonConnectUIProvider manifestUrl="https://1e4c-193-43-135-215.ngrok-free.app/tonconnect-manifest.json">
             <Router>
                 <AppContent />
             </Router>

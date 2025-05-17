@@ -5,7 +5,9 @@ const API_BASE_URL = "http://localhost:5000";
 
 function League() {
     const [userData, setUserData] = useState({});
-    const [teams, setTeams] = useState([]);
+    // const [leagues, setLeagues] = useState([]); // To store all leagues from /league/local - Commented out for now
+    const [selectedLeague, setSelectedLeague] = useState(null); // To store the first league object
+    const [standings, setStandings] = useState([]); // Changed from teams to standings
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
@@ -43,13 +45,22 @@ function League() {
                 console.log('Response data from /league/local:', data);
                 if (data.success) {
                     setUserData({
-                        walletAddress: data.walletAddress || 'Unknown',
-                        firstName: data.firstName || 'Unknown',
-                        leagueName: data.leagueName || 'Unknown',
-                        teamName: data.teamName || 'Unknown'
+                        walletAddress: data.user_info?.wallet_address || 'Unknown',
+                        displayName: data.user_info?.display_name || 'N/A', // Using displayName
+                        // leagueName and teamName will come from selectedLeague or standings
                     });
-                    fetchTeamsData(sessionToken);
-                    setLoading(false);
+                    const allLeagues = data.leagues || [];
+                    // setLeagues(allLeagues); // Commented out as the 'leagues' state is not yet used for multi-league selection
+                    console.log('All leagues fetched (raw data):', allLeagues);
+
+                    if (allLeagues.length > 0) {
+                        const firstLeague = allLeagues[0];
+                        setSelectedLeague(firstLeague);
+                        fetchStandingsData(sessionToken, firstLeague.league_id);
+                    } else {
+                        setError('No leagues found for this user.');
+                        setLoading(false);
+                    }
                 } else {
                     setError(data.error || 'Failed to fetch league data');
                     setLoading(false);
@@ -61,19 +72,27 @@ function League() {
             });
     }, [navigate]);
 
-    const fetchTeamsData = async (sessionToken) => {
+    const fetchStandingsData = async (sessionToken, leagueId) => {
+        if (!leagueId) {
+            setError('Cannot fetch standings without a league ID.');
+            setLoading(false);
+            return;
+        }
+        setLoading(true);
         try {
-            const response = await fetch(`${API_BASE_URL}/league/standings/local`, {
+            const response = await fetch(`${API_BASE_URL}/league/standings/local?league_id=${leagueId}`, {
                 headers: { 'Authorization': sessionToken }
             });
             const data = await response.json();
             if (data.success) {
-                setTeams(data.teams || []);
+                setStandings(data.standings || []);
             } else {
                 setError(data.error || 'Failed to fetch standings');
             }
         } catch (err) {
             setError('Error fetching standings: ' + err.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -101,29 +120,52 @@ function League() {
         );
     }
 
+    const leagueName = selectedLeague ? selectedLeague.name : 'No league selected';
+    const leagueAvatar = selectedLeague ? selectedLeague.avatar : null;
+
     return (
         <div className="container p-4">
-            <h1 className="display-4 fw-bold mb-4">Supreme Keeper League - {userData.leagueName}</h1>
-            <p className="lead">Welcome, {userData.firstName} ({userData.walletAddress})</p>
-            <p className="lead">Your Team: {userData.teamName}</p>
+            <h1 className="display-4 fw-bold mb-4">
+                {leagueAvatar && <img src={leagueAvatar} alt="League Avatar" style={{ width: '50px', height: '50px', marginRight: '15px', borderRadius: '50%' }} />}
+                Supreme Keeper League - {leagueName}
+            </h1>
+            <p className="lead">Welcome, {userData.displayName} ({userData.walletAddress})</p>
             <div className="mt-3">
-                {teams.length > 0 ? (
+                {standings.length > 0 ? (
                     <div>
-                        <h3>League Standings</h3>
-                        <ul className="list-group">
-                            {teams.map(team => (
-                                <li key={team.id} className="list-group-item">
-                                    <Link to={`/team/${team.id}`}>{team.teamName}</Link> - Managed by {team.manager} - Record: {team.record}
-                                </li>
-                            ))}
-                        </ul>
+                        <h3>League Rosters</h3>
+                        <table className="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Team Name</th>
+                                    <th>Manager</th>
+                                    <th>Record (W-L-T)</th>
+                                    <th>Player Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {standings.map(roster => (
+                                    <tr key={roster.roster_id}>
+                                        <td>
+                                            {roster.team_name || 'Unnamed Team'}
+                                        </td>
+                                        <td>
+                                            {roster.owner_avatar && <img src={roster.owner_avatar} alt="Owner Avatar" style={{ width: '25px', height: '25px', marginRight: '8px', borderRadius: '50%' }} />}
+                                            {roster.owner_display_name || roster.owner_id}
+                                        </td>
+                                        <td>{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
+                                        <td>{roster.player_count}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 ) : (
-                    <p>No standings data available yet.</p>
+                    <p>No standings data available for this league yet, or league not selected.</p>
                 )}
             </div>
         </div>
     );
 }
 
-export default League; 
+export default League;

@@ -63,17 +63,15 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
        - This function executes a comprehensive one-time data pull from the Sleeper API, retrieving all associated user, league, roster, player, and standings information.
        - All fetched data is then stored in the local `keeper.db`. The database schema, particularly the `rosters` table (with `sleeper_roster_id` as `PRIMARY KEY`) and its `ON CONFLICT` resolution strategy, has been confirmed to operate correctly, ensuring data integrity.
      - **Local Data Utilization:** Following the initial data synchronization, the frontend application primarily accesses league and team data (e.g., through `/league/local`, `/league/standings/local`) from the local `keeper.db`, thereby minimizing direct calls to the Sleeper API.
-   - Create local database schema and update backend to store and retrieve data from `keeper.db`.
+
 3. **Feature Development**
-   - Build components for league, team, and contract management using local data.
+   - Build components for trade interface using local data.
    - Implement transaction system with TON blockchain, including:
      - Enabling users to pay league fees using their TON wallet.
      - Displaying the payment status of league fees for users.
      - Logging league fee transactions from the TON blockchain into the local database.
      - Notifying users of unpaid league fees, with eventual removal from the league if fees remain unpaid by a deadline.
-4. **Testing and Deployment**
-   - Test the application for bugs and performance issues.
-   - Deploy the application to a production environment.
+
 
 ## Challenges and Solutions
 - **Data Synchronization**: Ensuring `keeper.db` stays updated with Sleeper data can be challenging. Solution: Implement a robust one-time pull mechanism with optional refresh capabilities.
@@ -81,20 +79,18 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **User Experience**: Balancing functionality with simplicity. Solution: Use Bootstrap for a clean, responsive design and iterative user feedback.
 
 ## Future Enhancements
-- Implement real-time updates for critical data if needed, with careful consideration of API usage.
-- Add support for multiple league associations per user.
-- Enhance contract management with more complex rules and automation.
+
+- Add support for multiple league associations per user. Need to review leauge selection process when a user has multiple leagues.
+- Enhance contract setting form with enhanced real time data viz type look at the future of your franchise, based on selected contract durations. Including remaining budget calculated for 4 years. Large contracts could dark shade a bar to indicate large contracts, light green for small contracts.
 - **League Commissioner Tools:**
-  - Advanced league customization options (scoring, rosters, deadlines, playoff seeding).
-  - Member management tools (invites, removals, ownership transfers).
-  - Commissioner announcement/bulletin board.
-- **Enhanced User Interaction & Engagement:**
-  - In-app/email notifications for key league events.
-  - Trade block and initial trade negotiation facilitation.
-  - Optional league chat/forum features.
+  - Member management tools (invites, removals, ownership transfers) potentially integrated with Telegram user IDs.
+  - Commissioner announcements and communications primarily via Telegram Messenger.
+- **Enhanced User Interaction & Engagement (Telegram-Centric):**
+  - All notifications (key league events, trade updates, fee reminders, etc.) to be delivered via Telegram Messenger.
+  - Trade block and initial trade negotiation facilitation, possibly using Telegram bots or groups.
+  - League chat/forum features primarily leveraging Telegram groups or channels.
 - **Draft Management & Support:**
-  - Draft center for viewing results, traded picks.
-  - Simple pre-draft ranking/planning tools.
+  - Draft center for viewing results, traded auction dollars.
   - Support for auction draft budget tracking.
 - **Historical Data and League History:**
   - Archive and display past season champions, standings, trades, and contract histories.

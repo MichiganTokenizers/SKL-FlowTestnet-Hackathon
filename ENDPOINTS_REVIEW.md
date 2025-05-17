@@ -12,7 +12,7 @@ This document tracks the review and update status of all backend endpoints in th
 | `/auth/check_association` | GET | Check if wallet needs Sleeper association | ✅ Implemented | New endpoint for the login flow |
 | `/auth/complete_association` | POST | Complete Sleeper account association | ✅ Implemented | New endpoint for the login flow |
 | `/league/local` | GET | Get league data from local DB | ✅ Implemented | |
-| `/league/standings/local` | GET | Get league standings from local DB | ✅ Implemented | |
+| `/league/standings/local` | GET | Get league standings from local DB | ✅ Implemented | Returns a list of rosters with owner info, team name, player count, and W-L-T record. Does not include full statistical ranking. |
 | `/league/teams` | GET | Get team data | ✅ Implemented | Review data format |
 | `/league/connect` | POST | Connect user to league | ✅ Implemented | |
 | `/leagues` | GET | Get all leagues | ✅ Implemented | |

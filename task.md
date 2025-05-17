@@ -3,6 +3,13 @@
 ## Active Tasks
 
 - [ ] Review and update `EndPoints_review.md` (Started: 2025-05-17)
+- [x] Restructure database based on dbRestructure.md (Started: 2025-05-21)
+- [x] Update `SleeperService.py` to align with new DB schema (Started: 2025-05-21)
+- [ ] Test `SleeperService.py` `fetch_all_data` with new DB schema (Started: 2025-05-21)
+- [x] Update frontend component `League.jsx` (and others) for new API responses (Started: 2025-05-21)
+- [x] Fix AttributeError in `get_league_standings_local` due to null metadata (Started: 2025-05-25)
+- [x] Simplify `rosters` table and dependent code to remove detailed player/team stats (Started: 2025-05-25)
+- [x] Update documentation (PLANNING.md, ENDPOINTS_REVIEW.md) with recent roster/API changes (Started: 2025-05-25)
 
 ## Discovered During Work
 
