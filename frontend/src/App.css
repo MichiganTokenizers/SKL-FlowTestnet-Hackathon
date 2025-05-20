@@ -127,3 +127,30 @@ a:hover{
         border-radius: 0;
     }
 }
+
+/* Team Page Position Group Styling */
+.position-group-header td {
+    background-color: var(--accent-color);
+    color: var(--base-color);
+    font-weight: bold;
+    padding: 0.5rem 0.75rem;
+    border-top: 2px solid var(--accent-color);
+    border-left: 2px solid var(--accent-color);
+    border-right: 2px solid var(--accent-color);
+}
+
+.player-data-row td {
+    padding: 0.5rem 0.75rem;
+    border-left: 2px solid var(--accent-color);
+    border-right: 2px solid var(--accent-color);
+    border-bottom: 1px solid #dee2e6; /* Standard Bootstrap table border color for bottom */
+}
+
+.player-data-row:last-child td {
+    border-bottom: 2px solid var(--accent-color); /* Thicker bottom border for the last row in a group */
+}
+
+/* Ensure the first player row under a header doesn't have a top border if cells get default borders */
+.position-group-header + .player-data-row td {
+    border-top: none; 
+}

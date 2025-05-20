@@ -1,3 +1,4 @@
+import React from 'react';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -25,23 +26,23 @@ function Team() {
             });
             if (!response.ok) {
                 if (response.status === 401) {
-                    localStorage.removeItem('sessionToken');
-                    window.location.href = '/login';
-                    throw new Error('Session expired. Please log in again.');
+                        localStorage.removeItem('sessionToken');
+                        window.location.href = '/login';
+                        throw new Error('Session expired. Please log in again.');
+                    }
+                    throw new Error('Failed to fetch team data');
                 }
-                throw new Error('Failed to fetch team data');
-            }
             const data = await response.json();
-            if (data.success) {
-                setTeamData(data.team);
+                if (data.success) {
+                    setTeamData(data.team);
                 setLeagueContext(data.league_context);
-            } else {
-                setError(data.error || 'Failed to load team data');
-            }
+                } else {
+                    setError(data.error || 'Failed to load team data');
+                }
         } catch (err) {
-            setError(err.message);
+                setError(err.message);
         }
-        setLoading(false);
+                setLoading(false);
     };
 
     useEffect(() => {
@@ -60,24 +61,45 @@ function Team() {
     if (error) return <div className="container p-4"><p className="text-danger">{error}</p></div>;
     if (!teamData) return <div className="container p-4"><p>No team data available</p></div>;
 
-    const playersByPosition = teamData.roster.reduce((acc, player) => {
-        const position = player.position || 'Unknown';
-        if (!acc[position]) {
-            acc[position] = [];
-        }
-        acc[position].push(player);
-        return acc;
-    }, {});
-
     const positionOrder = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB'];
-    
-    const sortedPositionEntries = Object.entries(playersByPosition).sort(([posA], [posB]) => {
+
+    const getSortableCost = (player, currentSeasonYear) => {
+        let cost = null;
+        if (player.yearly_costs && currentSeasonYear && player.yearly_costs[currentSeasonYear] !== null && player.yearly_costs[currentSeasonYear] !== undefined) {
+            cost = player.yearly_costs[currentSeasonYear];
+        } else if (player.player_contract_context && player.player_contract_context.status === 'pending_setting' &&
+                   player.player_contract_context.recent_auction_value !== null && 
+                   player.player_contract_context.recent_auction_value !== undefined) {
+            cost = player.player_contract_context.recent_auction_value;
+        }
+        // Return a very low number for null/undefined costs if sorting descending, or handle as needed
+        // For descending sort (b-a), a higher value means earlier. So nulls should be effectively smallest.
+        return cost === null || cost === undefined ? -1 : Number(cost);
+    };
+
+    const allPlayersSorted = [...teamData.roster].sort((a, b) => {
+        const posA = a.position || 'Unknown';
+        const posB = b.position || 'Unknown';
         const indexA = positionOrder.indexOf(posA);
         const indexB = positionOrder.indexOf(posB);
-        if (indexA === -1 && indexB === -1) return posA.localeCompare(posB);
-        if (indexA === -1) return 1;
-        if (indexB === -1) return -1;
-        return indexA - indexB;
+
+        if (indexA !== indexB) { // Sort by position group first
+            if (indexA === -1) return 1; // 'Unknown' or unlisted goes to the end
+            if (indexB === -1) return -1;
+            return indexA - indexB;
+        }
+
+        // Within the same position group, sort by contract cost (descending)
+        const currentSeasonYear = leagueContext ? leagueContext.current_season_year : null;
+        const costA = getSortableCost(a, currentSeasonYear);
+        const costB = getSortableCost(b, currentSeasonYear);
+
+        if (costA !== costB) {
+            return costB - costA; // Descending order for cost (higher cost comes first)
+        }
+
+        // If costs are equal, sort by name (ascending)
+        return (a.name || '').localeCompare(b.name || ''); 
     });
 
     const yearlyCostColumnHeaders = [];
@@ -86,6 +108,8 @@ function Team() {
             yearlyCostColumnHeaders.push(leagueContext.current_season_year + i);
         }
     }
+
+    const numDataColumns = 4 + yearlyCostColumnHeaders.length; // Name, Team, Draft Amount, Yrs Rem + yearly costs
 
     // Calculate min/max costs for each year for shading
     const costRangesByYear = {};
@@ -261,82 +285,90 @@ function Team() {
             <div className="row">
                 <div className="col-md-12">
                     <h2 className="mb-3">Active Roster</h2>
-                    {sortedPositionEntries.map(([position, players]) => (
-                        <div key={position} className="card mb-3">
-                            <div className="card-header">
-                                <h5 className="mb-0">{position}</h5>
-                            </div>
-                            <div className="card-body">
+                    {allPlayersSorted.length > 0 ? (
                                 <div className="table-responsive">
-                                    <table className="table table-hover table-sm">
+                            <table className="table table-hover table-sm">
                                         <thead>
                                             <tr>
                                                 <th>Name</th>
                                                 <th>Team</th>
-                                                <th>Draft Amount</th>
-                                                <th>Yrs Rem</th>
-                                                {yearlyCostColumnHeaders.map(year => (
-                                                    <th key={`header-cost-${year}`}>{year} Cost</th>
-                                                ))}
+                                        <th>Draft Amount</th>
+                                        <th>Yrs Rem</th>
+                                        {yearlyCostColumnHeaders.map(year => (
+                                            <th key={`header-cost-${year}`}>{year} Cost</th>
+                                        ))}
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {players.map(player => {
-                                                // DEBUGGING PLAYER DATA
-                                                console.log(`Player: ${player.name}, ID: ${player.id}, Yrs Rem: ${player.years_remaining}, ContractCtx: ${JSON.stringify(player.player_contract_context)}`);
-                                                return (
-                                                <tr key={player.id}>
-                                                    <td>
-                                                        {player.name}
-                                                        {player.status && player.status !== 'Active' && (
-                                                            <sup style={{ marginLeft: '4px', color: player.status === 'IR' ? 'red' : 'orange' }}>
-                                                                {player.status.substring(0,2).toUpperCase()}
-                                                            </sup>
-                                                        )}
+                                    {(() => {
+                                        let currentPosition = null;
+                                        return allPlayersSorted.map(player => {
+                                            const showPositionHeader = player.position !== currentPosition;
+                                            if (showPositionHeader) {
+                                                currentPosition = player.position;
+                                            }
+                                            return (
+                                                <React.Fragment key={`player-fragment-${player.id}`}>
+                                                    {showPositionHeader && (
+                                                        <tr className="position-group-header">
+                                                            <td colSpan={numDataColumns}>
+                                                                <h5 className="m-1">{currentPosition || 'Unknown'}</h5>
                                                     </td>
-                                                    <td>{player.team}</td>
-                                                    <td>${player.draft_amount !== null && player.draft_amount !== undefined ? player.draft_amount : 'N/A'}</td>
-                                                    <td>
-                                                        {leagueContext && leagueContext.is_contract_setting_period_active && player.player_contract_context && player.player_contract_context.status === 'pending_setting' ? (
-                                                            <select 
-                                                                className="form-select form-select-sm" 
-                                                                value={contractDurations[player.id] !== undefined ? contractDurations[player.id] : (player.years_remaining || 1)}
-                                                                onChange={(e) => handleDurationChange(player.id, parseInt(e.target.value))}
-                                                            >
-                                                                {[1, 2, 3, 4].map(yearVal => (
-                                                                    <option key={yearVal} value={yearVal}>{yearVal}</option>
-                                                                ))}
-                                                            </select>
-                                                        ) : (
-                                                            player.years_remaining !== null && player.years_remaining !== undefined ? player.years_remaining : 'N/A'
-                                                        )}
-                                                    </td>
-                                                    {yearlyCostColumnHeaders.map(year => {
-                                                        const cost = player.yearly_costs && player.yearly_costs[year];
-                                                        let displayCost = cost;
-                                                        if (player.player_contract_context && player.player_contract_context.status === 'pending_setting' && 
-                                                            year === leagueContext.current_season_year && 
-                                                            (cost === null || cost === undefined) && 
-                                                            player.player_contract_context.recent_auction_value !== null && 
-                                                            player.player_contract_context.recent_auction_value !== undefined) {
-                                                            displayCost = player.player_contract_context.recent_auction_value;
-                                                        }
-                                                        return (
-                                                            <td key={`cost-${player.id}-${year}`} style={getCostCellStyle(displayCost, year)}>
-                                                                {displayCost !== null && displayCost !== undefined ? `$${displayCost}` : '-'}
-                                                            </td>
-                                                        );
-                                                    })}
                                                 </tr>
-                                                );
-                                            })}
+                                                    )}
+                                                    <tr key={player.id} className="player-data-row">
+                                                        <td>
+                                                            {player.name}
+                                                            {player.status && player.status !== 'Active' && (
+                                                                <sup style={{ marginLeft: '4px', color: player.status === 'IR' ? 'red' : 'orange' }}>
+                                                                    {player.status.substring(0,2).toUpperCase()}
+                                                                </sup>
+                                                            )}
+                                                        </td>
+                                                        <td>{player.team}</td>
+                                                        <td>${player.draft_amount !== null && player.draft_amount !== undefined ? player.draft_amount : 'N/A'}</td>
+                                                        <td>
+                                                            {leagueContext && leagueContext.is_contract_setting_period_active && player.player_contract_context && player.player_contract_context.status === 'pending_setting' ? (
+                                                                <select 
+                                                                    className="form-select form-select-sm" 
+                                                                    value={contractDurations[player.id] !== undefined ? contractDurations[player.id] : (player.years_remaining || 1)}
+                                                                    onChange={(e) => handleDurationChange(player.id, parseInt(e.target.value))}
+                                                                >
+                                                                    {[1, 2, 3, 4].map(yearVal => (
+                                                                        <option key={yearVal} value={yearVal}>{yearVal}</option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : (
+                                                                player.years_remaining !== null && player.years_remaining !== undefined ? player.years_remaining : 'N/A'
+                                                            )}
+                                                        </td>
+                                                        {yearlyCostColumnHeaders.map(year => {
+                                                            const cost = player.yearly_costs && player.yearly_costs[year];
+                                                            let displayCost = cost;
+                                                            if (player.player_contract_context && player.player_contract_context.status === 'pending_setting' && 
+                                                                year === leagueContext.current_season_year && 
+                                                                (cost === null || cost === undefined) && 
+                                                                player.player_contract_context.recent_auction_value !== null && 
+                                                                player.player_contract_context.recent_auction_value !== undefined) {
+                                                                displayCost = player.player_contract_context.recent_auction_value;
+                                                            }
+                                                            return (
+                                                                <td key={`cost-${player.id}-${year}`} style={getCostCellStyle(displayCost, year)}>
+                                                                    {displayCost !== null && displayCost !== undefined ? `$${displayCost}` : '-'}
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                </React.Fragment>
+                                            );
+                                        });
+                                    })()}
                                         </tbody>
                                     </table>
-                                </div>
-                            </div>
                         </div>
-                    ))}
-                    {Object.keys(playersByPosition).length === 0 && <p>No active players on this roster.</p>}
+                    ) : (
+                        <p>No active players on this roster.</p>
+                    )}
                 </div>
             </div>
         </div>
