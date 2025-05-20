@@ -6,6 +6,7 @@ import SleeperImport from './SleeperImport';
 import AssociateSleeper from './components/auth/AssociateSleeper';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
+import './App.css';
 import { useTonConnect } from './hooks/useTonConnect';
 import { useTonWallet } from '@tonconnect/ui-react';
 import Home from './components/common/Home';
@@ -175,23 +176,44 @@ function AppContent() {
                     </button>
                     <div className="collapse navbar-collapse" id="navbarNav">
                         <ul className="navbar-nav me-auto">
-                            <li className="nav-item">
-                                <Link className="nav-link" to="/">Home</Link>
-                            </li>
                             {sessionToken && !isNewUser && (
                                 <>
-                                    <li className="nav-item">
-                                        <Link className="nav-link" to="/league">My League</Link>
+                                    <li className="nav-item dropdown">
+                                        <a className="nav-link dropdown-toggle" href="#" id="myLeaguesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                            My Leagues
+                                        </a>
+                                        <ul className="dropdown-menu" aria-labelledby="myLeaguesDropdown">
+                                            {/* Placeholder for league links - will be populated dynamically later */}
+                                            <li><a className="dropdown-item" href="#">League 1 (Placeholder)</a></li>
+                                            <li><a className="dropdown-item" href="#">League 2 (Placeholder)</a></li>
+                                            <li><hr className="dropdown-divider" /></li>
+                                            <li><a className="dropdown-item" href="#">View All Leagues</a></li>
+                                        </ul>
                                     </li>
                                     <li className="nav-item">
-                                        <Link className="nav-link" to="/profile">Profile</Link>
+                                        <Link className="nav-link" to="/my-team">My Team</Link>
+                                    </li>
+                                    <li className="nav-item">
+                                        <Link className="nav-link" to="/trade-desk">Trade Desk</Link>
                                     </li>
                                 </>
                             )}
                         </ul>
                         <div className="d-flex align-items-center">
                             {sessionToken ? (
-                                <button onClick={logout} className="btn btn-outline-light">Logout</button>
+                                <div className="nav-item dropdown">
+                                    <a className="nav-link text-white" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" className="bi bi-list" viewBox="0 0 16 16">
+                                            <path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
+                                        </svg>
+                                    </a>
+                                    <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
+                                        <li><Link className="dropdown-item" to="/account">Account</Link></li>
+                                        <li><Link className="dropdown-item" to="/change-team-name">Change Team Name</Link></li>
+                                        <li><hr className="dropdown-divider" /></li>
+                                        <li><button onClick={logout} className="dropdown-item btn btn-link">Logout</button></li>
+                                    </ul>
+                                </div>
                             ) : (
                                 <TonConnectButton className="btn btn-outline-light" />
                             )}
@@ -230,13 +252,6 @@ function AppContent() {
                             <Navigate to="/" replace />
                         )
                     } />
-                    <Route path="/profile" element={
-                        sessionToken && !isNewUser ? (
-                            <Profile />
-                        ) : (
-                            <Navigate to="/" replace />
-                        )
-                    } />
                     <Route path="/sleeper-import" element={<SleeperImport />} />
                     <Route path="/associate-sleeper" element={<AssociateSleeper onAssociationSuccess={handleAssociationSuccess} />} />
                     <Route path="/league-connect" element={
@@ -260,7 +275,7 @@ function AppContent() {
 // Main App Component
 function App() {
     return (
-        <TonConnectUIProvider manifestUrl="https://1e4c-193-43-135-215.ngrok-free.app/tonconnect-manifest.json">
+        <TonConnectUIProvider manifestUrl="https://10bf-193-43-135-254.ngrok-free.app/tonconnect-manifest.json">
             <Router>
                 <AppContent />
             </Router>

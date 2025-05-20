@@ -8,6 +8,7 @@ function League() {
     // const [leagues, setLeagues] = useState([]); // To store all leagues from /league/local - Commented out for now
     const [selectedLeague, setSelectedLeague] = useState(null); // To store the first league object
     const [standings, setStandings] = useState([]); // Changed from teams to standings
+    const [transactions, setTransactions] = useState([]); // State for recent transactions
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const navigate = useNavigate();
@@ -70,6 +71,13 @@ function League() {
                 setError(err.message);
                 setLoading(false);
             });
+
+        // Mock transaction data - replace with actual API call later
+        setTransactions([
+            { id: 1, date: '2024-05-27', type: 'Trade', description: 'Team A trades Player X to Team B for Player Y' },
+            { id: 2, date: '2024-05-26', type: 'Waiver', description: 'Player Z (Contracted) waived by Team C' },
+            { id: 3, date: '2024-05-25', type: 'Trade', description: 'Team D trades Pick 1.05 to Team E for Player W' },
+        ]);
     }, [navigate]);
 
     const fetchStandingsData = async (sessionToken, leagueId) => {
@@ -121,26 +129,25 @@ function League() {
     }
 
     const leagueName = selectedLeague ? selectedLeague.name : 'No league selected';
-    const leagueAvatar = selectedLeague ? selectedLeague.avatar : null;
 
     return (
         <div className="container p-4">
             <h1 className="display-4 fw-bold mb-4">
-                {leagueAvatar && <img src={leagueAvatar} alt="League Avatar" style={{ width: '50px', height: '50px', marginRight: '15px', borderRadius: '50%' }} />}
-                Supreme Keeper League - {leagueName}
+                {leagueName}
             </h1>
-            <p className="lead">Welcome, {userData.displayName} ({userData.walletAddress})</p>
+            <p className="lead">Welcome, {userData.displayName}</p>
             <div className="mt-3">
                 {standings.length > 0 ? (
                     <div>
-                        <h3>League Rosters</h3>
+                        <h3>League Standings</h3>
                         <table className="table table-striped table-hover">
                             <thead>
                                 <tr>
                                     <th>Team Name</th>
                                     <th>Manager</th>
                                     <th>Record (W-L-T)</th>
-                                    <th>Player Count</th>
+                                    <th>Next Matchup</th>
+                                    <th>Transaction Count</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -150,11 +157,11 @@ function League() {
                                             {roster.team_name || 'Unnamed Team'}
                                         </td>
                                         <td>
-                                            {roster.owner_avatar && <img src={roster.owner_avatar} alt="Owner Avatar" style={{ width: '25px', height: '25px', marginRight: '8px', borderRadius: '50%' }} />}
                                             {roster.owner_display_name || roster.owner_id}
                                         </td>
                                         <td>{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
-                                        <td>{roster.player_count}</td>
+                                        <td>TBD</td>
+                                        <td>0</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -162,6 +169,32 @@ function League() {
                     </div>
                 ) : (
                     <p>No standings data available for this league yet, or league not selected.</p>
+                )}
+            </div>
+
+            <div className="mt-5">
+                <h3>Recent Transactions</h3>
+                {transactions.length > 0 ? (
+                    <table className="table table-striped table-hover mt-3">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {transactions.map(tx => (
+                                <tr key={tx.id}>
+                                    <td>{tx.date}</td>
+                                    <td>{tx.type}</td>
+                                    <td>{tx.description}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                ) : (
+                    <p className="mt-3">No recent transactions to display.</p>
                 )}
             </div>
         </div>

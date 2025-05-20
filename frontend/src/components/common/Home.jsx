@@ -6,7 +6,7 @@ function Home({ sessionToken, onLogout }) {
             {sessionToken ? (
                 <div className="row justify-content-center">
                     <div className="col-md-8">
-                        <p className="lead">Welcome, {localStorage.getItem('walletAddress')}!</p>
+                        <p className="lead">Welcome!</p>
                         <div className="mt-3">
                             <Link to="/sleeper-import" className="btn btn-primary">Import Sleeper League</Link>
                         </div>

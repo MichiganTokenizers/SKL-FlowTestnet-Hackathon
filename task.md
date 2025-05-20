@@ -10,6 +10,12 @@
 - [x] Fix AttributeError in `get_league_standings_local` due to null metadata (Started: 2025-05-25)
 - [x] Simplify `rosters` table and dependent code to remove detailed player/team stats (Started: 2025-05-25)
 - [x] Update documentation (PLANNING.md, ENDPOINTS_REVIEW.md) with recent roster/API changes (Started: 2025-05-25)
+- [x] UI Refinements (Navbar, League Page, Welcome Message) (Completed: 2025-05-28)
+  - [x] League Page: Remove hardcoded "Supreme Keeper League" title, use dynamic `league_name`.
+  - [x] Welcome Message: Remove wallet address display.
+  - [x] Tables: Remove avatar display from tables.
+
+- [ ] Add "Recent Transactions" table to League page (Started: 2025-05-28)
 
 ## Discovered During Work
 

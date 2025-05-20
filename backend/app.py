@@ -289,7 +289,7 @@ def calculate_penalty(contract, current_year, is_offseason):
 
 # Initialize TonConnect
 ton_connect = TonConnect(
-    manifest_url='https://1e4c-193-43-135-215.ngrok-free.app/tonconnect-manifest.json'
+    manifest_url='https://10bf-193-43-135-254.ngrok-free.app/tonconnect-manifest.json'
 )
 
 # Helper function to get current user from session
@@ -339,9 +339,9 @@ def get_current_user():
 @app.route('/tonconnect-manifest.json')
 def tonconnect_manifest():
     return {
-        "url": "https://1e4c-193-43-135-215.ngrok-free.app",
+        "url": "https://10bf-193-43-135-254.ngrok-free.app",
         "name": "Supreme Keeper League",
-        "iconUrl": "https://1e4c-193-43-135-215.ngrok-free.app/static/icon.png"
+        "iconUrl": "https://10bf-193-43-135-254.ngrok-free.app/static/icon.png"
     }
 
 # TonConnect login initiation

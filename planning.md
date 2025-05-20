@@ -24,6 +24,13 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
    -Waiving player will take place on Sleeper app, but Sleeper API pull will detect the missing contracted player, update contracts with IsActive = 0, penalty_incurred, and penalty_year. 
    - Trading player on Supreme Keeper League site with options for trading next year's auction money. The trade will have to also take place on Sleeper app with players only.
 - **Contract Management**: Creating, viewing, and managing player contracts. After draft, before start of season, users will be prompted with contract setting page for newly drafted players. Can be accessed/changed up to start of season.
+  - Franchise Tag System: Each team can designate one player as their franchise player before the start of the season.
+    - Tag value is calculated as the greater of:
+      - Average of the top 5 contracts at that position from the previous year
+      - Player's current contract value + 10%
+    - Franchise tag can only be used on players with expiring contracts
+    - Tag can only be used once per season and must be declared during the contract setting phase
+    - Franchise tagged players cannot be traded during their tagged season
 - **Profile Management**: User profile and settings.
 
 ### Backend
@@ -41,8 +48,17 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 
 ## Database Schema (`keeper.db`)
 - **Users**: Information about users, including wallet address and associated Sleeper user ID.
-- **Leagues**: Details of connected Sleeper leagues.
-- **Teams**: Team information within each league.
+- **Leagues**: Details of connected Sleeper leagues. (This refers to `LeagueMetadata`)
+- **Teams**: Team information within each league. (This is represented by the `rosters` table)
+  - **Rosters (`rosters` table)**: Stores team composition linking to a `LeagueMetadata`.
+    - `sleeper_roster_id` (PK): Sleeper's unique ID for the roster.
+    - `sleeper_league_id` (FK to `LeagueMetadata`): The league this roster belongs to.
+    - `owner_id`: Sleeper user ID of the team owner.
+    - `players`: JSON string list of Sleeper player IDs on the main roster.
+    - `metadata`: JSON string for roster-specific metadata from Sleeper (e.g., custom team name).
+    - `reserve`: JSON string list of Sleeper player IDs on the reserve squad.
+    - `taxi`: JSON string list of Sleeper player IDs on the taxi squad.
+    - `wins`, `losses`, `ties`: Integer values for the team's record, sourced from roster settings in Sleeper.
 - **Players**: Player data including contracts and status.
 - **Contracts**: Contract details for players.
 - **Transactions**: Records of trades, waivers, etc.
@@ -90,7 +106,7 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
   - Trade block and initial trade negotiation facilitation, possibly using Telegram bots or groups.
   - League chat/forum features primarily leveraging Telegram groups or channels.
 - **Draft Management & Support:**
-  - Draft center for viewing results, traded auction dollars.
+  - Draft contract setting page for viewing results, traded auction dollars.
   - Support for auction draft budget tracking.
 - **Historical Data and League History:**
   - Archive and display past season champions, standings, trades, and contract histories.
@@ -100,7 +116,19 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **Deeper Financial/Transaction Transparency:**
   - League treasury view (fees collected, pot total, payouts).
   - Detailed, user-accessible audit log for significant league actions.
-- Develop smart contract(s) to automate the payout of league winnings to winners on the TON blockchain.
+  - Develop smart contract(s) to automate the payout of league winnings to winners on the TON blockchain.
+- Create NFTs for league trophies and accomplishments
+- **Enhanced Contract Setting Form:**
+  - Add franchise tag selection option with clear visual indicators
+  - Display calculated franchise tag values by position showing both calculation methods:
+    - Average of previous year's top 5 position contracts
+    - Current contract + 10%
+  - Show eligible players for franchise tag (expiring contracts only)
+  - Include franchise tag usage history and restrictions
+  - Show impact of franchise tag on team's salary cap and future contract options
+  - Real-time data visualization of future franchise outlook based on contract durations
+  - Remaining budget calculation for 4 years
+  - Visual contract size indicators (dark shade for large contracts, light green for small contracts)
 
 ## Timeline
 - **Week 1-2**: Setup, initial design, and core architecture.

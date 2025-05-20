@@ -190,6 +190,12 @@ class SleeperService:
 
                 # Extract data for LeagueMetadata
                 league_name = full_league_details.get("name", "Unknown League")
+
+                if not league_name.startswith("SKL"):
+                    self.logger.info(f"SleeperService.fetch_all_data: Skipping league '{league_name}' (ID: {league_id}) because its name does not start with 'SKL'.")
+                    print(f"DEBUG (SleeperService): Skipping league '{league_name}' (ID: {league_id}) due to naming convention.") # Optional: for more prominent console debugging
+                    continue
+
                 league_season_year = full_league_details.get("season", current_api_season) # current_api_season is defined earlier
                 league_status = full_league_details.get("status", "unknown")
                 league_settings_json = json.dumps(full_league_details.get("settings", {}))
