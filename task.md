@@ -16,11 +16,12 @@
   - [x] Tables: Remove avatar display from tables.
 
 - [ ] Add "Recent Transactions" table to League page (Started: 2025-05-28)
-- [ ] Build out Team Page functionality (Started: 2025-05-29)
-  - [x] 'My Team' link in navbar goes to logged-in user's team page
-  - [x] Team names in standings table link to respective team pages
-  - [x] Team page displays players by position (QB, RB, WR, TE, DEF)
-  - [x] Team page displays player draft amount
+- [x] Build out Team Page functionality (Started: 2025-05-29) (Completed: 2023-10-27)
+  - [x] 'My Team' link in navbar goes to logged-in user's team page (Completed: 2023-10-27)
+  - [x] Team names in standings table link to respective team pages (Completed: 2023-10-27)
+  - [x] Team page displays players by position (QB, RB, WR, TE, DEF) (Completed: 2023-10-27)
+  - [x] Team page displays player draft amount (Completed: 2023-10-27)
+  - [x] Team page displays "Years Remaining" (Completed: 2023-10-27)
 
 ## Discovered During Work
 

@@ -135,6 +135,16 @@ class SleeperService:
             self.logger.error(f"Error fetching drafts for league {league_id}: {str(e)}")
             return []
     
+    def get_draft_picks(self, draft_id: str) -> List[Dict]:
+        """Get all picks for a specific draft."""
+        try:
+            response = requests.get(f"{self.BASE_URL}/draft/{draft_id}/picks")
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Error fetching picks for draft {draft_id}: {str(e)}")
+            return []
+    
     def fetch_all_data(self, wallet_address: str) -> Dict[str, Any]:
         """
         Fetch all Sleeper data for a user and store it in the local database.
@@ -421,7 +431,49 @@ class SleeperService:
                         d_draft_id = draft_data.get("draft_id")
                         d_status = draft_data.get("status")
                         d_start_time = draft_data.get("start_time")
-                        d_data_json = json.dumps(draft_data)
+                        d_season = draft_data.get("season")
+
+                        # Determine what to store in d_data_json
+                        if d_draft_id and draft_data.get("type") == "auction" and d_status == "complete":
+                            self.logger.info(f"SleeperService.fetch_all_data: Fetching picks for completed auction draft {d_draft_id} in league {league_id}.")
+                            picks_data = self.get_draft_picks(d_draft_id)
+                            if picks_data: # If picks were successfully fetched
+                                d_data_json = json.dumps(picks_data) # Ensure d_data_json is set with actual picks
+                                self.logger.info(f"SleeperService.fetch_all_data: Storing actual picks for draft {d_draft_id}.")
+
+                                # --- Create default 1-year contracts for these auction acquisitions ---
+                                if d_season: # Ensure we have a season for the contract_year
+                                    for pick in picks_data: # picks_data is the list of pick objects
+                                        picked_player_id = pick.get('player_id')
+                                        pick_metadata = pick.get('metadata', {})
+                                        auction_amount_str = pick_metadata.get('amount')
+                                        drafting_team_roster_id_int = pick.get('roster_id') # This is sleeper_roster_id
+
+                                        if picked_player_id and auction_amount_str is not None and drafting_team_roster_id_int is not None:
+                                            try:
+                                                auction_amount = int(auction_amount_str)
+                                                contract_year_int = int(d_season)
+                                                team_id_str = str(drafting_team_roster_id_int)
+
+                                                self.logger.info(f"SleeperService: Creating default 1-year contract for player {picked_player_id} on team {team_id_str}, amount ${auction_amount}, season {d_season}.")
+                                                cursor.execute('''
+                                                    INSERT OR IGNORE INTO contracts 
+                                                        (player_id, team_id, draft_amount, contract_year, duration, is_active, created_at, updated_at)
+                                                    VALUES (?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))
+                                                ''', (picked_player_id, team_id_str, auction_amount, contract_year_int))
+                                            except ValueError as e:
+                                                self.logger.error(f"SleeperService: Error converting data for default contract for player {picked_player_id}: {e} (amount: {auction_amount_str}, season: {d_season})")
+                                        else:
+                                            self.logger.warning(f"SleeperService: Missing data for default contract creation from pick: {pick}")
+                                else:
+                                    self.logger.warning(f"SleeperService: Missing season for draft {d_draft_id}, cannot create default contracts.")
+                                # --- End default contract creation ---
+
+                            else: # Fallback if fetching picks fails, store original draft_data
+                                self.logger.warning(f"SleeperService.fetch_all_data: Failed to fetch picks for completed auction draft {d_draft_id}. Storing metadata instead.")
+                                d_data_json = json.dumps(draft_data)
+                        else: # For non-auction drafts or incomplete auction drafts, store the metadata
+                            d_data_json = json.dumps(draft_data)
 
                         if d_start_time:
                             try:
@@ -437,15 +489,16 @@ class SleeperService:
 
                         self.logger.debug(f"SleeperService.fetch_all_data: Upserting draft {d_draft_id} for league {league_id}.")
                         cursor.execute('''
-                            INSERT INTO drafts (sleeper_draft_id, league_id, status, start_time, data, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                            INSERT INTO drafts (sleeper_draft_id, league_id, season, status, start_time, data, created_at, updated_at)
+                            VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
                             ON CONFLICT(sleeper_draft_id) DO UPDATE SET
                                 league_id = excluded.league_id,
+                                season = excluded.season,
                                 status = excluded.status,
                                 start_time = excluded.start_time,
                                 data = excluded.data,
                                 updated_at = datetime('now')
-                        ''', (d_draft_id, league_id, d_status, d_start_time_iso, d_data_json))
+                        ''', (d_draft_id, league_id, d_season, d_status, d_start_time_iso, d_data_json))
             
             # Step 8: Consolidate and store all unique players from rosters
             self.logger.info("SleeperService.fetch_all_data: Starting general player data import...")
