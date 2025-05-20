@@ -65,6 +65,8 @@ function AppContent() {
     const tonWallet = useTonWallet();
     const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
     const [isNewUser, setIsNewUser] = useState(false);
+    const [leagues, setLeagues] = useState([]); // Added for managing user's leagues
+    const [selectedLeagueId, setSelectedLeagueId] = useState(null); // Added for selected league
     const tonConnectUI = useTonConnectUI()[0];
     const navigate = useNavigate();
 
@@ -79,6 +81,8 @@ function AppContent() {
             localStorage.removeItem('sessionToken');
             setSessionToken(null);
             setIsNewUser(false);
+            setLeagues([]); // Clear leagues on logout
+            setSelectedLeagueId(null); // Clear selected league on logout
             navigate('/');
         }
     };
@@ -116,21 +120,106 @@ function AppContent() {
 
     // New function to handle successful association
     const handleAssociationSuccess = async () => {
-        console.log('Sleeper association successful, backend has fetched data. Navigating to league.');
+        console.log('Sleeper association successful, backend has fetched data.');
         setIsNewUser(false); // User is no longer "new"
-        navigate('/league'); // Directly navigate to league
+        // After association, fetch leagues and navigate
+        if (sessionToken) { // sessionToken should be set by now
+            const userLeaguesData = await fetchUserLeagues(sessionToken);
+            if (userLeaguesData.success && userLeaguesData.leagues.length > 0) {
+                navigate('/league');
+            } else if (userLeaguesData.success) { // Has leagues but list is empty
+                navigate('/league'); // Navigate to league page, it will show "no leagues"
+            } else {
+                // Handle error in fetching leagues post-association if necessary
+                navigate('/associate-sleeper'); // Or back to a relevant page
+            }
+        } else {
+             navigate('/associate-sleeper'); // Fallback if session token issue
+        }
+    };
+
+    const fetchUserLeagues = async (token) => {
+        if (!token) return { success: false, leagues: [], error: 'No token for fetchUserLeagues' };
+        try {
+            const response = await fetch(`${API_BASE_URL}/league/local`, {
+                headers: { 'Authorization': token }
+            });
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Failed to fetch leagues and parse error JSON' }));
+                console.error('Failed to fetch user leagues:', response.status, errorData.error);
+                if (response.status === 401) { // Unauthorized
+                    logout(); // Perform logout if session is invalid
+                }
+                return { success: false, leagues: [], error: errorData.error || `HTTP error ${response.status}` };
+            }
+            const data = await response.json();
+            if (data.success) {
+                setLeagues(data.leagues || []);
+                if ((data.leagues || []).length > 0) {
+                    setSelectedLeagueId(data.leagues[0].league_id);
+                } else {
+                    setSelectedLeagueId(null); // No leagues, so no selected league
+                }
+                return { success: true, leagues: data.leagues || [] };
+            } else {
+                return { success: false, leagues: [], error: data.error || 'Fetching leagues was not successful' };
+            }
+        } catch (error) {
+            console.error('Error in fetchUserLeagues:', error);
+            return { success: false, leagues: [], error: error.message };
+        }
     };
 
     useEffect(() => {
-        if (connected && tonWallet && !sessionToken) {
+        const currentToken = localStorage.getItem('sessionToken');
+        if (currentToken) {
+            setSessionToken(currentToken);
+            // Verify token and fetch initial data if token exists
+            const verifyAndFetch = async () => {
+                // This verification could be a dedicated endpoint or part of fetchUserLeagues
+                // For now, assume fetchUserLeagues handles auth errors (like 401)
+                const leagueData = await fetchUserLeagues(currentToken);
+                if (!leagueData.success) {
+                    // If fetching leagues fails (e.g. bad token), logout might have been called
+                    // If not, ensure user is redirected or state is cleared
+                    if (localStorage.getItem('sessionToken')) { // check if logout was called
+                       // setError('Failed to verify session or fetch initial data.');
+                       // Potentially navigate to login or show error
+                    }
+                }
+                 // Determine if association is needed based on user state (isNewUser could be set by login)
+                const userNeedsAssociation = async () => {
+                    try {
+                        const res = await fetch(`${API_BASE_URL}/auth/check_association`, { headers: { 'Authorization': currentToken }});
+                        if (!res.ok) return true; // Assume needs association on error
+                        const checkData = await res.json();
+                        return checkData.success ? checkData.needs_association : true;
+                    } catch {
+                        return true;
+                    }
+                };
+
+                if (await userNeedsAssociation()) {
+                    navigate('/associate-sleeper');
+                } else if (leagueData.leagues.length > 0) {
+                    navigate('/league');
+                } else {
+                    // User is associated but has no leagues, stay on a page or redirect to league import/search
+                    navigate('/league'); // League page will show "no leagues"
+                }
+
+            };
+            verifyAndFetch();
+        }
+
+        // This effect primarily handles initial login via TonConnect
+        if (connected && tonWallet && !sessionToken && !localStorage.getItem('sessionToken')) { // Ensure we only run this for a new wallet connection without an existing session
             const login = async () => {
                 try {
-                    const nonce = Math.random().toString(36).substring(2);
-                    const response = await fetch('http://localhost:5000/auth/login', {
+                    const nonce = Math.random().toString(36).substring(2); // Consider a more secure nonce
+                    const response = await fetch(`${API_BASE_URL}/auth/login`, {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             walletAddress: tonWallet.account.address,
                             nonce: nonce
@@ -142,29 +231,46 @@ function AppContent() {
                         const newSessionToken = loginData.sessionToken;
                         localStorage.setItem('sessionToken', newSessionToken);
                         setSessionToken(newSessionToken);
-                        setIsNewUser(loginData.isNewUser);
-                        
-                        let associationNeeded = loginData.isNewUser;
-                        if (!loginData.isNewUser) {
-                            const fetchResult = await fetchAllSleeperData(newSessionToken);
-                            if (!fetchResult.success && fetchResult.needsAssociation) {
-                                associationNeeded = true;
+                        setIsNewUser(loginData.isNewUser); // Set based on login response
+
+                        if (loginData.isNewUser) {
+                            navigate('/associate-sleeper');
+                        } else {
+                            // For existing user, fetch their leagues
+                            const userLeaguesData = await fetchUserLeagues(newSessionToken);
+                            if (userLeaguesData.success && userLeaguesData.leagues.length > 0) {
+                                navigate('/league');
+                            } else if (userLeaguesData.success) { // Successfully fetched but no leagues
+                                navigate('/league'); // League page will show "no leagues"
+                            } else {
+                                // Error fetching leagues for existing user, potentially back to login or error page
+                                // For now, let's assume they might need to associate if fetchAllData implies it
+                                const fetchResult = await fetchAllSleeperData(newSessionToken);
+                                if (!fetchResult.success && fetchResult.needsAssociation) {
+                                     navigate('/associate-sleeper');
+                                } else {
+                                     navigate('/'); // Or an error page
+                                }
                             }
                         }
-                        
-                        if (associationNeeded) {
-                            navigate('/associate-sleeper'); // Or your league-connect route if that handles association
-                        } else {
-                            navigate('/league');
-                        }
+                    } else {
+                        // Handle login failure
+                        console.error("Login failed:", loginData.error);
                     }
                 } catch (error) {
-                    console.error('Login error:', error);
+                    console.error('Login process error:', error);
                 }
             };
             login();
         }
-    }, [connected, tonWallet, sessionToken, navigate]);
+    // }, [connected, tonWallet, sessionToken, navigate]); // Original dependencies
+    // eslint-disable-next-line react-hooks/exhaustive-deps 
+    }, [connected, tonWallet, navigate]); // Removed sessionToken from deps to avoid re-running on its own change from localStorage hydration
+
+    const handleLeagueNavChange = (leagueId) => {
+        setSelectedLeagueId(leagueId);
+        navigate('/league'); // Navigate to league page when a league is selected from navbar
+    };
 
     return (
         <div className="App min-vh-100 d-flex flex-column">
@@ -176,20 +282,27 @@ function AppContent() {
                     </button>
                     <div className="collapse navbar-collapse" id="navbarNav">
                         <ul className="navbar-nav me-auto">
-                            {sessionToken && !isNewUser && (
+                            {sessionToken && !isNewUser && leagues.length > 0 && (
+                                <li className="nav-item dropdown">
+                                    <a className="nav-link dropdown-toggle" href="#" id="myLeaguesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                        My Leagues
+                                    </a>
+                                    <ul className="dropdown-menu" aria-labelledby="myLeaguesDropdown">
+                                        {leagues.map(league => (
+                                            <li key={league.league_id}>
+                                                <button 
+                                                    className={`dropdown-item ${league.league_id === selectedLeagueId ? 'active' : ''}`}
+                                                    onClick={() => handleLeagueNavChange(league.league_id)}
+                                                >
+                                                    {league.name}
+                                                </button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </li>
+                            )}
+                            {sessionToken && !isNewUser && ( // Keep other nav items
                                 <>
-                                    <li className="nav-item dropdown">
-                                        <a className="nav-link dropdown-toggle" href="#" id="myLeaguesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                            My Leagues
-                                        </a>
-                                        <ul className="dropdown-menu" aria-labelledby="myLeaguesDropdown">
-                                            {/* Placeholder for league links - will be populated dynamically later */}
-                                            <li><a className="dropdown-item" href="#">League 1 (Placeholder)</a></li>
-                                            <li><a className="dropdown-item" href="#">League 2 (Placeholder)</a></li>
-                                            <li><hr className="dropdown-divider" /></li>
-                                            <li><a className="dropdown-item" href="#">View All Leagues</a></li>
-                                        </ul>
-                                    </li>
                                     <li className="nav-item">
                                         <Link className="nav-link" to="/my-team">My Team</Link>
                                     </li>
@@ -240,7 +353,7 @@ function AppContent() {
                     } />
                     <Route path="/league" element={
                         sessionToken && !isNewUser ? (
-                            <League />
+                            <League leagues={leagues} selectedLeagueId={selectedLeagueId} sessionToken={sessionToken} />
                         ) : (
                             <Navigate to="/" replace />
                         )

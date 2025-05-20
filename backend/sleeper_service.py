@@ -457,13 +457,18 @@ class SleeperService:
                 self.logger.info(f"SleeperService.fetch_all_data: Retrieved {len(all_players_api_data)} players from Sleeper API for general import.")
                 print(f"DEBUG (SleeperService): Retrieved {len(all_players_api_data)} players from Sleeper API")
                 players_to_insert = []
+                allowed_positions = {'QB', 'RB', 'WR', 'TE', 'DEF'}
                 for player_id, player_info in all_players_api_data.items():
-                    players_to_insert.append((
-                        player_id,
-                        player_info.get('full_name', player_info.get('first_name', '') + ' ' + player_info.get('last_name', '')).strip(),
-                        player_info.get('position'),
-                        player_info.get('team')
-                    ))
+                    player_position = player_info.get('position')
+                    if player_position in allowed_positions:
+                        players_to_insert.append((
+                            player_id,
+                            player_info.get('full_name', player_info.get('first_name', '') + ' ' + player_info.get('last_name', '')).strip(),
+                            player_position,
+                            player_info.get('team')
+                        ))
+                    else:
+                        self.logger.debug(f"SleeperService.fetch_all_data: Skipping player {player_id} (Name: {player_info.get('full_name', 'N/A')}) due to position: {player_position}")
                 
                 if players_to_insert:
                     self.logger.info(f"SleeperService.fetch_all_data: Bulk inserting/updating {len(players_to_insert)} players into DB.")
@@ -478,6 +483,9 @@ class SleeperService:
                     ''', players_to_insert)
                     self.logger.info(f"SleeperService.fetch_all_data: Added/Updated {len(players_to_insert)} players to the database.")
                     print(f"DEBUG (SleeperService): Added {len(players_to_insert)} players to the database")
+                else:
+                    self.logger.info("SleeperService.fetch_all_data: No players matched the position criteria (QB, RB, WR, TE, DEF) to be inserted/updated.")
+                    print("DEBUG (SleeperService): No players matched position criteria for DB operation.")
 
             self.logger.info(f"SleeperService.fetch_all_data: Completed processing for wallet {wallet_address}.")
             return {"success": True, "message": "All data fetched and stored successfully"}

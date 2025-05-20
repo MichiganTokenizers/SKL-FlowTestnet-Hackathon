@@ -1141,10 +1141,19 @@ def complete_sleeper_association():
         print(f"DEBUG: Calling internal sleeper_service.fetch_all_data for {wallet_address}")
         fetch_result = sleeper_service.fetch_all_data(wallet_address)
         print(f"DEBUG: Internal fetch_all_data result: {fetch_result}")
-        if not fetch_result.get('success'):
+        
+        if fetch_result.get('success'):
+            conn.commit() # Commit changes made by fetch_all_data
+            print(f"DEBUG: conn.commit() executed for wallet_address: {wallet_address} (after successful fetch_all_data)")
+        elif fetch_result.get('error'): # Make sure to check if 'error' key exists
             # Log this error, but the association itself was successful.
             # The client will attempt another fetch via onAssociationSuccess anyway.
             print(f"Warning: Post-association data fetch failed for {wallet_address}: {fetch_result.get('error')}")
+            # Consider if a rollback is needed if fetch_all_data could leave partial data on error.
+            # For now, the user association is committed, but data fetch might be incomplete.
+        else:
+            # Handle cases where 'success' is not true and 'error' is not present, if any.
+            print(f"Warning: Post-association data fetch returned an unexpected result for {wallet_address}: {fetch_result}")
 
         print(f"DEBUG: /auth/complete_association successful for {wallet_address}")
         return jsonify({'success': True, 'message': 'Sleeper account associated successfully'}), 200
