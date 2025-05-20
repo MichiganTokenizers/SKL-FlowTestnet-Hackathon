@@ -1444,6 +1444,55 @@ def get_user_roster_for_league():
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
 
+def _get_player_current_year_cost(player_id: str, team_id: str, current_season_year: int, db_conn: sqlite3.Connection) -> float:
+    """
+    Determines the current season's contract cost for a player on a specific team.
+    Uses vw_contractByYear first, then falls back to the contracts table for Year 1 costs.
+    """
+    cursor = db_conn.cursor()
+    cost = 0.0
+
+    # Attempt 1: Check vw_contractByYear
+    # This view calculates the escalated cost for each year of a contract.
+    # The `year_number_in_contract` combined with `contract_start_season` gives the actual season this cost applies to.
+    # So, we are looking for the row where (contract_start_season + year_number_in_contract - 1) IS the current_season_year.
+    try:
+        cursor.execute("""
+            SELECT cost_for_season
+            FROM vw_contractByYear
+            WHERE player_id = ? 
+              AND team_id = ? 
+              AND (contract_start_season + year_number_in_contract - 1) = ?
+        """, (player_id, team_id, current_season_year))
+        row = cursor.fetchone()
+        if row and row['cost_for_season'] is not None:
+            cost = float(row['cost_for_season'])
+            return cost
+    except Exception as e:
+        # Log this error, as an issue with the view or query would be problematic
+        app.logger.error(f"Error querying vw_contractByYear for player {player_id}, team {team_id}, year {current_season_year}: {e}")
+
+
+    # Attempt 2: Check contracts table directly (primarily for Year 1 costs if not caught by view, or for 1-year contracts)
+    # This is important for players newly drafted and assigned a 1-year default contract by SleeperService.
+    try:
+        cursor.execute("""
+            SELECT draft_amount
+            FROM contracts
+            WHERE player_id = ?
+              AND team_id = ?
+              AND contract_year = ? 
+              AND is_active = 1
+        """, (player_id, team_id, current_season_year))
+        row = cursor.fetchone()
+        if row and row['draft_amount'] is not None:
+            cost = float(row['draft_amount'])
+            return cost
+    except Exception as e:
+        app.logger.error(f"Error querying contracts table for player {player_id}, team {team_id}, year {current_season_year}: {e}")
+        
+    return cost # Defaults to 0.0 if no cost found
+
 @app.route('/team/<team_id>', methods=['GET'])
 @login_required
 def get_team_details(team_id):
@@ -1486,12 +1535,10 @@ def get_team_details(team_id):
                 if custom_name: 
                     team_name = custom_name
             except json.JSONDecodeError:
-                print(f"Warning: Could not parse roster metadata for roster_id {team_id}")
+                app.logger.warning(f"Could not parse roster metadata for roster_id {team_id}")
 
-        # 2. Process player lists (main, reserve, taxi)
         main_player_ids = json.loads(roster_info['player_ids_json']) if roster_info['player_ids_json'] else []
         reserve_player_ids = json.loads(roster_info['reserve_ids_json']) if roster_info['reserve_ids_json'] else []
-        # taxi_player_ids = json.loads(roster_info['taxi_ids_json']) if roster_info['taxi_ids_json'] else [] # Taxi squad removed
         all_player_ids_on_roster = list(set(main_player_ids + reserve_player_ids))
         
         current_season_data = get_current_season()
@@ -1505,7 +1552,7 @@ def get_team_details(team_id):
 
         # Determine if the contract setting period is active for this league
         is_contract_setting_period_active = False
-        auction_acquisitions = {} # {player_id: auction_price}
+        auction_acquisitions = {} 
         
         if is_offseason and current_processing_year > 0:
             cursor.execute("""
@@ -1516,13 +1563,9 @@ def get_team_details(team_id):
             """, (roster_info['sleeper_league_id'], str(current_processing_year), "complete"))
             draft_record = cursor.fetchone()
             
-            print(f"DEBUG_TEAM_DETAILS_FULL: draft_record query params: league_id={roster_info['sleeper_league_id']}, season={str(current_processing_year)}, status='complete'")
-            print(f"DEBUG_TEAM_DETAILS_FULL: draft_record found = {'Yes' if draft_record else 'No'}")
-
             if draft_record and draft_record['data']:
                 try:
                     draft_picks_data = json.loads(draft_record['data'])
-                    print(f"DEBUG_TEAM_DETAILS_FULL: draft_picks_data type = {type(draft_picks_data)}, length = {len(draft_picks_data) if isinstance(draft_picks_data, list) else 'N/A'}")
                     if isinstance(draft_picks_data, list):
                         is_contract_setting_period_active = True 
                         for pick in draft_picks_data:
@@ -1533,19 +1576,88 @@ def get_team_details(team_id):
                                 try:
                                     auction_acquisitions[str(player_id)] = int(amount_str)
                                 except ValueError:
-                                    print(f"DEBUG_TEAM_DETAILS_FULL: Warning: Could not convert auction amount '{amount_str}' to int for player {player_id}")
-                            # else:
-                                # print(f"DEBUG_TEAM_DETAILS_FULL: Pick skipped: player_id={player_id}, amount_str={amount_str}") # Optional: very verbose
-                    else:
-                        print(f"DEBUG_TEAM_DETAILS_FULL: Warning: Draft data for league {roster_info['sleeper_league_id']} season {current_processing_year} is not a list.")
+                                    app.logger.warning(f"DEBUG_TEAM_DETAILS_FULL: Warning: Could not convert auction amount '{amount_str}' to int for player {player_id}")
                 except json.JSONDecodeError:
-                    print(f"DEBUG_TEAM_DETAILS_FULL: Warning: Could not parse draft data JSON for league {roster_info['sleeper_league_id']} season {current_processing_year}")
-        
-        print(f"DEBUG_TEAM_DETAILS_FULL: is_contract_setting_period_active = {is_contract_setting_period_active}")
-        print(f"DEBUG_TEAM_DETAILS_FULL: auction_acquisitions = {auction_acquisitions}")
+                    app.logger.warning(f"DEBUG_TEAM_DETAILS_FULL: Warning: Could not parse draft data JSON for league {roster_info['sleeper_league_id']} season {current_processing_year}")
+
+        # <<< START NEW LOGIC FOR LEAGUE SPENDING RANKS >>>
+        team_position_spending_ranks = {}
+        current_league_id_for_ranks = roster_info['sleeper_league_id']
+
+        if current_league_id_for_ranks and current_processing_year > 0:
+            try:
+                # 1. Get all rosters for the current league
+                cursor.execute("SELECT sleeper_roster_id, players FROM rosters WHERE sleeper_league_id = ?", (current_league_id_for_ranks,))
+                all_league_rosters_raw = cursor.fetchall()
+
+                if not all_league_rosters_raw:
+                    app.logger.warning(f"No rosters found for league {current_league_id_for_ranks} when calculating spending ranks.")
+                else:
+                    # Collect all unique player IDs from all rosters in the league first
+                    all_player_ids_in_league_set = set()
+                    for r_raw_temp in all_league_rosters_raw:
+                        p_ids_temp = json.loads(r_raw_temp['players']) if r_raw_temp['players'] else []
+                        for p_id_item in p_ids_temp:
+                            all_player_ids_in_league_set.add(p_id_item)
+                    
+                    player_positions_map = {}
+                    if all_player_ids_in_league_set:
+                        placeholders_for_player_pos = ', '.join('?' * len(all_player_ids_in_league_set))
+                        cursor.execute(f"SELECT sleeper_player_id, position FROM players WHERE sleeper_player_id IN ({placeholders_for_player_pos})", tuple(all_player_ids_in_league_set))
+                        for row_pos_map in cursor.fetchall():
+                            player_positions_map[row_pos_map['sleeper_player_id']] = row_pos_map['position']
+
+                    league_spending_by_pos_for_ranking = {} 
+                    
+                    for roster_raw_in_league in all_league_rosters_raw:
+                        current_roster_id_in_league = roster_raw_in_league['sleeper_roster_id']
+                        player_ids_json_in_league = roster_raw_in_league['players']
+                        player_ids_in_league = json.loads(player_ids_json_in_league) if player_ids_json_in_league else []
+                        
+                        team_spending_this_iteration = {}
+
+                        for p_id_str in player_ids_in_league:
+                            position = player_positions_map.get(p_id_str)
+                            
+                            if not position:
+                                app.logger.debug(f"Skipping player {p_id_str} on roster {current_roster_id_in_league}: no position found in pre-fetched map.")
+                                continue 
+                            
+                            if position not in team_spending_this_iteration:
+                                 team_spending_this_iteration[position] = 0.0
+
+                            cost = _get_player_current_year_cost(p_id_str, current_roster_id_in_league, current_processing_year, conn)
+                            if cost > 0:
+                                team_spending_this_iteration[position] += cost
+                        
+                        for pos, total_amount in team_spending_this_iteration.items():
+                            if pos not in league_spending_by_pos_for_ranking:
+                                league_spending_by_pos_for_ranking[pos] = []
+                            league_spending_by_pos_for_ranking[pos].append({'team_id': current_roster_id_in_league, 'amount': total_amount})
+
+                    # 3. Rank teams within each position
+                    for position, spending_list_for_pos in league_spending_by_pos_for_ranking.items():
+                        sorted_spending = sorted(spending_list_for_pos, key=lambda x: x['amount'], reverse=True)
+                        
+                        rank_for_viewed_team = -1 
+                        # Find the rank of the team whose page is being viewed (team_id)
+                        for i, team_spend_info in enumerate(sorted_spending):
+                            if team_spend_info['team_id'] == team_id: # team_id is the sleeper_roster_id of the team page being viewed
+                                rank_for_viewed_team = i + 1
+                                break
+                        
+                        # Only include rank if the viewed team has spending (and thus a rank) in this position
+                        if rank_for_viewed_team != -1:
+                            team_position_spending_ranks[position] = {
+                                'rank': rank_for_viewed_team,
+                                'total_teams': len(sorted_spending) 
+                            }
+            except Exception as e:
+                app.logger.error(f"Error calculating league spending ranks for team {team_id}, league {current_league_id_for_ranks}: {e}")
+                # team_position_spending_ranks will remain empty or partially filled; frontend should handle this
+        # <<< END NEW LOGIC FOR LEAGUE SPENDING RANKS >>>
 
         active_roster_players = []
-        
         if all_player_ids_on_roster:
             placeholders = ', '.join('?' * len(all_player_ids_on_roster))
             query = f"""
@@ -1762,7 +1874,12 @@ def get_team_details(team_id):
         print(f"DEBUG_TEAM_DETAILS_FULL: Final league_context_payload = {league_context_payload}")
         print(f"DEBUG_TEAM_DETAILS_FULL: Returning {len(team_payload['roster'])} roster players, {len(team_payload['reserve'])} reserve players.")
 
-        return jsonify({'success': True, 'team': team_payload, 'league_context': league_context_payload}), 200
+        return jsonify({
+            'success': True, 
+            'team': team_payload, 
+            'league_context': league_context_payload,
+            'team_position_spending_ranks': team_position_spending_ranks # Added new ranks data
+        }), 200
     except sqlite3.Error as e:
         print(f"ERROR: /team/{team_id} - Database error: {str(e)}")
         return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500

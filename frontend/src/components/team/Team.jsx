@@ -8,6 +8,7 @@ function Team() {
     const { teamId } = useParams();
     const [teamData, setTeamData] = useState(null);
     const [leagueContext, setLeagueContext] = useState(null);
+    const [teamPositionRanks, setTeamPositionRanks] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [contractDurations, setContractDurations] = useState({});
@@ -36,6 +37,7 @@ function Team() {
                 if (data.success) {
                     setTeamData(data.team);
                 setLeagueContext(data.league_context);
+                setTeamPositionRanks(data.team_position_spending_ranks || null);
                 } else {
                     setError(data.error || 'Failed to load team data');
                 }
@@ -110,6 +112,21 @@ function Team() {
     }
 
     const numDataColumns = 4 + yearlyCostColumnHeaders.length; // Name, Team, Draft Amount, Yrs Rem + yearly costs
+
+    // Calculate current year totals for each position group
+    const positionGroupTotals = {};
+    if (leagueContext && leagueContext.current_season_year) {
+        allPlayersSorted.forEach(player => {
+            const position = player.position || 'Unknown';
+            const cost = getSortableCost(player, leagueContext.current_season_year);
+            if (!positionGroupTotals[position]) {
+                positionGroupTotals[position] = 0;
+            }
+            if (cost > 0) { // Only add positive costs to the total
+                positionGroupTotals[position] += cost;
+            }
+        });
+    }
 
     // Calculate min/max costs for each year for shading
     const costRangesByYear = {};
@@ -292,10 +309,10 @@ function Team() {
                                             <tr>
                                                 <th>Name</th>
                                                 <th>Team</th>
-                                        <th>Draft Amount</th>
+                                        <th>Draft $</th>
                                         <th>Yrs Rem</th>
                                         {yearlyCostColumnHeaders.map(year => (
-                                            <th key={`header-cost-${year}`}>{year} Cost</th>
+                                            <th key={`header-cost-${year}`}>{year} $</th>
                                         ))}
                                             </tr>
                                         </thead>
@@ -307,14 +324,27 @@ function Team() {
                                             if (showPositionHeader) {
                                                 currentPosition = player.position;
                                             }
+                                            const currentPositionTotal = positionGroupTotals[currentPosition] !== undefined ? positionGroupTotals[currentPosition] : 0;
+                                            const positionRankData = teamPositionRanks && teamPositionRanks[currentPosition];
+
                                             return (
                                                 <React.Fragment key={`player-fragment-${player.id}`}>
                                                     {showPositionHeader && (
                                                         <tr className="position-group-header">
                                                             <td colSpan={numDataColumns}>
-                                                                <h5 className="m-1">{currentPosition || 'Unknown'}</h5>
-                                                    </td>
-                                                </tr>
+                                                                <h5 className="m-1" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                                    <span>{currentPosition || 'Unknown'}</span> 
+                                                                    {leagueContext && leagueContext.current_season_year && (
+                                                                        <span style={{ fontWeight: 'normal', fontSize: '0.9rem' }}>
+                                                                            {leagueContext.current_season_year} Total: ${currentPositionTotal.toFixed(0)}
+                                                                            {positionRankData && (
+                                                                                ` (Rank: ${positionRankData.rank}/${positionRankData.total_teams})`
+                                                                            )}
+                                                                        </span>
+                                                                    )}
+                                                                </h5>
+                                                            </td>
+                                                        </tr>
                                                     )}
                                                     <tr key={player.id} className="player-data-row">
                                                         <td>
