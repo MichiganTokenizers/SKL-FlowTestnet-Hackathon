@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Route, Routes, Link, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { TonConnectButton, useTonConnectUI, TonConnectUIProvider } from '@tonconnect/ui-react';
 import ErrorBoundary from './ErrorBoundary';
@@ -65,10 +65,13 @@ function AppContent() {
     const tonWallet = useTonWallet();
     const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
     const [isNewUser, setIsNewUser] = useState(false);
-    const [leagues, setLeagues] = useState([]); // Added for managing user's leagues
-    const [selectedLeagueId, setSelectedLeagueId] = useState(null); // Added for selected league
+    const [leagues, setLeagues] = useState([]);
+    const [selectedLeagueId, setSelectedLeagueId] = useState(null);
+    const [currentUserDetails, setCurrentUserDetails] = useState(null);
+    const [myTeamRosterId, setMyTeamRosterId] = useState(null);
     const tonConnectUI = useTonConnectUI()[0];
     const navigate = useNavigate();
+    const location = useLocation();
 
     const logout = async () => {
         try {
@@ -81,8 +84,10 @@ function AppContent() {
             localStorage.removeItem('sessionToken');
             setSessionToken(null);
             setIsNewUser(false);
-            setLeagues([]); // Clear leagues on logout
-            setSelectedLeagueId(null); // Clear selected league on logout
+            setLeagues([]);
+            setSelectedLeagueId(null);
+            setCurrentUserDetails(null);
+            setMyTeamRosterId(null);
             navigate('/');
         }
     };
@@ -150,48 +155,87 @@ function AppContent() {
                 if (response.status === 401) { // Unauthorized
                     logout(); // Perform logout if session is invalid
                 }
+                setCurrentUserDetails(null); // Clear user details on error
+                setMyTeamRosterId(null); // Clear roster ID on error
                 return { success: false, leagues: [], error: errorData.error || `HTTP error ${response.status}` };
             }
             const data = await response.json();
             if (data.success) {
                 setLeagues(data.leagues || []);
+                setCurrentUserDetails(data.user_info || null); // Store user_info
                 if ((data.leagues || []).length > 0) {
-                    setSelectedLeagueId(data.leagues[0].league_id);
+                    // Auto-select first league if none is selected or if previous selected is not in new list
+                    if (!selectedLeagueId || !data.leagues.some(l => l.league_id === selectedLeagueId)) {
+                        setSelectedLeagueId(data.leagues[0].league_id);
+                    }
                 } else {
                     setSelectedLeagueId(null); // No leagues, so no selected league
+                    setMyTeamRosterId(null); // No leagues, so no roster ID
                 }
-                return { success: true, leagues: data.leagues || [] };
+                return { success: true, leagues: data.leagues || [], user_info: data.user_info };
             } else {
+                setCurrentUserDetails(null); // Clear user details on failure
+                setMyTeamRosterId(null); // Clear roster ID on failure
                 return { success: false, leagues: [], error: data.error || 'Fetching leagues was not successful' };
             }
         } catch (error) {
             console.error('Error in fetchUserLeagues:', error);
+            setCurrentUserDetails(null); // Clear user details on exception
+            setMyTeamRosterId(null); // Clear roster ID on exception
             return { success: false, leagues: [], error: error.message };
         }
     };
 
     useEffect(() => {
+        const fetchMyTeamRosterId = async () => {
+            if (currentUserDetails && currentUserDetails.sleeper_user_id && selectedLeagueId && sessionToken) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/api/user/roster?league_id=${selectedLeagueId}`, {
+                        headers: { 'Authorization': sessionToken }
+                    });
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch roster ID and parse error JSON' }));
+                        console.error('Failed to fetch my team roster ID:', response.status, errorData.error);
+                        setMyTeamRosterId(null);
+                        return;
+                    }
+                    const data = await response.json();
+                    if (data.success && data.roster_id) {
+                        setMyTeamRosterId(data.roster_id);
+                    } else {
+                        console.error('Failed to get roster_id from response:', data.error || 'No roster_id found');
+                        setMyTeamRosterId(null);
+                    }
+                } catch (error) {
+                    console.error('Error fetching my team roster ID:', error);
+                    setMyTeamRosterId(null);
+                }
+            } else {
+                // If not all conditions met (e.g., no selected league, no user details), clear roster ID
+                setMyTeamRosterId(null);
+            }
+        };
+
+        fetchMyTeamRosterId();
+    }, [currentUserDetails, selectedLeagueId, sessionToken]); // Dependencies for this effect
+
+    useEffect(() => {
         const currentToken = localStorage.getItem('sessionToken');
         if (currentToken) {
             setSessionToken(currentToken);
-            // Verify token and fetch initial data if token exists
             const verifyAndFetch = async () => {
-                // This verification could be a dedicated endpoint or part of fetchUserLeagues
-                // For now, assume fetchUserLeagues handles auth errors (like 401)
                 const leagueData = await fetchUserLeagues(currentToken);
-                if (!leagueData.success) {
-                    // If fetching leagues fails (e.g. bad token), logout might have been called
-                    // If not, ensure user is redirected or state is cleared
-                    if (localStorage.getItem('sessionToken')) { // check if logout was called
-                       // setError('Failed to verify session or fetch initial data.');
-                       // Potentially navigate to login or show error
-                    }
+                if (!leagueData || typeof leagueData.leagues === 'undefined') {
+                    console.error("Failed to get valid league data from fetchUserLeagues in verifyAndFetch");
+                    if (localStorage.getItem('sessionToken')) logout(); else if (location.pathname !== '/') navigate('/');
+                    return;
                 }
-                 // Determine if association is needed based on user state (isNewUser could be set by login)
+
+                // Define userNeedsAssociation here
                 const userNeedsAssociation = async () => {
                     try {
                         const res = await fetch(`${API_BASE_URL}/auth/check_association`, { headers: { 'Authorization': currentToken }});
-                        if (!res.ok) return true; // Assume needs association on error
+                        if (!res.ok) return true; 
                         const checkData = await res.json();
                         return checkData.success ? checkData.needs_association : true;
                     } catch {
@@ -199,15 +243,17 @@ function AppContent() {
                     }
                 };
 
-                if (await userNeedsAssociation()) {
-                    navigate('/associate-sleeper');
-                } else if (leagueData.leagues.length > 0) {
-                    navigate('/league');
-                } else {
-                    // User is associated but has no leagues, stay on a page or redirect to league import/search
-                    navigate('/league'); // League page will show "no leagues"
-                }
+                const needsAssociation = await userNeedsAssociation();
 
+                if (needsAssociation) {
+                    if (location.pathname !== '/associate-sleeper') {
+                        navigate('/associate-sleeper');
+                    }
+                } else { 
+                    if (location.pathname === '/' || location.pathname === '/associate-sleeper') {
+                        navigate('/league'); 
+                    }
+                }
             };
             verifyAndFetch();
         }
@@ -231,25 +277,39 @@ function AppContent() {
                         const newSessionToken = loginData.sessionToken;
                         localStorage.setItem('sessionToken', newSessionToken);
                         setSessionToken(newSessionToken);
-                        setIsNewUser(loginData.isNewUser); // Set based on login response
+                        setIsNewUser(loginData.isNewUser); 
 
                         if (loginData.isNewUser) {
-                            navigate('/associate-sleeper');
+                            if (location.pathname !== '/associate-sleeper') {
+                                navigate('/associate-sleeper');
+                            }
                         } else {
-                            // For existing user, fetch their leagues
                             const userLeaguesData = await fetchUserLeagues(newSessionToken);
-                            if (userLeaguesData.success && userLeaguesData.leagues.length > 0) {
-                                navigate('/league');
-                            } else if (userLeaguesData.success) { // Successfully fetched but no leagues
-                                navigate('/league'); // League page will show "no leagues"
+                            if (!userLeaguesData || typeof userLeaguesData.leagues === 'undefined') {
+                                console.error("Failed to get valid league data after login");
+                                if (localStorage.getItem('sessionToken')) logout(); else if (location.pathname !== '/') navigate('/');
+                                return;
+                            }
+                            
+                            // If login was successful and user is not new (already associated)
+                            if (userLeaguesData.success) {
+                                // Only navigate to /league if on an initial page
+                                if (location.pathname === '/' || location.pathname === '/associate-sleeper') {
+                                    navigate('/league');
+                                }
                             } else {
-                                // Error fetching leagues for existing user, potentially back to login or error page
-                                // For now, let's assume they might need to associate if fetchAllData implies it
-                                const fetchResult = await fetchAllSleeperData(newSessionToken);
-                                if (!fetchResult.success && fetchResult.needsAssociation) {
-                                     navigate('/associate-sleeper');
-                                } else {
-                                     navigate('/'); // Or an error page
+                                // fetchUserLeagues was not successful (e.g. token became invalid, or other server error)
+                                // logout() would have been called for 401 inside fetchUserLeagues.
+                                // If still on an entry page, and data fetch failed for other reasons, consider navigating to root or an error page.
+                                if (location.pathname === '/' || location.pathname === '/associate-sleeper') {
+                                    // Attempt to clarify if association is needed via fetchAllSleeperData, then navigate
+                                    const fetchResult = await fetchAllSleeperData(newSessionToken);
+                                    if (fetchResult && !fetchResult.success && fetchResult.needsAssociation) {
+                                        navigate('/associate-sleeper');
+                                    } else {
+                                        // Fallback to root if association not clearly needed or fetchAllSleeperData also failed
+                                        if (location.pathname !== '/') navigate('/'); 
+                                    }
                                 }
                             }
                         }
@@ -265,7 +325,7 @@ function AppContent() {
         }
     // }, [connected, tonWallet, sessionToken, navigate]); // Original dependencies
     // eslint-disable-next-line react-hooks/exhaustive-deps 
-    }, [connected, tonWallet, navigate]); // Removed sessionToken from deps to avoid re-running on its own change from localStorage hydration
+    }, [connected, tonWallet, navigate]); // location is NOT added here to prevent re-triggering on deliberate navigation
 
     const handleLeagueNavChange = (leagueId) => {
         setSelectedLeagueId(leagueId);
@@ -301,10 +361,10 @@ function AppContent() {
                                     </ul>
                                 </li>
                             )}
-                            {sessionToken && !isNewUser && ( // Keep other nav items
+                            {sessionToken && !isNewUser && currentUserDetails && selectedLeagueId && myTeamRosterId && (
                                 <>
                                     <li className="nav-item">
-                                        <Link className="nav-link" to="/my-team">My Team</Link>
+                                        <Link className="nav-link" to={`/team/${myTeamRosterId}`}>My Team</Link>
                                     </li>
                                     <li className="nav-item">
                                         <Link className="nav-link" to="/trade-desk">Trade Desk</Link>

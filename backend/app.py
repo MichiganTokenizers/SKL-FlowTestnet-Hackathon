@@ -1312,6 +1312,231 @@ def update_season_settings():
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
 
+@app.route('/auth/me', methods=['GET'])
+@login_required
+def get_me():
+    """Returns the details of the currently authenticated user."""
+    user = get_current_user() # This already fetches from DB based on session token
+    if not user:
+        # This case should ideally be handled by @login_required, 
+        # but as a safeguard:
+        return jsonify({'success': False, 'error': 'User not authenticated or session invalid'}), 401
+    
+    # get_current_user() returns a dict. We can augment or filter it if needed.
+    # For now, return what get_current_user() provides.
+    # Ensure sensitive data is not exposed if get_current_user() returns more than needed.
+    # Based on its definition, it returns: {'username', 'display_name', 'wallet_address', 'sleeper_user_id'}
+    
+    print(f"DEBUG: /auth/me - Returning user data: {user}")
+    return jsonify({'success': True, 'user': user}), 200
+
+@app.route('/api/user/roster', methods=['GET'])
+@login_required
+def get_user_roster_for_league():
+    """Fetches the roster_id for the authenticated user in a specific league."""
+    user = get_current_user()
+    # @login_required should ensure user is not None, but double check for safety
+    if not user or not user.get('sleeper_user_id'):
+        return jsonify({'success': False, 'error': 'User not authenticated or sleeper_user_id missing'}), 401
+
+    sleeper_user_id = user['sleeper_user_id']
+    league_id = request.args.get('league_id')
+
+    if not league_id:
+        return jsonify({'success': False, 'error': 'Missing league_id parameter'}), 400
+
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        # First, verify the user is actually part of this league via UserLeagueLinks
+        # This is an important authorization check.
+        cursor.execute("""
+            SELECT 1 FROM UserLeagueLinks 
+            WHERE wallet_address = ? AND sleeper_league_id = ?
+        """, (user['wallet_address'], league_id))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'User not authorized for this league or league link does not exist.'}), 403
+
+        # Fetch the roster_id from the rosters table
+        cursor.execute("""
+            SELECT sleeper_roster_id 
+            FROM rosters 
+            WHERE owner_id = ? AND sleeper_league_id = ?
+        """, (sleeper_user_id, league_id))
+        roster_data = cursor.fetchone()
+
+        if roster_data and roster_data['sleeper_roster_id']:
+            return jsonify({'success': True, 'roster_id': roster_data['sleeper_roster_id']}), 200
+        else:
+            # This means the user is in the league, but no roster was found for them.
+            # This could be a data integrity issue or the user might not have a roster in that specific league (e.g., co-manager not primary owner listed in rosters.owner_id)
+            # PLANNING.md suggests rosters.owner_id is the sleeper user ID of the team owner.
+            return jsonify({'success': False, 'error': 'No roster found for this user in the specified league.'}), 404
+
+    except sqlite3.Error as e:
+        print(f"ERROR: /api/user/roster - Database error: {str(e)}")
+        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
+    except Exception as e:
+        print(f"ERROR: /api/user/roster - Unexpected error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
+
+@app.route('/team/<team_id>', methods=['GET'])
+@login_required
+def get_team_details(team_id):
+    """Fetches detailed information for a specific team (roster)."""
+    current_user_details = get_current_user()
+    if not current_user_details:
+        return jsonify({'success': False, 'error': 'User not authenticated'}), 401
+
+    # team_id is the sleeper_roster_id
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        # 1. Fetch basic roster details (including owner_id and league_id)
+        cursor.execute("""
+            SELECT r.sleeper_roster_id, r.sleeper_league_id, r.owner_id, r.players as player_ids_json, 
+                   r.reserve as reserve_ids_json, r.taxi as taxi_ids_json, r.metadata as roster_metadata_json,
+                   COALESCE(u.display_name, u.username) as manager_name, u.username as sleeper_username
+            FROM rosters r
+            LEFT JOIN Users u ON r.owner_id = u.sleeper_user_id
+            WHERE r.sleeper_roster_id = ?
+        """, (team_id,))
+        roster_info = cursor.fetchone()
+
+        if not roster_info:
+            return jsonify({'success': False, 'error': 'Team (roster) not found'}), 404
+
+        # Verify that the current user is part of the league this team belongs to.
+        # This prevents users from viewing teams in leagues they are not a part of.
+        cursor.execute("""SELECT 1 FROM UserLeagueLinks WHERE wallet_address = ? AND sleeper_league_id = ?""",
+                       (current_user_details['wallet_address'], roster_info['sleeper_league_id']))
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'User not authorized to view this team (not part of the league)'}), 403
+
+        team_name = "Team %s" % roster_info['owner_id'] # Default team name
+        if roster_info['roster_metadata_json']:
+            try:
+                roster_metadata = json.loads(roster_info['roster_metadata_json'])
+                custom_name = roster_metadata.get('team_name', roster_metadata.get('name'))
+                if custom_name: 
+                    team_name = custom_name
+            except json.JSONDecodeError:
+                print(f"Warning: Could not parse roster metadata for roster_id {team_id}")
+
+        # 2. Process player lists (main, reserve, taxi)
+        main_player_ids = json.loads(roster_info['player_ids_json']) if roster_info['player_ids_json'] else []
+        reserve_player_ids = json.loads(roster_info['reserve_ids_json']) if roster_info['reserve_ids_json'] else []
+        taxi_player_ids = json.loads(roster_info['taxi_ids_json']) if roster_info['taxi_ids_json'] else []
+        all_player_ids_on_roster = list(set(main_player_ids + reserve_player_ids + taxi_player_ids))
+        
+        active_roster_players = []
+        # We need to fetch details for all players on the roster (main, reserve, taxi) to correctly populate them later.
+        # And then filter for the 'active_roster_players' based on main_player_ids.
+
+        if all_player_ids_on_roster:
+            # Construct a query to get player details and contract details in one go for efficiency
+            # The team_id in contracts table refers to sleeper_roster_id
+            placeholders = ', '.join('?' * len(all_player_ids_on_roster))
+            query = f"""
+                SELECT p.sleeper_player_id, p.name, p.position, p.team as nfl_team,
+                       c.draft_amount, c.contract_year, c.duration, c.is_active
+                FROM players p
+                LEFT JOIN contracts c ON p.sleeper_player_id = c.player_id AND c.team_id = ? 
+                WHERE p.sleeper_player_id IN ({placeholders})
+            """
+            cursor.execute(query, (team_id, *all_player_ids_on_roster))
+            player_details_list = cursor.fetchall()
+
+            player_map = {str(p['sleeper_player_id']): dict(p) for p in player_details_list}
+            
+            current_season_data = get_current_season() # Get current season year
+            current_processing_year = int(current_season_data['year']) if current_season_data and current_season_data['year'] else 0
+
+            for player_id_str in main_player_ids:
+                player_data = player_map.get(player_id_str)
+                if player_data:
+                    years_remaining = 0
+                    if player_data['contract_year'] and player_data['duration'] and current_processing_year > 0:
+                        contract_start_year = int(player_data['contract_year'])
+                        contract_duration = int(player_data['duration'])
+                        contract_end_year = contract_start_year + contract_duration - 1
+
+                        if current_processing_year < contract_start_year: # Contract hasn't started
+                            years_remaining = contract_duration
+                        elif current_processing_year <= contract_end_year: # Contract is active
+                            years_remaining = contract_end_year - current_processing_year + 1
+                        # else years_remaining is 0 (contract expired)
+                    
+                    active_roster_players.append({
+                        'id': player_data['sleeper_player_id'],
+                        'name': player_data['name'],
+                        'position': player_data['position'],
+                        'team': player_data['nfl_team'], 
+                        'status': 'Active' if player_data['is_active'] else 'Inactive', 
+                        'draft_amount': player_data['draft_amount'],
+                        'years_remaining': years_remaining
+                    })
+                else:
+                    # Player ID was in roster.players but not found in players table or player_map
+                    print(f"Warning: Player ID {player_id_str} from main roster not found in detailed player fetch for team {team_id}")
+        
+        # Prepare taxi and reserve lists (IDs only, as per current frontend Team.jsx)
+        # Frontend currently expects player objects for these lists, but it looks them up in the main `roster` array.
+        # For now, let's send the full player objects if available.
+        def get_player_object_for_squad(player_id_str, player_map_local):
+            player_data = player_map_local.get(player_id_str)
+            if player_data:
+                years_remaining_squad = 0
+                if player_data['contract_year'] and player_data['duration'] and current_processing_year > 0:
+                    contract_start_year = int(player_data['contract_year'])
+                    contract_duration = int(player_data['duration'])
+                    contract_end_year = contract_start_year + contract_duration - 1
+                    if current_processing_year < contract_start_year:
+                        years_remaining_squad = contract_duration
+                    elif current_processing_year <= contract_end_year:
+                        years_remaining_squad = contract_end_year - current_processing_year + 1
+
+                return {
+                        'id': player_data['sleeper_player_id'],
+                        'name': player_data['name'],
+                        'position': player_data['position'],
+                        'team': player_data['nfl_team'],
+                        'status': 'Taxi' if player_id_str in taxi_player_ids else 'Reserve', 
+                        'draft_amount': player_data['draft_amount'],
+                        'years_remaining': years_remaining_squad
+                    }
+            return None
+
+        processed_taxi_squad = [p for p_id in taxi_player_ids if (p := get_player_object_for_squad(str(p_id), player_map)) is not None]
+        processed_reserve_squad = [p for p_id in reserve_player_ids if (p := get_player_object_for_squad(str(p_id), player_map)) is not None]
+
+
+        team_payload = {
+            'name': team_name,
+            'manager': {
+                'name': roster_info['manager_name'],
+                'sleeper_username': roster_info['sleeper_username']
+            },
+            'roster': active_roster_players, # This is the main/active roster for display
+            'taxi_squad': processed_taxi_squad, # List of player objects
+            'reserve': processed_reserve_squad    # List of player objects
+        }
+
+        return jsonify({'success': True, 'team': team_payload}), 200
+
+    except sqlite3.Error as e:
+        print(f"ERROR: /team/{team_id} - Database error: {str(e)}")
+        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
+    except Exception as e:
+        print(f"ERROR: /team/{team_id} - Unexpected error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
+
 if __name__ == '__main__':
     # Ensure global connection is initialized before app runs,
     # especially if any routes might be hit immediately or by background tasks.

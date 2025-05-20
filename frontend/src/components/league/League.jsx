@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom'; // Import Link
 // import { Link, useNavigate } from 'react-router-dom'; // Link and useNavigate might not be needed directly if navigation is handled by App.jsx
 
 const API_BASE_URL = "http://localhost:5000";
@@ -169,14 +170,18 @@ function League(props) { // Accept props
                                     {standings.map(roster => (
                                         <tr key={roster.roster_id}>
                                             <td>
-                                                {roster.team_name || 'Unnamed Team'}
+                                                {roster.roster_id ? (
+                                                    <Link to={`/team/${roster.roster_id}`}>
+                                                        {roster.team_name || 'Unnamed Team'}
+                                                    </Link>
+                                                ) : (
+                                                    roster.team_name || 'Unnamed Team' // Fallback if no roster_id
+                                                )}
                                             </td>
-                                            <td>
-                                                {roster.owner_display_name || roster.owner_id}
-                                            </td>
+                                            <td>{roster.owner_display_name || roster.owner_id}</td>
                                             <td>{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
                                             <td>TBD</td>
-                                            <td>0</td> {/* Placeholder */}
+                                            <td>0</td>{/* Placeholder */}
                                         </tr>
                                     ))}
                                 </tbody>
@@ -199,15 +204,7 @@ function League(props) { // Accept props
                                 <th>Description</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {transactions.map(tx => (
-                                <tr key={tx.id}>
-                                    <td>{tx.date}</td>
-                                    <td>{tx.type}</td>
-                                    <td>{tx.description}</td>
-                                </tr>
-                            ))}
-                        </tbody>
+                        <tbody>{transactions.map(tx => (<tr key={tx.id}><td>{tx.date}</td><td>{tx.type}</td><td>{tx.description}</td></tr>))}</tbody>
                     </table>
                 ) : (
                     <p className="mt-3">No recent transactions to display.</p>

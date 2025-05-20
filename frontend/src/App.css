@@ -19,7 +19,8 @@ body{
     background-image: url(images/background.jpg);
     background-size: cover;
     background-position: right;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 .logo { /*added as class in html first*/
     width: 300px;

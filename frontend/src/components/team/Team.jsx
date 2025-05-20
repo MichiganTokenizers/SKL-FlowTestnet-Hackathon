@@ -50,13 +50,24 @@ function Team() {
     if (!teamData) return <div className="container p-4"><p>No team data available</p></div>;
 
     const playersByPosition = teamData.roster.reduce((acc, player) => {
-        const position = player.position;
+        const position = player.position || 'Unknown';
         if (!acc[position]) {
             acc[position] = [];
         }
         acc[position].push(player);
         return acc;
     }, {});
+
+    const positionOrder = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB'];
+    
+    const sortedPositionEntries = Object.entries(playersByPosition).sort(([posA], [posB]) => {
+        const indexA = positionOrder.indexOf(posA);
+        const indexB = positionOrder.indexOf(posB);
+        if (indexA === -1 && indexB === -1) return posA.localeCompare(posB);
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+    });
 
     return (
         <div className="container p-4">
@@ -74,7 +85,7 @@ function Team() {
             <div className="row">
                 <div className="col-md-8">
                     <h2 className="mb-3">Active Roster</h2>
-                    {Object.entries(playersByPosition).map(([position, players]) => (
+                    {sortedPositionEntries.map(([position, players]) => (
                         <div key={position} className="card mb-3">
                             <div className="card-header">
                                 <h5 className="mb-0">{position}</h5>
@@ -86,19 +97,24 @@ function Team() {
                                             <tr>
                                                 <th>Name</th>
                                                 <th>Team</th>
-                                                <th>Status</th>
+                                                <th>Draft Amount</th>
+                                                <th>Yrs Rem</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {players.map(player => (
                                                 <tr key={player.id}>
-                                                    <td>{player.name}</td>
-                                                    <td>{player.team}</td>
                                                     <td>
-                                                        <span className={`badge ${player.status === 'Active' ? 'bg-success' : 'bg-warning'}`}>
-                                                            {player.status}
-                                                        </span>
+                                                        {player.name}
+                                                        {player.status && player.status !== 'Active' && (
+                                                            <sup style={{ marginLeft: '4px', color: player.status === 'IR' ? 'red' : 'orange' }}>
+                                                                {player.status.substring(0,2).toUpperCase()}
+                                                            </sup>
+                                                        )}
                                                     </td>
+                                                    <td>{player.team}</td>
+                                                    <td>${player.draft_amount !== null && player.draft_amount !== undefined ? player.draft_amount : 'N/A'}</td>
+                                                    <td>{player.years_remaining !== null && player.years_remaining !== undefined ? player.years_remaining : 'N/A'}</td>
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -107,24 +123,23 @@ function Team() {
                             </div>
                         </div>
                     ))}
+                    {Object.keys(playersByPosition).length === 0 && <p>No active players on this roster.</p>}
                 </div>
 
-                <div className="col-md-4">
+                {/* Removing Taxi Squad and Reserve sections by commenting them out or deleting */}
+                {/* <div className="col-md-4">
                     <div className="card mb-3">
                         <div className="card-header">
                             <h5 className="mb-0">Taxi Squad</h5>
                         </div>
                         <div className="card-body">
-                            {teamData.taxi_squad.length > 0 ? (
+                            {teamData.taxi_squad && teamData.taxi_squad.length > 0 ? (
                                 <ul className="list-group list-group-flush">
-                                    {teamData.taxi_squad.map(playerId => {
-                                        const player = teamData.roster.find(p => p.id === playerId);
-                                        return player ? (
-                                            <li key={playerId} className="list-group-item">
-                                                {player.name} ({player.position})
-                                            </li>
-                                        ) : null;
-                                    })}
+                                    {teamData.taxi_squad.map(player => (
+                                        <li key={player.id} className="list-group-item">
+                                            {player.name} ({player.position}) - Drafted: ${player.draft_amount !== null && player.draft_amount !== undefined ? player.draft_amount : 'N/A'}
+                                        </li>
+                                    ))}
                                 </ul>
                             ) : (
                                 <p className="text-muted">No players on taxi squad</p>
@@ -137,23 +152,20 @@ function Team() {
                             <h5 className="mb-0">Reserve</h5>
                         </div>
                         <div className="card-body">
-                            {teamData.reserve.length > 0 ? (
+                            {teamData.reserve && teamData.reserve.length > 0 ? (
                                 <ul className="list-group list-group-flush">
-                                    {teamData.reserve.map(playerId => {
-                                        const player = teamData.roster.find(p => p.id === playerId);
-                                        return player ? (
-                                            <li key={playerId} className="list-group-item">
-                                                {player.name} ({player.position})
-                                            </li>
-                                        ) : null;
-                                    })}
+                                    {teamData.reserve.map(player => (
+                                        <li key={player.id} className="list-group-item">
+                                            {player.name} ({player.position}) - Drafted: ${player.draft_amount !== null && player.draft_amount !== undefined ? player.draft_amount : 'N/A'}
+                                        </li>
+                                    ))}
                                 </ul>
                             ) : (
                                 <p className="text-muted">No players on reserve</p>
                             )}
                         </div>
                     </div>
-                </div>
+                </div> */}
             </div>
         </div>
     );
