@@ -9,6 +9,7 @@ function Team() {
     const [teamData, setTeamData] = useState(null);
     const [leagueContext, setLeagueContext] = useState(null);
     const [teamPositionRanks, setTeamPositionRanks] = useState(null);
+    const [futureYearlyTotalRanks, setFutureYearlyTotalRanks] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [contractDurations, setContractDurations] = useState({});
@@ -38,6 +39,7 @@ function Team() {
                     setTeamData(data.team);
                 setLeagueContext(data.league_context);
                 setTeamPositionRanks(data.team_position_spending_ranks || null);
+                setFutureYearlyTotalRanks(data.future_yearly_total_ranks || null);
                 } else {
                     setError(data.error || 'Failed to load team data');
                 }
@@ -244,11 +246,17 @@ function Team() {
     return (
         <div className="container p-4">
             <h1 className="display-4 fw-bold mb-4">{teamData.name}</h1>
+            
+            {/* Display League Name */}
+            {leagueContext && leagueContext.league_name && (
+                <h2 className="mb-3 text-muted">League: {leagueContext.league_name}</h2>
+            )}
+
             <div className="card mb-4">
                 <div className="card-body">
                     <h5 className="card-title">Manager Information</h5>
                     <p className="card-text">
-                        <strong>Manager:</strong> {teamData.manager.name} ({teamData.manager.sleeper_username})
+                        <strong>Manager:</strong> {teamData.name} ({teamData.manager.sleeper_username})
                     </p>
                     {/* Display current season and offseason status */}
                     {leagueContext && (
@@ -258,13 +266,13 @@ function Team() {
                         </p>
                     )}
                      {/* Spending Ranks Display */}
-                     {teamPositionRanks && Object.keys(teamPositionRanks).length > 0 && (
+                     {teamPositionRanks && Object.keys(teamPositionRanks).length > 0 && leagueContext && leagueContext.current_season_year && (
                         <div>
-                            <h6>Positional Spending Ranks (League-wide):</h6>
+                            <h6>{leagueContext.current_season_year} Positional Spending Ranks (League-wide):</h6>
                             <ul className="list-inline">
                                 {positionOrder.filter(pos => teamPositionRanks[pos]).map(pos => (
                                     <li key={pos} className="list-inline-item">
-                                        <span className="badge bg-info me-1">{pos}: {teamPositionRanks[pos].rank}/{teamPositionRanks[pos].total_teams}</span>
+                                        <span className="badge bg-warning-subtle text-dark me-1">{pos}: {teamPositionRanks[pos].rank}/{teamPositionRanks[pos].total_teams}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -273,10 +281,37 @@ function Team() {
                 </div>
             </div>
 
-            {/* New combined header for Active Roster title and Save button */}
-            <div className="d-flex justify-content-between align-items-center mb-3">
-                <h5 className="mb-0">Active Roster</h5>
-                {canSetContracts && (
+            {/* Display Future Yearly Totals */}
+            {yearlyCostColumnHeaders.length > 1 && (
+                <div className="card mb-4">
+                    <div className="card-body">
+                        <h5 className="card-title">Future Contract Totals</h5>
+                        <div className="row">
+                            {yearlyCostColumnHeaders.slice(1).map(year => {
+                                const rankData = futureYearlyTotalRanks && futureYearlyTotalRanks[year];
+                                return (
+                                    <div key={`total-${year}`} className="col-md-4 mb-2">
+                                        <div>
+                                            <strong>{year}:</strong> ${futureYearlyTotals[year] !== undefined ? futureYearlyTotals[year].toFixed(2) : '0.00'}
+                                        </div>
+                                        {rankData && (
+                                            <div style={{ marginTop: '0.2rem' }}>
+                                                <span className="badge bg-warning-subtle text-dark">
+                                                    Rank: {rankData.rank}/{rankData.total_teams}
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Save Contract Durations Button - MOVED HERE */}
+            {canSetContracts && (
+                <div className="text-end mb-3">
                     <button 
                         onClick={handleSaveContractDurations} 
                         className="btn btn-primary"
@@ -284,22 +319,6 @@ function Team() {
                     >
                         {loading ? 'Saving...' : 'Save Contract Durations'}
                     </button>
-                )}
-            </div>
-
-            {/* Display Future Yearly Totals */}
-            {yearlyCostColumnHeaders.length > 1 && (
-                <div className="card mb-4">
-                    <div className="card-body">
-                        <h5 className="card-title">Projected Future Yearly Contract Totals</h5>
-                        <div className="row">
-                            {yearlyCostColumnHeaders.slice(1).map(year => (
-                                <div key={`total-${year}`} className="col-md-4">
-                                    <strong>{year}:</strong> ${futureYearlyTotals[year] !== undefined ? futureYearlyTotals[year].toFixed(2) : '0.00'}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
                 </div>
             )}
 

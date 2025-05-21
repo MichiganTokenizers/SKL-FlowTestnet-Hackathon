@@ -1530,6 +1530,11 @@ def get_team_details(team_id):
         if not roster_info:
             return jsonify({'success': False, 'error': 'Team (roster) not found'}), 404
 
+        # Fetch League Name for league_context
+        cursor.execute("SELECT name FROM LeagueMetadata WHERE sleeper_league_id = ?", (roster_info['sleeper_league_id'],))
+        league_metadata_row = cursor.fetchone()
+        league_name_for_context = league_metadata_row['name'] if league_metadata_row else 'Unknown League'
+
         # Verify that the current user is part of the league this team belongs to.
         # This prevents users from viewing teams in leagues they are not a part of.
         cursor.execute("""SELECT 1 FROM UserLeagueLinks WHERE wallet_address = ? AND sleeper_league_id = ?""",
@@ -1667,6 +1672,69 @@ def get_team_details(team_id):
                 app.logger.error(f"Error calculating league spending ranks for team {team_id}, league {current_league_id_for_ranks}: {e}")
                 # team_position_spending_ranks will remain empty or partially filled; frontend should handle this
         # <<< END NEW LOGIC FOR LEAGUE SPENDING RANKS >>>
+
+        # Calculate Future Yearly Total Ranks
+        future_yearly_total_ranks = {}
+        if current_league_id_for_ranks and current_processing_year > 0:
+            try:
+                # Get all rosters for the current league (re-fetch or reuse if already fetched and suitable)
+                cursor.execute("SELECT sleeper_roster_id FROM rosters WHERE sleeper_league_id = ?", (current_league_id_for_ranks,))
+                all_roster_ids_in_league = [row['sleeper_roster_id'] for row in cursor.fetchall()]
+
+                if all_roster_ids_in_league:
+                    seasons_to_rank = [current_processing_year + i for i in range(1, 4)] # For next 3 future years
+
+                    # Dictionary to store total spending for each team for each future year
+                    # { year1: [{'team_id': X, 'total_cost': Y}, ...], year2: [...] }
+                    league_spending_by_future_year = {year: [] for year in seasons_to_rank}
+
+                    for r_id_in_league in all_roster_ids_in_league:
+                        for year_to_rank in seasons_to_rank:
+                            # Sum costs for this team for this specific future year from vw_contractByYear
+                            cursor.execute("""
+                                SELECT SUM(v.cost_for_season) as total_future_cost
+                                FROM vw_contractByYear v
+                                JOIN contracts c ON v.original_contract_rowid = c.rowid 
+                                WHERE v.team_id = ?
+                                  AND v.sleeper_league_id = ?
+                                  AND (v.contract_start_season + v.year_number_in_contract - 1) = ?
+                                  AND c.is_active = 1
+                            """, (r_id_in_league, current_league_id_for_ranks, year_to_rank))
+                            # Ensure player_id on contracts table is used for active check with c.player_id = v.player_id
+                            # The above query assumes original_contract_rowid links directly. 
+                            # If vw_contractByYear doesn't implicitly filter by active contracts, that needs to be added.
+                            # The `c.is_active = 1` is added to the JOIN condition for `contracts`.
+
+                            yearly_sum_row = cursor.fetchone()
+                            total_cost_for_year = float(yearly_sum_row['total_future_cost']) if yearly_sum_row and yearly_sum_row['total_future_cost'] is not None else 0.0
+                            
+                            league_spending_by_future_year[year_to_rank].append({
+                                'team_id': r_id_in_league,
+                                'total_cost': total_cost_for_year
+                            })
+                    
+                    # Now, rank for each future year
+                    for year_val, spending_list in league_spending_by_future_year.items():
+                        sorted_spending = sorted(spending_list, key=lambda x: x['total_cost'], reverse=True)
+                        
+                        rank_for_viewed_team = -1
+                        for i, team_spend_info in enumerate(sorted_spending):
+                            if team_spend_info['team_id'] == team_id: # team_id is the sleeper_roster_id of the team page being viewed
+                                rank_for_viewed_team = i + 1
+                                break
+                        
+                        if rank_for_viewed_team != -1: # Only add if the team has spending (or 0 spending but is in the list)
+                            future_yearly_total_ranks[str(year_val)] = {
+                                'rank': rank_for_viewed_team,
+                                'total_teams': len(all_roster_ids_in_league) # Or len(sorted_spending) if some teams might have no contracts
+                            }
+                        # If rank_for_viewed_team is -1, it implies the team wasn't in the spending list (e.g. error, or 0 cost and not included)
+                        # For robustness, might want to ensure all teams are in the list, even with 0 cost, if they should be ranked.
+                        # The current logic includes them with 0.0 cost.
+            
+            except Exception as e:
+                app.logger.error(f"Error calculating future yearly total ranks for team {team_id}, league {current_league_id_for_ranks}: {e}")
+                # future_yearly_total_ranks will remain empty or partially filled.
 
         active_roster_players = []
         if all_player_ids_on_roster:
@@ -1880,18 +1948,37 @@ def get_team_details(team_id):
         league_context_payload = {
             'current_season_year': current_processing_year,
             'is_offseason': is_offseason,
-            'is_contract_setting_period_active': is_contract_setting_period_active
+            'is_contract_setting_period_active': is_contract_setting_period_active,
+            'league_name': league_name_for_context # Add league_name here
         }
 
         print(f"DEBUG_TEAM_DETAILS_FULL: Final league_context_payload = {league_context_payload}")
         print(f"DEBUG_TEAM_DETAILS_FULL: Returning {len(team_payload['roster'])} roster players, {len(team_payload['reserve'])} reserve players.")
 
-        return jsonify({
-            'success': True, 
-            'team': team_payload, 
-            'league_context': league_context_payload,
-            'team_position_spending_ranks': team_position_spending_ranks # Added new ranks data
-        }), 200
+        # Assemble the final response
+        response_data = {
+            'success': True,
+            'team': {
+                'id': roster_info['sleeper_roster_id'],
+                'league_id': roster_info['sleeper_league_id'],
+                'name': team_name,
+                'manager': {
+                    'name': roster_info['manager_name'],
+                    'sleeper_username': roster_info['sleeper_username']
+                },
+                'roster': active_roster_players 
+            },
+            'league_context': {
+                'current_season_year': current_processing_year,
+                'is_offseason': is_offseason,
+                'is_contract_setting_period_active': is_contract_setting_period_active,
+                'league_name': league_name_for_context # Add league_name here
+            },
+            'team_position_spending_ranks': team_position_spending_ranks,
+            'future_yearly_total_ranks': future_yearly_total_ranks # Add the new ranks here
+        }
+
+        return jsonify(response_data), 200
     except sqlite3.Error as e:
         print(f"ERROR: /team/{team_id} - Database error: {str(e)}")
         return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
@@ -1926,10 +2013,10 @@ def update_contract_durations(team_id):
         cursor = conn.cursor()
 
         # 1. Validate team_id and user authorization for this team's league
-        cursor.execute("""SELECT sleeper_league_id, owner_id FROM rosters WHERE sleeper_roster_id = ?""", (team_id,))
+        cursor.execute("""SELECT sleeper_league_id, owner_id FROM rosters WHERE sleeper_roster_id = ? AND sleeper_league_id = ?""", (team_id, request_league_id))
         roster_info = cursor.fetchone()
         if not roster_info:
-            return jsonify({'success': False, 'error': 'Team (roster) not found'}), 404
+            return jsonify({'success': False, 'error': 'Team (roster) not found for the given team_id and league_id in payload'}), 404
         
         db_league_id = roster_info['sleeper_league_id']
         team_owner_sleeper_id = roster_info['owner_id'] 
