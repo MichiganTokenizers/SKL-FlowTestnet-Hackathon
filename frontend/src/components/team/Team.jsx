@@ -331,7 +331,7 @@ function Team() {
                     <button 
                         onClick={handleSaveContractDurations} 
                         className="btn"
-                        style={{ backgroundColor: '#9966CC', color: 'white' }}
+                        style={{ backgroundColor: '#9966CC', color: 'white', fontFamily: 'var(--primary-font-family)' }}
                         disabled={Object.keys(contractDurations).length === 0 || loading}
                     >
                         {loading ? 'Saving...' : 'Save Contract Durations'}

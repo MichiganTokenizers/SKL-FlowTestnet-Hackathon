@@ -9,18 +9,20 @@
   --header-text-color: #100B00;   /* Near Black */
   --border-color: #3B341F;        /* Dark Brown/Olive */
   --light-border-color: #E77728;  /* Orange - for subtle borders */
+  --primary-font-family: "Comfortaa", Poppins, Segoe UI, sans-serif;
 }
 *{
     margin: 0;
     padding: 0;
 }
 html{
-    font-family: Poppins, Segoe UI, sans-serif;
+    font-family: var(--primary-font-family);
     font-size: 12pt;
     color: var(--text-color);
     text-align: center;
 }
 body{
+    font-family: var(--primary-font-family);
     min-height: 100vh;
     background-image: url(images/background.jpg);
     background-size: cover;
@@ -81,7 +83,7 @@ form input{
     min-width: 0;
     height: 50px;
     padding: 1em;
-    font: inherit;
+    font-family: var(--primary-font-family);
     border-radius: 0, 10px, 10px, 0;
     border: 2px solid var(--input-border-color);
     border-left: none;
@@ -108,7 +110,7 @@ form button{
     padding: .85em 4em;
     background-color: var(--accent-color);
     color: var(--base-color);
-    font: inherit;
+    font-family: var(--primary-font-family);
     font-weight: 600;
     text-transform: uppercase;
     cursor: pointer;
@@ -172,4 +174,9 @@ a:hover{
     background-color: var(--header-bg-color);
     color: var(--header-text-color);
     border-bottom: 2px solid var(--border-color); /* Match team page header bottom border */
+}
+
+/* Ensuring common elements also use the primary font */
+button, input, select, textarea, label, td, th, h1, h2, h3, h4, h5, h6, p, a, li, .card, .card-body, .card-title, .card-text, .alert, .badge {
+    font-family: var(--primary-font-family);
 }
