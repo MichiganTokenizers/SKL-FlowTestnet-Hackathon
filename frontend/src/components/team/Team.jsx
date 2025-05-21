@@ -243,6 +243,19 @@ function Team() {
         setLoading(false);
     };
 
+    // Add console logs for debugging
+    if (leagueContext) {
+        console.log("Team.jsx - leagueContext:", leagueContext);
+        console.log("Team.jsx - leagueContext.is_contract_setting_period_active:", leagueContext.is_contract_setting_period_active);
+    }
+    if (teamData && teamData.roster) {
+        console.log("Team.jsx - teamData.roster:", teamData.roster);
+        teamData.roster.forEach(player => {
+            console.log(`Team.jsx - Player ${player.id} (${player.name}) contract context:`, player.player_contract_context);
+        });
+    }
+    console.log("Team.jsx - canSetContracts variable value:", canSetContracts);
+
     return (
         <div className="container p-4">
             <h1 className="display-4 fw-bold mb-4">{teamData.name}</h1>
@@ -327,7 +340,7 @@ function Team() {
                     <div className="card mb-4">
                         <div className="card-body p-0"> {/* p-0 to make table flush with card */}
                             <div className="table-responsive">
-                                <table className="table table-hover mb-0"> {/* mb-0 to remove bottom margin */}
+                                <table className="table table-hover mb-0">{/* mb-0 to remove bottom margin */}
                                     <thead className="table-light">
                                         <tr>
                                             <th>Name</th>

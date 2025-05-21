@@ -152,6 +152,7 @@ def init_db(force_create=False):
                           (sleeper_roster_id TEXT,
                            sleeper_league_id TEXT,
                            owner_id TEXT, -- Sleeper user ID of the roster owner
+                           team_name TEXT, -- Actual team name, sourced by sleeper_service
                            players TEXT, -- JSON list of player_ids on main roster
                            metadata TEXT, -- JSON of roster metadata (e.g., custom team name from Sleeper)
                            reserve TEXT, -- JSON list of player_ids on reserve
@@ -1555,6 +1556,9 @@ def get_team_details(team_id):
         is_contract_setting_period_active = False
         auction_acquisitions = {} 
         
+        print(f"DEBUG_TEAM_DETAILS: Initial is_contract_setting_period_active: {is_contract_setting_period_active}")
+        print(f"DEBUG_TEAM_DETAILS: Initial auction_acquisitions: {auction_acquisitions}")
+
         if is_offseason and current_processing_year > 0:
             cursor.execute("""
                 SELECT data 
@@ -1563,23 +1567,31 @@ def get_team_details(team_id):
                 ORDER BY start_time DESC LIMIT 1
             """, (roster_info['sleeper_league_id'], str(current_processing_year), "complete"))
             draft_record = cursor.fetchone()
+            print(f"DEBUG_TEAM_DETAILS: Draft record for league {roster_info['sleeper_league_id']} season {current_processing_year}: {draft_record}")
             
             if draft_record and draft_record['data']:
                 try:
                     draft_picks_data = json.loads(draft_record['data'])
+                    print(f"DEBUG_TEAM_DETAILS: Parsed draft_picks_data: {draft_picks_data}")
                     if isinstance(draft_picks_data, list):
                         is_contract_setting_period_active = True 
                         for pick in draft_picks_data:
                             player_id = pick.get('player_id')
                             metadata = pick.get('metadata', {})
                             amount_str = metadata.get('amount')
+                            print(f"DEBUG_TEAM_DETAILS: Draft pick processing - player_id: {player_id}, amount_str: {amount_str}")
                             if player_id and amount_str is not None:
                                 try:
                                     auction_acquisitions[str(player_id)] = int(amount_str)
                                 except ValueError:
                                     app.logger.warning(f"DEBUG_TEAM_DETAILS_FULL: Warning: Could not convert auction amount '{amount_str}' to int for player {player_id}")
+                    else:
+                        print(f"DEBUG_TEAM_DETAILS: draft_picks_data is not a list. Type: {type(draft_picks_data)}")
                 except json.JSONDecodeError:
                     app.logger.warning(f"DEBUG_TEAM_DETAILS_FULL: Warning: Could not parse draft data JSON for league {roster_info['sleeper_league_id']} season {current_processing_year}")
+        
+        print(f"DEBUG_TEAM_DETAILS: Final is_contract_setting_period_active: {is_contract_setting_period_active}")
+        print(f"DEBUG_TEAM_DETAILS: Final auction_acquisitions: {auction_acquisitions}")
 
         # <<< START NEW LOGIC FOR LEAGUE SPENDING RANKS >>>
         team_position_spending_ranks = {}
@@ -1756,32 +1768,66 @@ def get_team_details(team_id):
                     continue
 
                 player_contract_info = contracts_for_roster_map.get(p_id)
+                print(f"DEBUG_TEAM_DETAILS: Player {p_id} ({p_data.get('name', 'N/A')}) - Contract Info from DB: {player_contract_info}")
                 
                 status_text = "Active" # Default
                 if p_id in reserve_player_ids: status_text = "RES" 
                 # Note: Taxi squad status determination might need explicit roster metadata if not simply presence in taxi_list
 
-                # Player contract context
+                # Player contract context initialization
                 player_contract_context = {'status': 'not_applicable', 'recent_auction_value': None}
                 years_remaining_display = "N/A"
-                draft_amount_display = None # Default to None
+                draft_amount_display = None
 
-                if player_contract_info:
+                if is_contract_setting_period_active and p_id in auction_acquisitions:
+                    # This player was acquired in the current year's auction and it's the contract setting period.
+                    
+                    is_overridden_by_prior_active_contract = False
+                    if player_contract_info and player_contract_info['is_active'] and player_contract_info['contract_year'] < current_processing_year:
+                        is_overridden_by_prior_active_contract = True
+                        print(f"DEBUG_TEAM_DETAILS: Player {p_id} - Auction acquisition, but overridden by prior active contract from year {player_contract_info['contract_year']}.")
+
+                    if is_overridden_by_prior_active_contract:
+                        # Existing prior year active contract takes precedence
+                        player_contract_context['status'] = 'active_contract'
+                        draft_amount_display = player_contract_info['draft_amount']
+                        contract_end_year = player_contract_info['contract_year'] + player_contract_info['duration'] -1
+                        years_remaining = contract_end_year - current_processing_year + 1
+                        years_remaining_display = max(0, years_remaining)
+                        print(f"DEBUG_TEAM_DETAILS: Player {p_id} - Status set to 'active_contract' due to prior year contract.")
+                    else:
+                        # Eligible for pending_setting. This includes cases where:
+                        # 1. No contract exists for the player.
+                        # 2. An inactive contract exists for the player.
+                        # 3. An active contract exists, but it's for the current_processing_year (i.e., the default auction contract).
+                        player_contract_context['status'] = 'pending_setting'
+                        player_contract_context['recent_auction_value'] = auction_acquisitions[p_id]
+                        draft_amount_display = auction_acquisitions[p_id]
+                        # The frontend dropdown will handle displaying 1-4 and defaulting.
+                        # If a contract for the current year exists (e.g. 1-year default), 
+                        # its duration is implicitly what's being potentially changed.
+                        # For display simplicity for 'years_remaining' column before interaction, 1 is a sensible default.
+                        years_remaining_display = 1 
+                        print(f"DEBUG_TEAM_DETAILS: Player {p_id} - Status set to 'pending_setting'. Eligible auction acquisition. Contract info: {player_contract_info}")
+                
+                elif player_contract_info:
+                    # Player is not an auction pick eligible for setting OR contract setting period is not active,
+                    # but contract info exists.
                     draft_amount_display = player_contract_info['draft_amount']
                     if player_contract_info['is_active']:
                         player_contract_context['status'] = 'active_contract'
-                        # Calculate years_remaining based on current_processing_year and contract_year + duration
                         contract_end_year = player_contract_info['contract_year'] + player_contract_info['duration'] -1
                         years_remaining = contract_end_year - current_processing_year + 1
-                        years_remaining_display = max(0, years_remaining) # Ensure non-negative
-                    else: # Inactive contract (e.g. penalty)
+                        years_remaining_display = max(0, years_remaining) 
+                    else: 
                         player_contract_context['status'] = 'inactive_contract'
                         years_remaining_display = 0
-                elif p_id in auction_acquisitions and is_contract_setting_period_active :
-                    player_contract_context['status'] = 'pending_setting'
-                    player_contract_context['recent_auction_value'] = auction_acquisitions[p_id]
-                    draft_amount_display = auction_acquisitions[p_id] # Show auction value as draft amount
-                    years_remaining_display = 1 # Default to 1 year for newly acquired, can be changed by user
+                    print(f"DEBUG_TEAM_DETAILS: Player {p_id} - Existing contract (not pending auction or period inactive). Status: {player_contract_context['status']}")
+                
+                else:
+                    # No contract info, and not an eligible auction acquisition for setting.
+                    # Defaults for status ('not_applicable'), draft_amount_display (None), years_remaining_display ("N/A") are already set.
+                    print(f"DEBUG_TEAM_DETAILS: Player {p_id} - No specific contract context. Status remains: {player_contract_context['status']}")
 
                 player_details.append({
                     'id': p_id,
