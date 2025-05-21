@@ -68,7 +68,6 @@ function AppContent() {
     const [leagues, setLeagues] = useState([]);
     const [selectedLeagueId, setSelectedLeagueId] = useState(null);
     const [currentUserDetails, setCurrentUserDetails] = useState(null);
-    const [myTeamRosterId, setMyTeamRosterId] = useState(null);
     const tonConnectUI = useTonConnectUI()[0];
     const navigate = useNavigate();
     const location = useLocation();
@@ -87,7 +86,6 @@ function AppContent() {
             setLeagues([]);
             setSelectedLeagueId(null);
             setCurrentUserDetails(null);
-            setMyTeamRosterId(null);
             navigate('/');
         }
     };
@@ -156,7 +154,6 @@ function AppContent() {
                     logout(); // Perform logout if session is invalid
                 }
                 setCurrentUserDetails(null); // Clear user details on error
-                setMyTeamRosterId(null); // Clear roster ID on error
                 return { success: false, leagues: [], error: errorData.error || `HTTP error ${response.status}` };
             }
             const data = await response.json();
@@ -170,54 +167,18 @@ function AppContent() {
                     }
                 } else {
                     setSelectedLeagueId(null); // No leagues, so no selected league
-                    setMyTeamRosterId(null); // No leagues, so no roster ID
                 }
                 return { success: true, leagues: data.leagues || [], user_info: data.user_info };
             } else {
                 setCurrentUserDetails(null); // Clear user details on failure
-                setMyTeamRosterId(null); // Clear roster ID on failure
                 return { success: false, leagues: [], error: data.error || 'Fetching leagues was not successful' };
             }
         } catch (error) {
             console.error('Error in fetchUserLeagues:', error);
             setCurrentUserDetails(null); // Clear user details on exception
-            setMyTeamRosterId(null); // Clear roster ID on exception
             return { success: false, leagues: [], error: error.message };
         }
     };
-
-    useEffect(() => {
-        const fetchMyTeamRosterId = async () => {
-            if (currentUserDetails && currentUserDetails.sleeper_user_id && selectedLeagueId && sessionToken) {
-                try {
-                    const response = await fetch(`${API_BASE_URL}/api/user/roster?league_id=${selectedLeagueId}`, {
-                        headers: { 'Authorization': sessionToken }
-                    });
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({ error: 'Failed to fetch roster ID and parse error JSON' }));
-                        console.error('Failed to fetch my team roster ID:', response.status, errorData.error);
-                        setMyTeamRosterId(null);
-                        return;
-                    }
-                    const data = await response.json();
-                    if (data.success && data.roster_id) {
-                        setMyTeamRosterId(data.roster_id);
-                    } else {
-                        console.error('Failed to get roster_id from response:', data.error || 'No roster_id found');
-                        setMyTeamRosterId(null);
-                    }
-                } catch (error) {
-                    console.error('Error fetching my team roster ID:', error);
-                    setMyTeamRosterId(null);
-                }
-            } else {
-                // If not all conditions met (e.g., no selected league, no user details), clear roster ID
-                setMyTeamRosterId(null);
-            }
-        };
-
-        fetchMyTeamRosterId();
-    }, [currentUserDetails, selectedLeagueId, sessionToken]); // Dependencies for this effect
 
     useEffect(() => {
         const currentToken = localStorage.getItem('sessionToken');
@@ -329,7 +290,39 @@ function AppContent() {
 
     const handleLeagueNavChange = (leagueId) => {
         setSelectedLeagueId(leagueId);
-        navigate('/league'); // Navigate to league page when a league is selected from navbar
+        navigate('/league'); // Restore navigation to the league page
+    };
+
+    const handleMyTeamClick = async () => {
+        console.log("DEBUG_MY_TEAM_CLICK: Attempting to navigate. Selected League ID is:", selectedLeagueId);
+        if (!selectedLeagueId) {
+            alert("Please select a league first.");
+            return;
+        }
+        if (!currentUserDetails || !currentUserDetails.sleeper_user_id) {
+            alert("User details not available. Cannot determine your team.");
+            return;
+        }
+        if (!sessionToken) {
+            alert("Session token not available. Please log in again.");
+            logout(); // Or navigate to login
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/user/roster?league_id=${selectedLeagueId}`, {
+                headers: { 'Authorization': sessionToken }
+            });
+            const data = await response.json();
+            if (response.ok && data.success && data.roster_id) {
+                navigate(`/league/${selectedLeagueId}/team/${data.roster_id}`);
+            } else {
+                alert(data.error || "Could not find your team in the selected league.");
+            }
+        } catch (error) {
+            console.error('Error fetching roster ID for My Team click:', error);
+            alert('An error occurred while trying to find your team.');
+        }
     };
 
     return (
@@ -361,10 +354,12 @@ function AppContent() {
                                     </ul>
                                 </li>
                             )}
-                            {sessionToken && !isNewUser && currentUserDetails && selectedLeagueId && myTeamRosterId && (
+                            {sessionToken && !isNewUser && currentUserDetails && selectedLeagueId && (
                                 <>
                                     <li className="nav-item">
-                                        <Link className="nav-link" to={`/team/${myTeamRosterId}`}>My Team</Link>
+                                        <button className="nav-link btn btn-link" onClick={handleMyTeamClick}>
+                                            My Team
+                                        </button>
                                     </li>
                                     <li className="nav-item">
                                         <Link className="nav-link" to="/trade-desk">Trade Desk</Link>
@@ -418,7 +413,7 @@ function AppContent() {
                             <Navigate to="/" replace />
                         )
                     } />
-                    <Route path="/team/:teamId" element={
+                    <Route path="/league/:leagueId/team/:teamId" element={
                         sessionToken && !isNewUser ? (
                             <Team />
                         ) : (
@@ -448,7 +443,7 @@ function AppContent() {
 // Main App Component
 function App() {
     return (
-        <TonConnectUIProvider manifestUrl="https://10bf-193-43-135-254.ngrok-free.app/tonconnect-manifest.json">
+        <TonConnectUIProvider manifestUrl="https://6feb-45-14-195-35.ngrok-free.app/tonconnect-manifest.json">
             <Router>
                 <AppContent />
             </Router>

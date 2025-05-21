@@ -149,7 +149,7 @@ def init_db(force_create=False):
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME)''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS rosters
-                          (sleeper_roster_id TEXT PRIMARY KEY,
+                          (sleeper_roster_id TEXT,
                            sleeper_league_id TEXT,
                            owner_id TEXT, -- Sleeper user ID of the roster owner
                            players TEXT, -- JSON list of player_ids on main roster
@@ -161,6 +161,7 @@ def init_db(force_create=False):
                            ties INTEGER DEFAULT 0,
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME,
+                           PRIMARY KEY (sleeper_roster_id, sleeper_league_id),
                            FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE
                            )''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS contracts
@@ -350,7 +351,7 @@ def calculate_penalty(contract, current_year, is_offseason):
 
 # Initialize TonConnect
 ton_connect = TonConnect(
-    manifest_url='https://10bf-193-43-135-254.ngrok-free.app/tonconnect-manifest.json'
+    manifest_url='https://6feb-45-14-195-35.ngrok-free.app/tonconnect-manifest.json'
 )
 
 # Helper function to get current user from session
@@ -400,9 +401,9 @@ def get_current_user():
 @app.route('/tonconnect-manifest.json')
 def tonconnect_manifest():
     return {
-        "url": "https://10bf-193-43-135-254.ngrok-free.app",
+        "url": "https://6feb-45-14-195-35.ngrok-free.app",
         "name": "Supreme Keeper League",
-        "iconUrl": "https://10bf-193-43-135-254.ngrok-free.app/static/icon.png"
+        "iconUrl": "https://6feb-45-14-195-35.ngrok-free.app/static/icon.png"
     }
 
 # TonConnect login initiation
@@ -511,21 +512,19 @@ def login():
         else:
             # For existing users, trigger a full data pull from Sleeper
             print("Existing user detected, triggering full Sleeper data pull via /auth/login path")
-            # Note: sleeper_service.fetch_all_data will use its own connection management unless also refactored
-            full_data_response = sleeper_service.fetch_all_data(wallet_address) # This might be problematic if it uses separate connections
+            full_data_response = sleeper_service.fetch_all_data(wallet_address)
             if not full_data_response['success']:
                 print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
-
-        # Create session
-        cursor.execute('''
-            INSERT OR REPLACE INTO sessions (
-                wallet_address,
-                session_token
-            ) VALUES (?, ?)''',
-            (wallet_address, session_token)
-        )
-        conn.commit()
-        print("Successfully created session")
+            # Create session
+            cursor.execute('''
+                INSERT OR REPLACE INTO sessions (
+                    wallet_address,
+                    session_token
+                ) VALUES (?, ?)''',
+                (wallet_address, session_token)
+            )
+            conn.commit()
+            print("Successfully created session")
 
         return jsonify({
             'success': True,
@@ -1496,10 +1495,16 @@ def _get_player_current_year_cost(player_id: str, team_id: str, current_season_y
 @app.route('/team/<team_id>', methods=['GET'])
 @login_required
 def get_team_details(team_id):
-    """Fetches detailed information for a specific team (roster)."""
+    """Fetches detailed information for a specific team (roster).
+       Expects league_id as a query parameter.
+    """
     current_user_details = get_current_user()
     if not current_user_details:
         return jsonify({'success': False, 'error': 'User not authenticated'}), 401
+
+    league_id_from_query = request.args.get('league_id')
+    if not league_id_from_query:
+        return jsonify({'success': False, 'error': 'Missing league_id query parameter'}), 400
 
     # team_id is the sleeper_roster_id
     try:
@@ -1513,8 +1518,8 @@ def get_team_details(team_id):
                    COALESCE(u.display_name, u.username) as manager_name, u.username as sleeper_username
             FROM rosters r
             LEFT JOIN Users u ON r.owner_id = u.sleeper_user_id
-            WHERE r.sleeper_roster_id = ?
-        """, (team_id,))
+            WHERE r.sleeper_roster_id = ? AND r.sleeper_league_id = ?
+        """, (team_id, league_id_from_query))
         roster_info = cursor.fetchone()
 
         if not roster_info:
@@ -1527,7 +1532,8 @@ def get_team_details(team_id):
         if not cursor.fetchone():
             return jsonify({'success': False, 'error': 'User not authorized to view this team (not part of the league)'}), 403
 
-        team_name = "Team %s" % roster_info['owner_id'] # Default team name
+        # Default team name will be the manager's display name if no custom name is found
+        team_name = roster_info['manager_name']  # Use manager's name as a better default
         if roster_info['roster_metadata_json']:
             try:
                 roster_metadata = json.loads(roster_info['roster_metadata_json'])
@@ -1535,7 +1541,7 @@ def get_team_details(team_id):
                 if custom_name: 
                     team_name = custom_name
             except json.JSONDecodeError:
-                app.logger.warning(f"Could not parse roster metadata for roster_id {team_id}")
+                app.logger.warning(f"Could not parse roster metadata for roster_id {team_id}. Using manager name '{team_name}' as fallback.")
 
         main_player_ids = json.loads(roster_info['player_ids_json']) if roster_info['player_ids_json'] else []
         reserve_player_ids = json.loads(roster_info['reserve_ids_json']) if roster_info['reserve_ids_json'] else []

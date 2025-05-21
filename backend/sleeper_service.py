@@ -316,12 +316,13 @@ class SleeperService:
                         ties = roster_settings.get("ties", 0)
 
                         self.logger.debug(f"SleeperService.fetch_all_data: Upserting roster_id {roster_id} for league {league_id}.")
+                        print(f"DEBUG_SS_ROSTER_UPSERT: Attempting to upsert roster_id: {roster_id}, league_id: {league_id}, owner_id: {owner_id}")
                         cursor.execute('''
                             INSERT INTO rosters (
                                 sleeper_roster_id, sleeper_league_id, owner_id, players, metadata, reserve, taxi,
                                 wins, losses, ties, created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(\'now\'), datetime(\'now\'))
-                            ON CONFLICT(sleeper_roster_id) DO UPDATE SET
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                            ON CONFLICT(sleeper_roster_id, sleeper_league_id) DO UPDATE SET
                                 sleeper_league_id = excluded.sleeper_league_id,
                                 owner_id = excluded.owner_id,
                                 players = excluded.players,
@@ -331,11 +332,12 @@ class SleeperService:
                                 wins = excluded.wins,
                                 losses = excluded.losses,
                                 ties = excluded.ties,
-                                updated_at = datetime(\'now\')
+                                updated_at = datetime('now')
                         ''', (
                             roster_id, league_id, owner_id, players_json, metadata_json, 
                             reserve_json, taxi_json, wins, losses, ties
                         ))
+                        print(f"DEBUG_SS_ROSTER_UPSERT_RESULT: Roster_id: {roster_id}, league_id: {league_id}, cursor.rowcount: {cursor.rowcount}")
                     
                     self.logger.info(f"SleeperService.fetch_all_data: Finished processing {len(rosters)} rosters for league {league_id}.")
                     print(f"DEBUG (SleeperService): Total unique players found on rosters in league {league_id}: {len(unique_player_ids_in_league)}")

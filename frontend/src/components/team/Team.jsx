@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
 const API_BASE_URL = "http://localhost:5000";
 
 function Team() {
-    const { teamId } = useParams();
+    const { teamId, leagueId } = useParams();
     const [teamData, setTeamData] = useState(null);
     const [leagueContext, setLeagueContext] = useState(null);
     const [teamPositionRanks, setTeamPositionRanks] = useState(null);
@@ -13,7 +13,7 @@ function Team() {
     const [error, setError] = useState(null);
     const [contractDurations, setContractDurations] = useState({});
 
-    const fetchTeamData = async (currentTeamId, token) => {
+    const fetchTeamData = async (currentTeamId, currentLeagueId, token) => {
         if (!token) {
             setError('Please log in to view team information.');
             setLoading(false);
@@ -22,7 +22,7 @@ function Team() {
         setLoading(true);
         setError(null);
         try {
-            const response = await fetch(`${API_BASE_URL}/team/${currentTeamId}`, {
+            const response = await fetch(`${API_BASE_URL}/team/${currentTeamId}?league_id=${currentLeagueId}`, {
                 headers: { 'Authorization': token }
             });
             if (!response.ok) {
@@ -49,8 +49,8 @@ function Team() {
 
     useEffect(() => {
         const sessionToken = localStorage.getItem('sessionToken');
-        fetchTeamData(teamId, sessionToken);
-    }, [teamId]);
+        fetchTeamData(teamId, leagueId, sessionToken);
+    }, [teamId, leagueId]);
 
     const handleDurationChange = (playerId, duration) => {
         setContractDurations(prevDurations => ({
@@ -231,7 +231,7 @@ function Team() {
                 setContractDurations({}); // Clear selections
                 // Re-fetch team data to reflect changes immediately
                 const sessionToken = localStorage.getItem('sessionToken');
-                await fetchTeamData(teamId, sessionToken);
+                await fetchTeamData(teamId, leagueId, sessionToken);
             } else {
                 setError(result.error || 'An unknown error occurred while saving.');
             }
@@ -248,40 +248,44 @@ function Team() {
                 <div className="card-body">
                     <h5 className="card-title">Manager Information</h5>
                     <p className="card-text">
-                        <strong>Name:</strong> {teamData.manager.name}<br />
-                        <strong>Sleeper Username:</strong> {teamData.manager.sleeper_username}
+                        <strong>Manager:</strong> {teamData.manager.name} ({teamData.manager.sleeper_username})
                     </p>
+                    {/* Display current season and offseason status */}
+                    {leagueContext && (
+                        <p className="card-text">
+                            <strong>Current Season:</strong> {leagueContext.current_season_year} ({leagueContext.is_offseason ? 'Off-season' : 'In-season'})
+                            {leagueContext.is_contract_setting_period_active && <span className="badge bg-success ms-2">Contract Setting Active</span>}
+                        </p>
+                    )}
+                     {/* Spending Ranks Display */}
+                     {teamPositionRanks && Object.keys(teamPositionRanks).length > 0 && (
+                        <div>
+                            <h6>Positional Spending Ranks (League-wide):</h6>
+                            <ul className="list-inline">
+                                {positionOrder.filter(pos => teamPositionRanks[pos]).map(pos => (
+                                    <li key={pos} className="list-inline-item">
+                                        <span className="badge bg-info me-1">{pos}: {teamPositionRanks[pos].rank}/{teamPositionRanks[pos].total_teams}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                 </div>
             </div>
 
-            {leagueContext && (
-                <div className="card mb-4">
-                    <div className="card-body">
-                        <h5 className="card-title">League Status</h5>
-                        <p className="card-text">
-                            <strong>Current Season:</strong> {leagueContext.current_season_year}<br />
-                            <strong>Status:</strong> {leagueContext.is_offseason ? "Off-season" : "In-season"}<br />
-                            {leagueContext.is_contract_setting_period_active && (
-                                <strong className="text-success">Contract setting period is active.</strong>
-                            )}
-                        </p>
-                    </div>
-                </div>
-            )}
-
-            {canSetContracts && (
-                <div className="card mb-4">
-                    <div className="card-body text-end">
-                        <button 
-                            className="btn btn-primary" 
-                            onClick={handleSaveContractDurations}
-                            disabled={Object.keys(contractDurations).length === 0}
-                        >
-                            Save Contract Durations
-                        </button>
-                    </div>
-                </div>
-            )}
+            {/* New combined header for Active Roster title and Save button */}
+            <div className="d-flex justify-content-between align-items-center mb-3">
+                <h5 className="mb-0">Active Roster</h5>
+                {canSetContracts && (
+                    <button 
+                        onClick={handleSaveContractDurations} 
+                        className="btn btn-primary"
+                        disabled={Object.keys(contractDurations).length === 0 || loading}
+                    >
+                        {loading ? 'Saving...' : 'Save Contract Durations'}
+                    </button>
+                )}
+            </div>
 
             {/* Display Future Yearly Totals */}
             {yearlyCostColumnHeaders.length > 1 && (
@@ -301,22 +305,22 @@ function Team() {
 
             <div className="row">
                 <div className="col-md-12">
-                    <h2 className="mb-3">Active Roster</h2>
-                    {allPlayersSorted.length > 0 ? (
-                                <div className="table-responsive">
-                            <table className="table table-hover table-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Name</th>
-                                                <th>Team</th>
-                                        <th>Draft $</th>
-                                        <th>Yrs Rem</th>
-                                        {yearlyCostColumnHeaders.map(year => (
-                                            <th key={`header-cost-${year}`}>{year} $</th>
-                                        ))}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
+                    <div className="card mb-4">
+                        <div className="card-body p-0"> {/* p-0 to make table flush with card */}
+                            <div className="table-responsive">
+                                <table className="table table-hover mb-0"> {/* mb-0 to remove bottom margin */}
+                                    <thead className="table-light">
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Team</th>
+                                            <th>Draft $</th>
+                                            <th>Yrs Rem</th>
+                                            {yearlyCostColumnHeaders.map(year => (
+                                                <th key={`header-cost-${year}`}>{year} $</th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
                                     {(() => {
                                         let currentPosition = null;
                                         return allPlayersSorted.map(player => {
@@ -393,12 +397,11 @@ function Team() {
                                             );
                                         });
                                     })()}
-                                        </tbody>
-                                    </table>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    ) : (
-                        <p>No active players on this roster.</p>
-                    )}
+                    </div>
                 </div>
             </div>
         </div>

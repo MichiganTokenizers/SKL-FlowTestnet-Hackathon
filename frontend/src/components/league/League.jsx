@@ -171,7 +171,7 @@ function League(props) { // Accept props
                                         <tr key={roster.roster_id}>
                                             <td>
                                                 {roster.roster_id ? (
-                                                    <Link to={`/team/${roster.roster_id}`}>
+                                                    <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`}>
                                                         {roster.team_name || 'Unnamed Team'}
                                                     </Link>
                                                 ) : (
