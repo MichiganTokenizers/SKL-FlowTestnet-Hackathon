@@ -5,38 +5,13 @@ import { Link } from 'react-router-dom'; // Import Link
 const API_BASE_URL = "http://localhost:5000";
 
 function League(props) { // Accept props
-    const { leagues, selectedLeagueId, sessionToken } = props; // Destructure props
+    const { leagues, selectedLeagueId, sessionToken, currentUserDetails } = props; // Destructure props, add currentUserDetails
 
-    const [userData, setUserData] = useState({}); // Still useful for display name
     const [standings, setStandings] = useState([]);
     const [transactions, setTransactions] = useState([]); // State for recent transactions (mocked for now)
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     // const navigate = useNavigate(); // Removed, navigation handled by App.jsx
-
-    // Effect to fetch user data (like display name) if not already part of a shared context
-    // This is a simplified version, ideally user info would come from App.jsx or context
-    useEffect(() => {
-        if (sessionToken) {
-            // Fetch basic user info if needed and not available from props
-            // For now, assuming App.jsx passes enough user context or League.jsx can derive it
-            // We need the display name, which might not be in `leagues` or `selectedLeagueId` directly
-            // A temporary fix: fetch /league/local again just for user_info if not available otherwise.
-            // This is inefficient and should be addressed by better state management in App.jsx for user_info.
-            fetch(`${API_BASE_URL}/league/local`, { // Re-fetch for user_info if necessary
-                 headers: { 'Authorization': sessionToken }
-            })
-            .then(res => res.json())
-            .then(data => {
-                if (data.success && data.user_info) {
-                    setUserData({ displayName: data.user_info.display_name || 'N/A' });
-                } else {
-                     setUserData({ displayName: 'Player' }); // Fallback
-                }
-            })
-            .catch(() => setUserData({ displayName: 'Player' }));
-        }
-    }, [sessionToken]);
 
     // Effect to fetch standings when selectedLeagueId or sessionToken changes from props
     useEffect(() => {
@@ -125,7 +100,7 @@ function League(props) { // Accept props
         return (
             <div className="container p-4">
                 <h1 className="display-4 fw-bold mb-4" style={{ color: 'var(--text-color)' }}>{leagueName}</h1>
-                <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {userData.displayName || 'Player'}</p>
+                <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {currentUserDetails?.display_name || 'Player'}</p>
                 <div className="alert" style={{ backgroundColor: 'var(--input-bg-color)', color: 'var(--text-color)', border: '1px solid var(--input-border-color)' }}>
                     Please select a league from the navbar to view its details.
                 </div>
@@ -138,7 +113,7 @@ function League(props) { // Accept props
          return (
             <div className="container p-4">
                 <h1 className="display-4 fw-bold mb-4" style={{ color: 'var(--text-color)' }}>My League</h1>
-                <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {userData.displayName || 'Player'}</p>
+                <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {currentUserDetails?.display_name || 'Player'}</p>
                 <div className="alert" style={{ backgroundColor: '#FDEBD0', color: 'var(--text-color)', border: '1px solid var(--header-bg-color)' }}>
                     No leagues are currently associated with your account. Please import or create a league.
                 </div>
@@ -151,7 +126,7 @@ function League(props) { // Accept props
             <h1 className="display-4 fw-bold mb-4" style={{ color: 'var(--text-color)' }}>
                 {leagueName} 
             </h1>
-            <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {userData.displayName || 'Player'}</p>
+            <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {currentUserDetails?.display_name || 'Player'}</p>
             
             {selectedLeagueId && ( // Only show standings if a league is selected
                 <div className="mt-3">

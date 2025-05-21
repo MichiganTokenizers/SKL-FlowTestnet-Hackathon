@@ -68,6 +68,8 @@ function AppContent() {
     const [leagues, setLeagues] = useState([]);
     const [selectedLeagueId, setSelectedLeagueId] = useState(null);
     const [currentUserDetails, setCurrentUserDetails] = useState(null);
+    const [loginProcessJustCompleted, setLoginProcessJustCompleted] = useState(false);
+    const [isAppReady, setIsAppReady] = useState(false);
     const tonConnectUI = useTonConnectUI()[0];
     const navigate = useNavigate();
     const location = useLocation();
@@ -86,63 +88,12 @@ function AppContent() {
             setLeagues([]);
             setSelectedLeagueId(null);
             setCurrentUserDetails(null);
-            // Navigate to root only if not already there to avoid redundant navigation warnings/issues
+            setIsAppReady(false);
             if (location.pathname !== '/') {
                 navigate('/');
             }
         }
-    }, [tonConnectUI, navigate, location.pathname]); // Removed setSessionToken etc. as they are stable
-
-    const fetchAllSleeperData = async (tokenToUse) => {
-        if (!tokenToUse) {
-            console.error('fetchAllSleeperData called without a token.');
-            return { success: false, error: 'No token provided to fetchAllSleeperData' };
-        }
-        try {
-            const response = await fetch('http://localhost:5000/sleeper/fetchAll', {
-                method: 'POST',
-                headers: {
-                    'Authorization': tokenToUse
-                }
-            });
-            const data = await response.json(); // Always parse JSON to get error message
-            if (!response.ok) { // Check if response status is not OK (2xx)
-                console.error('Failed to fetch all Sleeper data:', data.error || response.statusText);
-                return { success: false, error: data.error || response.statusText, needsAssociation: (response.status === 404 && data.error && data.error.includes("No Sleeper user ID associated")) };
-            }
-            if (data.success) {
-                console.log('All Sleeper data fetched and stored successfully.');
-                return { success: true };
-            } else {
-                // This case might be redundant if !response.ok covers it
-                console.error('Failed to fetch all Sleeper data (data.success false):', data.error);
-                return { success: false, error: data.error, needsAssociation: (data.error && data.error.includes("No Sleeper user ID associated")) };
-            }
-        } catch (error) {
-            console.error('Error fetching all Sleeper data (catch block):', error);
-            return { success: false, error: error.message };
-        }
-    };
-
-    // New function to handle successful association
-    const handleAssociationSuccess = async () => {
-        console.log('Sleeper association successful, backend has fetched data.');
-        setIsNewUser(false); // User is no longer "new"
-        // After association, fetch leagues and navigate
-        if (sessionToken) { // sessionToken should be set by now
-            const userLeaguesData = await fetchUserLeagues(sessionToken);
-            if (userLeaguesData.success && userLeaguesData.leagues.length > 0) {
-                navigate('/league');
-            } else if (userLeaguesData.success) { // Has leagues but list is empty
-                navigate('/league'); // Navigate to league page, it will show "no leagues"
-            } else {
-                // Handle error in fetching leagues post-association if necessary
-                navigate('/associate-sleeper'); // Or back to a relevant page
-            }
-        } else {
-             navigate('/associate-sleeper'); // Fallback if session token issue
-        }
-    };
+    }, [tonConnectUI, navigate, location.pathname]);
 
     const fetchUserLeagues = async (token) => {
         if (!token) return { success: false, leagues: [], error: 'No token for fetchUserLeagues' };
@@ -153,80 +104,75 @@ function AppContent() {
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({ error: 'Failed to fetch leagues and parse error JSON' }));
                 console.error('Failed to fetch user leagues:', response.status, errorData.error);
-                if (response.status === 401) { // Unauthorized
-                    logout(); // Perform logout if session is invalid
-                }
-                setCurrentUserDetails(null); // Clear user details on error
+                if (response.status === 401) logout();
+                setCurrentUserDetails(null);
                 return { success: false, leagues: [], error: errorData.error || `HTTP error ${response.status}` };
             }
             const data = await response.json();
             if (data.success) {
                 setLeagues(data.leagues || []);
-                setCurrentUserDetails(data.user_info || null); // Store user_info
+                setCurrentUserDetails(data.user_info || null);
                 if ((data.leagues || []).length > 0) {
-                    // Auto-select first league if none is selected or if previous selected is not in new list
                     if (!selectedLeagueId || !data.leagues.some(l => l.league_id === selectedLeagueId)) {
                         setSelectedLeagueId(data.leagues[0].league_id);
                     }
                 } else {
-                    setSelectedLeagueId(null); // No leagues, so no selected league
+                    setSelectedLeagueId(null);
                 }
                 return { success: true, leagues: data.leagues || [], user_info: data.user_info };
             } else {
-                setCurrentUserDetails(null); // Clear user details on failure
+                setCurrentUserDetails(null);
                 return { success: false, leagues: [], error: data.error || 'Fetching leagues was not successful' };
             }
         } catch (error) {
             console.error('Error in fetchUserLeagues:', error);
-            setCurrentUserDetails(null); // Clear user details on exception
+            setCurrentUserDetails(null);
             return { success: false, leagues: [], error: error.message };
         }
     };
 
+    // Verification Effect: Handles existing token on app load
     useEffect(() => {
-        const currentToken = localStorage.getItem('sessionToken');
-        if (currentToken) {
-            setSessionToken(currentToken);
-            const verifyAndFetch = async () => {
-                const leagueData = await fetchUserLeagues(currentToken);
-                if (!leagueData || typeof leagueData.leagues === 'undefined') {
-                    console.error("Failed to get valid league data from fetchUserLeagues in verifyAndFetch");
-                    if (localStorage.getItem('sessionToken')) logout(); else if (location.pathname !== '/') navigate('/');
-                    return;
-                }
-
-                // Define userNeedsAssociation here
-                const userNeedsAssociation = async () => {
-                    try {
-                        const res = await fetch(`${API_BASE_URL}/auth/check_association`, { headers: { 'Authorization': currentToken }});
-                        if (!res.ok) return true; 
-                        const checkData = await res.json();
-                        return checkData.success ? checkData.needs_association : true;
-                    } catch {
-                        return true;
-                    }
-                };
-
-                const needsAssociation = await userNeedsAssociation();
-
-                if (needsAssociation) {
-                    if (location.pathname !== '/associate-sleeper') {
-                        navigate('/associate-sleeper');
-                    }
-                } else { 
-                    if (location.pathname === '/' || location.pathname === '/associate-sleeper') {
-                        navigate('/league'); 
-                    }
-                }
-            };
-            verifyAndFetch();
+        if (loginProcessJustCompleted) {
+            setLoginProcessJustCompleted(false); // Reset the flag
+            return; // Skip this run, let states settle from login effect
         }
 
-        // This effect primarily handles initial login via TonConnect
-        if (connected && tonWallet && !sessionToken && !localStorage.getItem('sessionToken')) { // Ensure we only run this for a new wallet connection without an existing session
+        const currentToken = localStorage.getItem('sessionToken');
+        if (currentToken) {
+            setSessionToken(currentToken); 
+
+            const verifyAndSetStates = async () => {
+                await fetchUserLeagues(currentToken); 
+                try {
+                    const res = await fetch(`${API_BASE_URL}/auth/check_association`, { headers: { 'Authorization': currentToken }});
+                    if (res.ok) {
+                        const checkData = await res.json();
+                        if (checkData.success) {
+                            setIsNewUser(checkData.needs_association);
+                        } else {
+                            setIsNewUser(true); 
+                        }
+                    } else {
+                        if (res.status === 401) logout();
+                        setIsNewUser(true); 
+                    }
+                } catch {
+                    setIsNewUser(true); 
+                }
+                setIsAppReady(true); // Set app ready after all states are set
+            };
+            verifyAndSetStates();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loginProcessJustCompleted, logout]); // Dependencies: loginProcessJustCompleted, logout. fetchUserLeagues/setIsNewUser are stable.
+
+    // Login Effect: Handles new wallet connection via TonConnect
+    useEffect(() => {
+        if (connected && tonWallet && !sessionToken && !localStorage.getItem('sessionToken')) {
             const login = async () => {
                 try {
-                    const nonce = Math.random().toString(36).substring(2); // Consider a more secure nonce
+                    const nonce = Math.random().toString(36).substring(2);
                     const response = await fetch(`${API_BASE_URL}/auth/login`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -235,83 +181,50 @@ function AppContent() {
                             nonce: nonce
                         })
                     });
-
                     const loginData = await response.json();
                     if (loginData.success) {
                         const newSessionToken = loginData.sessionToken;
                         localStorage.setItem('sessionToken', newSessionToken);
                         setSessionToken(newSessionToken);
-                        setIsNewUser(loginData.isNewUser); 
+                        setIsNewUser(loginData.isNewUser);
+                        setLoginProcessJustCompleted(true); // Signal that login just completed
 
-                        if (loginData.isNewUser) {
-                            if (location.pathname !== '/associate-sleeper') {
-                                navigate('/associate-sleeper');
-                            }
-                        } else {
-                            const userLeaguesData = await fetchUserLeagues(newSessionToken);
-                            if (!userLeaguesData || typeof userLeaguesData.leagues === 'undefined') {
-                                console.error("Failed to get valid league data after login");
-                                if (localStorage.getItem('sessionToken')) logout(); else if (location.pathname !== '/') navigate('/');
-                                return;
-                            }
-                            
-                            // If login was successful and user is not new (already associated)
-                            if (userLeaguesData.success) {
-                                // Only navigate to /league if on an initial page
-                                if (location.pathname === '/' || location.pathname === '/associate-sleeper') {
-                                    navigate('/league');
-                                }
-                            } else {
-                                // fetchUserLeagues was not successful (e.g. token became invalid, or other server error)
-                                // logout() would have been called for 401 inside fetchUserLeagues.
-                                // If still on an entry page, and data fetch failed for other reasons, consider navigating to root or an error page.
-                                if (location.pathname === '/' || location.pathname === '/associate-sleeper') {
-                                    // Attempt to clarify if association is needed via fetchAllSleeperData, then navigate
-                                    const fetchResult = await fetchAllSleeperData(newSessionToken);
-                                    if (fetchResult && !fetchResult.success && fetchResult.needsAssociation) {
-                                        navigate('/associate-sleeper');
-                                    } else {
-                                        // Fallback to root if association not clearly needed or fetchAllSleeperData also failed
-                                        if (location.pathname !== '/') navigate('/'); 
-                                    }
-                                }
-                            }
+                        if (!loginData.isNewUser) {
+                            await fetchUserLeagues(newSessionToken); // Fetch leagues for existing user
                         }
+                        setIsAppReady(true); // Set app ready after all states are set
                     } else {
-                        // Handle login failure
                         console.error("Login failed:", loginData.error);
+                        setIsAppReady(false); // Ensure app is not ready on login failure
                     }
                 } catch (error) {
                     console.error('Login process error:', error);
+                    setIsAppReady(false); // Ensure app is not ready on error
                 }
             };
             login();
         }
-    // }, [connected, tonWallet, sessionToken, navigate]); // Original dependencies
-    // eslint-disable-next-line react-hooks/exhaustive-deps 
-    }, [connected, tonWallet, navigate]); // location is NOT added here to prevent re-triggering on deliberate navigation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [connected, tonWallet]); // Dependencies: connected, tonWallet. Setters & fetchUserLeagues are stable. navigate removed.
 
-    // Effect to handle wallet disconnection via TonConnectButton or external events
+    // Wallet Disconnection Effect
     useEffect(() => {
         if (!tonConnectUI) {
             return;
         }
-
         const unsubscribe = tonConnectUI.onStatusChange(
-            (walletInfo) => { // walletInfo is null when disconnected, or an object if connected
+            (walletInfo) => {
                 const currentSessionToken = localStorage.getItem('sessionToken');
-                // If wallet becomes disconnected and we had an active session token
                 if (!walletInfo && currentSessionToken) {
-                    console.log('Wallet disconnected (e.g., via TonConnectButton or provider), triggering app logout.');
-                    logout(); // Call the memoized logout function
+                    console.log('Wallet disconnected, triggering app logout.');
+                    logout();
                 }
             }
         );
-
         return () => {
-            unsubscribe(); // Cleanup subscription on component unmount
+            unsubscribe();
         };
-    }, [tonConnectUI, logout]); // Dependencies: tonConnectUI and the memoized logout function
+    }, [tonConnectUI, logout]);
 
     const handleLeagueNavChange = (leagueId) => {
         setSelectedLeagueId(leagueId);
@@ -348,6 +261,10 @@ function AppContent() {
             console.error('Error fetching roster ID for My Team click:', error);
             alert('An error occurred while trying to find your team.');
         }
+    };
+
+    const handleAssociationSuccess = async () => {
+        // ... existing code ...
     };
 
     return (
@@ -402,42 +319,52 @@ function AppContent() {
             <main className="flex-grow-1 py-4">
                 <Routes>
                     <Route path="/" element={
-                        sessionToken ? (
+                        sessionToken && isAppReady ? (
                             isNewUser ? (
                                 <Navigate to="/associate-sleeper" replace />
                             ) : (
                                 <Navigate to="/league" replace />
                             )
                         ) : (
-                            <div className="text-center">
-                                <h2>Welcome to Supreme Keeper League</h2>
-                                <p>Please connect your TON wallet to continue</p>
-                            </div>
+                            sessionToken && !isAppReady ? (
+                                <div className="text-center py-5">
+                                    <div className="spinner-border text-primary" role="status">
+                                        <span className="visually-hidden">Loading...</span>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center">
+                                    <h2>Welcome to Supreme Keeper League</h2>
+                                    <p>Please connect your TON wallet to continue</p>
+                                </div>
+                            )
                         )
                     } />
                     <Route path="/league" element={
-                        sessionToken && !isNewUser ? (
-                            <League leagues={leagues} selectedLeagueId={selectedLeagueId} sessionToken={sessionToken} />
+                        sessionToken && isAppReady && !isNewUser ? (
+                            <League leagues={leagues} selectedLeagueId={selectedLeagueId} sessionToken={sessionToken} currentUserDetails={currentUserDetails} />
                         ) : (
                             <Navigate to="/" replace />
                         )
                     } />
                     <Route path="/league/:leagueId/team/:teamId" element={
-                        sessionToken && !isNewUser ? (
+                        sessionToken && isAppReady && !isNewUser ? (
                             <Team />
                         ) : (
                             <Navigate to="/" replace />
                         )
                     } />
                     <Route path="/sleeper-import" element={<SleeperImport />} />
-                    <Route path="/associate-sleeper" element={<AssociateSleeper onAssociationSuccess={handleAssociationSuccess} />} />
+                    <Route path="/associate-sleeper" element={
+                        sessionToken && isAppReady ? /* Also protect association route if needed, or handle differently */ 
+                        <AssociateSleeper onAssociationSuccess={handleAssociationSuccess} /> : <Navigate to="/" replace />
+                    } />
                     <Route path="/league-connect" element={
-                        sessionToken && isNewUser ? (
+                        sessionToken && isAppReady && isNewUser ? (
                             <LeagueConnect sessionToken={sessionToken} onSuccess={() => {
-                                // After LeagueConnect (if it only creates a user record without sleeper_id)
-                                // we might still need to go to association or directly fetch if it now has sleeper_id
-                                setIsNewUser(false); // Assumption: LeagueConnect makes them not a new user
-                                navigate('/associate-sleeper'); // Or directly to /league if association is handled by LeagueConnect
+                                setIsNewUser(false); 
+                                setIsAppReady(false); // Will re-evaluate and navigate to /associate-sleeper or /league
+                                navigate('/'); // Go to root to re-trigger routing logic after this action
                             }} />
                         ) : (
                             <Navigate to="/" replace />

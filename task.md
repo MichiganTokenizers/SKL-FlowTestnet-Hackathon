@@ -16,12 +16,21 @@
   - [x] Tables: Remove avatar display from tables.
 
 - [ ] Add "Recent Transactions" table to League page (Started: 2025-05-28)
-- [x] Build out Team Page functionality (Started: 2025-05-29) (Completed: 2023-10-27)
+- [x] Build out Team Page functionality (Started: 2025-05-29) (Completed: 2025-07-28)
   - [x] 'My Team' link in navbar goes to logged-in user's team page (Completed: 2023-10-27)
   - [x] Team names in standings table link to respective team pages (Completed: 2023-10-27)
   - [x] Team page displays players by position (QB, RB, WR, TE, DEF) (Completed: 2023-10-27)
   - [x] Team page displays player draft amount (Completed: 2023-10-27)
   - [x] Team page displays "Years Remaining" (Completed: 2023-10-27)
+  - [x] Team page displays 4-year projected contract costs (Completed: 2025-07-28)
+  - [x] Team page displays "Projected Future Yearly Contract Totals" (Completed: 2025-07-28)
+  - [x] Team page implements UI for setting new player contract durations during the contract setting window (Completed: 2025-07-28)
+  - [x] Backend supports fetching 4-year costs and saving contract durations (Completed: 2025-07-28)
+- [ ] Clean up routes upon login with TonConnect, seeing an error page before correct league page loads
+- [ ] Detect players who have been waived from Sleeper team but still have an active contract during season
+- [ ] Build Trade Desk (big)
+- [ ] Build league fee structure in keeper.db
+- [ ] Add pay league fee button in league page
 
 ## Discovered During Work
 

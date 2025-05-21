@@ -427,17 +427,26 @@ def initiate_login():
             print("User already authenticated and associated with Sleeper")
             # Fetch user's leagues
             cursor = conn.cursor()
-            cursor.execute('SELECT sleeper_league_id FROM leagues WHERE sleeper_user_id = ?', (result['sleeper_user_id'],))
+            # The 'leagues' table was an old schema. User's leagues are now in UserLeagueLinks.
+            # We need to join with LeagueMetadata to get details if needed, or just the IDs.
+            # For now, let's fetch linked league_ids.
+            cursor.execute('''
+                SELECT ull.sleeper_league_id 
+                FROM UserLeagueLinks ull
+                WHERE ull.wallet_address = ?
+            ''', (user['wallet_address'],))
             leagues = cursor.fetchall()
             if leagues:
                 first_league_id = leagues[0]['sleeper_league_id']
-                return redirect(url_for('league', league_id=first_league_id))
+                # Redirect to the standings page for the first league
+                return redirect(url_for('get_league_standings_local', league_id=first_league_id))
             else:
-                return redirect(url_for('league'))
+                # No specific league, redirect to the user's general league data page
+                return redirect(url_for('get_league_data_local'))
         else:
             print("User authenticated but not associated with Sleeper")
-            # Bypassing Sleeper association, redirect directly to league page
-            return redirect(url_for('league'))
+            # Bypassing Sleeper association, redirect to the user's general league data page
+            return redirect(url_for('get_league_data_local'))
     flash('Please connect your TON wallet from the frontend.', 'info')
     return redirect("http://localhost:5173")
 
@@ -460,7 +469,7 @@ def tonconnect_callback():
                 user_id = user['wallet_address']
             session['wallet_address'] = address
             flash('Logged in successfully.', 'success')
-            return redirect(url_for('league'))
+            return redirect(url_for('get_league_data_local'))
         else:
             flash('Invalid TonConnect proof.', 'error')
             return redirect(url_for('initiate_login'))

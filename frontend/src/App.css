@@ -180,3 +180,21 @@ a:hover{
 button, input, select, textarea, label, td, th, h1, h2, h3, h4, h5, h6, p, a, li, .card, .card-body, .card-title, .card-text, .alert, .badge {
     font-family: var(--primary-font-family);
 }
+
+/* Custom styling for "My Leagues" dropdown items */
+.navbar-custom .dropdown-menu .dropdown-item:hover,
+.navbar-custom .dropdown-menu .dropdown-item:focus {
+  background-color: #E77728; /* Your desired orange color */
+  color: var(--header-text-color);    /* Using Near Black from your theme for text */
+}
+
+.navbar-custom .dropdown-menu .dropdown-item.active {
+  background-color: #E77728; /* Your desired orange color */
+  color: var(--header-text-color);    /* Using Near Black for text */
+}
+
+/* Optional: Ensure consistent font and default text color for dropdown items */
+.navbar-custom .dropdown-menu .dropdown-item {
+  font-family: var(--primary-font-family); /* Ensures Comfortaa font */
+  color: var(--text-color); /* Default text color for non-active/hovered items */
+}

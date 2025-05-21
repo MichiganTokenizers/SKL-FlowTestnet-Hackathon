@@ -5,6 +5,7 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 
 ## Data Pull Strategy
 - **One-Time Data Pull**: All Sleeper API data will be pulled once during user login or after a new league association. This pull will update the local database (`keeper.db`) with the latest information on users, leagues, teams, rosters, standings, and other relevant data.
+  - **League Filtering**: Only leagues whose names begin with "SKL" will be imported and processed into `keeper.db`.
 - **Local Data Usage**: After the initial data pull, the application will use data stored in `keeper.db` for all subsequent requests, minimizing repeated calls to Sleeper APIs.
 - **Refresh Mechanism**: A manual refresh option or scheduled task may be implemented to update `keeper.db` when necessary, but this will be an exception rather than the norm.
 - **Backend Endpoints**: New endpoints will be created or existing ones updated to fetch data from `keeper.db` (e.g., `/league/local`, `/league/standings/local`). A specific endpoint `/sleeper/fetchAll` will handle the full data pull from Sleeper APIs.
@@ -23,14 +24,26 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **Team Management**: Rosters for the most part will be managed on Sleeper app. 
    -Waiving player will take place on Sleeper app, but Sleeper API pull will detect the missing contracted player, update contracts with IsActive = 0, penalty_incurred, and penalty_year. 
    - Trading player on Supreme Keeper League site with options for trading next year's auction money. The trade will have to also take place on Sleeper app with players only.
-- **Contract Management**: Creating, viewing, and managing player contracts. After draft, before start of season, users will be prompted with contract setting page for newly drafted players. Can be accessed/changed up to start of season.
+  - **Team Page Analytics & Display**:
+    - **Current Year Positional Spending Ranks**: Displays the team's total contract spending for each player position (QB, RB, WR, TE, etc.) for the current season. This is ranked against all other teams in the league to show comparative spending by position.
+    - **Future Contract Yearly Ranks**: Shows the team's projected total contract commitments for each of the next three future seasons. These projected totals are also ranked against all other teams in the league for each respective future year, providing insight into long-term financial obligations.
+- **Contract Management**: Creating, viewing, and managing player contracts. 
+  - **Contract Setting Phase:** After the annual league draft and before the start of the season, users will access a contract setting page for newly drafted players. These settings can be accessed and modified up until the official start of the season.
+  - **Contract Duration:** Players can be signed to contracts of up to 4 years.
+  - **Contract Cost Structure:**
+    - The initial `draft_amount` is the cost for Year 1 of the contract.
+    - For each subsequent year of the contract (Year 2, Year 3, Year 4), the cost increases by 10% of the *previous year's cost*, with the result rounded up to the nearest dollar.
+    - Example:
+      - Year 1 Cost = `draft_amount`
+      - Year 2 Cost = `ceil(Year 1 Cost * 1.1)`
+      - Year 3 Cost = `ceil(Year 2 Cost * 1.1)`
+      - Year 4 Cost = `ceil(Year 3 Cost * 1.1)`
+  - **Calculated Annual Costs:** The `contracts` table will store the initial `draft_amount`, `contract_year`, and `duration`. To provide the escalated annual costs for each year of a contract, a database view (e.g., `vw_contractByYear`) will be created. This view will perform the necessary calculations based on the stored contract terms.
   - Franchise Tag System: Each team can designate one player as their franchise player before the start of the season.
     - Tag value is calculated as the greater of:
-      - Average of the top 5 contracts at that position from the previous year
-      - Player's current contract value + 10%
-    - Franchise tag can only be used on players with expiring contracts
-    - Tag can only be used once per season and must be declared during the contract setting phase
-    - Franchise tagged players cannot be traded during their tagged season
+      - Average of the top 5 contracts at that position from the previous year (using their final year, escalated costs).
+      - The player's final year, escalated contract cost from their expiring contract + 10%.
+    - Franchise tag can only be used on players with expiring contracts.
 - **Profile Management**: User profile and settings.
 
 ### Backend
@@ -61,6 +74,14 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
     - `wins`, `losses`, `ties`: Integer values for the team's record, sourced from roster settings in Sleeper.
 - **Players**: Player data including contracts and status.
 - **Contracts**: Contract details for players.
+  - `player_id`: Foreign key to `players` table.
+  - `team_id`: Foreign key to `rosters` table (identifies the `sleeper_roster_id`).
+  - `draft_amount`: The initial auction cost for Year 1 of the contract.
+  - `contract_year`: The season (e.g., 2024) in which the contract starts.
+  - `duration`: The length of the contract in years (1 to 4).
+  - `is_active`: Boolean indicating if the contract is currently active.
+  - `penalty_incurred`, `penalty_year`: For recording waiver penalties.
+  - **Calculated Yearly Costs (View):** The actual cost for subsequent years (Year 2, 3, 4) escalates as described in the Contract Management section. This calculation will be encapsulated in a database view (e.g., `vw_contractByYear`) to be created, which will derive annual costs from the base contract terms.
 - **Transactions**: Records of trades, waivers, etc.
 - **Traded Picks**: Information on traded draft picks.
 - **Drafts**: Draft details and status.
@@ -73,7 +94,14 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
    - Design the UI/UX for the platform.
 2. **Core Functionality**
    - **Initial User Onboarding and Data Synchronization Flow (Implemented & Verified):**
-     - **TON Wallet Authentication:** Users authenticate via their TON wallet (e.g., using the `/auth/login` route).
+     - **TON Wallet Authentication:** Users authenticate via their TON wallet. 
+       - **Frontend Process:** Upon successful TON wallet connection, the frontend React application initiates a login sequence:
+         1. Calls the backend `/auth/login` endpoint, receiving a `sessionToken` and an `isNewUser` status.
+         2. Stores the `sessionToken` in `localStorage` and updates its internal state.
+         3. Fetches essential user data (leagues via `/league/local`, association status via `/auth/check_association`) and updates relevant states (`leagues`, `selectedLeagueId`, `isNewUser`).
+         4. A global `isAppReady` state flag is set to `true` only after all initial authentication calls and essential data fetches are complete.
+         5. Declarative routing then navigates the user: to `/associate-sleeper` if `isNewUser` is true, or to the main `/league` page if the user is already associated. A loading indicator is shown if `sessionToken` exists but `isAppReady` is false, preventing premature navigation.
+       - **Backend Process:** The `/auth/login` route verifies the wallet, creates/retrieves the user record, and generates a session.
      - **Sleeper Account Association:** Users link their authenticated wallet to their Sleeper username. The `/auth/complete_association` endpoint manages this. Upon successful association:
        - An internal `sleeper_service.fetch_all_data` function is triggered.
        - This function executes a comprehensive one-time data pull from the Sleeper API, retrieving all associated user, league, roster, player, and standings information.
