@@ -247,16 +247,16 @@ function Team() {
         <div className="container p-4">
             <h1 className="display-4 fw-bold mb-4">{teamData.name}</h1>
             
-            {/* Display League Name */}
-            {leagueContext && leagueContext.league_name && (
-                <h2 className="mb-3 text-muted">League: {leagueContext.league_name}</h2>
-            )}
+            {/* League Name will be moved into the card below */}
 
             <div className="card mb-4">
                 <div className="card-body">
-                    <h5 className="card-title">Manager Information</h5>
+                    {/* Display League Name as the card title */}
+                    {leagueContext && leagueContext.league_name && (
+                        <h5 className="card-title">League: {leagueContext.league_name}</h5>
+                    )}
                     <p className="card-text">
-                        <strong>Manager:</strong> {teamData.name} ({teamData.manager.sleeper_username})
+                        <strong>Manager:</strong> {teamData.manager.display_name}
                     </p>
                     {/* Display current season and offseason status */}
                     {leagueContext && (

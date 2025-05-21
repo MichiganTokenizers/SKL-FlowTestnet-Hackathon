@@ -176,10 +176,6 @@ class SleeperService:
             
             if not leagues:
                 self.logger.warning(f"SleeperService.fetch_all_data: No leagues found on Sleeper API for user {sleeper_user_id} for season {current_api_season}.")
-                # This is not necessarily an error for the fetch_all_data process itself if the user has no leagues.
-                # The users table should be correct, leagues table will just be empty for this user.
-                # However, the calling context might expect leagues to be found.
-                # For now, let's match prior logic which returned an error.
                 return {"success": False, "error": f"No leagues found for this user for season {current_api_season}"}
             
             # Step 2: Process each league
@@ -203,29 +199,19 @@ class SleeperService:
 
                 if not league_name.startswith("SKL"):
                     self.logger.info(f"SleeperService.fetch_all_data: Skipping league '{league_name}' (ID: {league_id}) because its name does not start with 'SKL'.")
-                    print(f"DEBUG (SleeperService): Skipping league '{league_name}' (ID: {league_id}) due to naming convention.") # Optional: for more prominent console debugging
+                    print(f"DEBUG (SleeperService): Skipping league '{league_name}' (ID: {league_id}) due to naming convention.") 
                     continue
 
-                league_season_year = full_league_details.get("season", current_api_season) # current_api_season is defined earlier
+                league_season_year = full_league_details.get("season", current_api_season) 
                 league_status = full_league_details.get("status", "unknown")
                 league_settings_json = json.dumps(full_league_details.get("settings", {}))
                 league_scoring_settings_json = json.dumps(full_league_details.get("scoring_settings", {}))
                 league_roster_positions_json = json.dumps(full_league_details.get("roster_positions", []))
                 league_previous_league_id = full_league_details.get("previous_league_id")
-                # Sleeper's league_creation_time is often in metadata, but can vary or be absent.
-                # It's usually a Unix timestamp in milliseconds.
                 league_metadata_obj = full_league_details.get("metadata", {})
                 league_creation_time_ms = league_metadata_obj.get("league_creation_time") if isinstance(league_metadata_obj, dict) else None
-
                 league_avatar = full_league_details.get("avatar")
-                # Other fields from LeagueMetadata schema (display_order, company_id, bracket_id)
-                # are not standard in Sleeper's main league object. They might be in settings or metadata if at all.
-                # For now, we'll insert NULL or default for them if not directly found.
-                # display_order = full_league_details.get("display_order") # unlikely to be top-level
-                # company_id = full_league_details.get("company_id") # unlikely
-                # bracket_id = full_league_details.get("bracket_id") # unlikely
 
-                # Store/Update LeagueMetadata
                 self.logger.debug(f"SleeperService.fetch_all_data: Upserting league {league_id} into LeagueMetadata.")
                 cursor.execute('''
                     INSERT INTO LeagueMetadata (
@@ -233,7 +219,6 @@ class SleeperService:
                         scoring_settings, roster_positions, previous_league_id, 
                         league_creation_time, avatar, created_at, updated_at,
                         display_order, company_id, bracket_id 
-                        -- Ensure all columns from app.py's LeagueMetadata are listed
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?, ?, ?)
                     ON CONFLICT(sleeper_league_id) DO UPDATE SET
                         name = excluded.name,
@@ -253,97 +238,19 @@ class SleeperService:
                     league_id, league_name, league_season_year, league_status, league_settings_json,
                     league_scoring_settings_json, league_roster_positions_json, league_previous_league_id,
                     league_creation_time_ms, league_avatar, 
-                    None, None, None # Values for display_order, company_id, bracket_id
+                    None, None, None 
                 ))
                 
-                # Link user to this league in UserLeagueLinks
                 self.logger.debug(f"SleeperService.fetch_all_data: Linking wallet {wallet_address} to league {league_id} in UserLeagueLinks.")
                 cursor.execute('''
                     INSERT OR IGNORE INTO UserLeagueLinks (wallet_address, sleeper_league_id)
                     VALUES (?, ?)
                 ''', (wallet_address, league_id))
 
-                # Step 3: Get rosters for this league
-                rosters = self.get_league_rosters(league_id)
-                if not rosters:
-                    self.logger.warning(f"SleeperService.fetch_all_data: No rosters found for league_id {league_id}. Skipping roster processing.")
-                else:
-                    self.logger.info(f"SleeperService.fetch_all_data: Found {len(rosters)} rosters for league {league_id}.")
-                    print(f"DEBUG (SleeperService): Found {len(rosters)} roster records for league {league_id}")
-                    
-                    unique_player_ids_in_league = set()
-
-                    for roster in rosters:
-                        roster_id_str = roster.get("roster_id") # Sleeper roster_id is an int, but we store as TEXT
-                        if roster_id_str is None:
-                            self.logger.warning(f"SleeperService.fetch_all_data: Roster found without roster_id in league {league_id}. Skipping.")
-                            continue
-                        
-                        # Ensure roster_id is string for DB consistency if it's ever not
-                        roster_id = str(roster_id_str)
-
-                        # Prepare roster data for DB insertion/update
-                        # owner_id is the sleeper_user_id of the roster owner
-                        owner_id = roster.get("owner_id") 
-                        
-                        # Players list (player_ids on this roster)
-                        players_list = roster.get("players")
-                        if players_list is None:
-                            self.logger.debug(f"SleeperService: Roster {roster_id} in league {league_id} has a null 'players' field. Storing as empty list.")
-                            players_json = json.dumps([])
-                        elif not isinstance(players_list, list):
-                            self.logger.warning(f"SleeperService: Roster {roster_id} players field is not a list (type: {type(players_list)}). Storing as empty list. Data: {players_list}")
-                            print(f"DEBUG (SleeperService): Roster {roster_id} players not in list format or is None: {type(players_list)}")
-                            players_json = json.dumps([])
-                        else:
-                            players_json = json.dumps(players_list)
-                            for player_id in players_list:
-                                unique_player_ids_in_league.add(player_id)
-                        
-                        current_metadata = roster.get("metadata")
-                        metadata_json = json.dumps(current_metadata if current_metadata is not None else {})
-
-                        reserve_list = roster.get("reserve")
-                        reserve_json = json.dumps(reserve_list if reserve_list else [])
-
-                        taxi_list = roster.get("taxi")
-                        taxi_json = json.dumps(taxi_list if taxi_list else [])
-
-                        # Extract wins, losses, ties from roster.settings
-                        roster_settings = roster.get("settings", {})
-                        wins = roster_settings.get("wins", 0)
-                        losses = roster_settings.get("losses", 0)
-                        ties = roster_settings.get("ties", 0)
-
-                        self.logger.debug(f"SleeperService.fetch_all_data: Upserting roster_id {roster_id} for league {league_id}.")
-                        print(f"DEBUG_SS_ROSTER_UPSERT: Attempting to upsert roster_id: {roster_id}, league_id: {league_id}, owner_id: {owner_id}")
-                        cursor.execute('''
-                            INSERT INTO rosters (
-                                sleeper_roster_id, sleeper_league_id, owner_id, players, metadata, reserve, taxi,
-                                wins, losses, ties, created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-                            ON CONFLICT(sleeper_roster_id, sleeper_league_id) DO UPDATE SET
-                                sleeper_league_id = excluded.sleeper_league_id,
-                                owner_id = excluded.owner_id,
-                                players = excluded.players,
-                                metadata = excluded.metadata,
-                                reserve = excluded.reserve,
-                                taxi = excluded.taxi,
-                                wins = excluded.wins,
-                                losses = excluded.losses,
-                                ties = excluded.ties,
-                                updated_at = datetime('now')
-                        ''', (
-                            roster_id, league_id, owner_id, players_json, metadata_json, 
-                            reserve_json, taxi_json, wins, losses, ties
-                        ))
-                        print(f"DEBUG_SS_ROSTER_UPSERT_RESULT: Roster_id: {roster_id}, league_id: {league_id}, cursor.rowcount: {cursor.rowcount}")
-                    
-                    self.logger.info(f"SleeperService.fetch_all_data: Finished processing {len(rosters)} rosters for league {league_id}.")
-                    print(f"DEBUG (SleeperService): Total unique players found on rosters in league {league_id}: {len(unique_player_ids_in_league)}")
-
-                # Step 4: Get users (participants) for this league
+                # Step 3: Get users (participants) for this league *before* rosters
                 league_participants = self.get_league_users(league_id)
+                participant_map = {p['user_id']: p for p in league_participants if p and p.get('user_id')}
+
                 if not league_participants:
                     self.logger.warning(f"SleeperService.fetch_all_data: No participants found for league {league_id}.")
                 else:
@@ -374,6 +281,97 @@ class SleeperService:
                             self.logger.info(f"SleeperService.fetch_all_data: User {p_user_id} ({p_display_name}) inserted/updated in users table.")
                         else:
                             self.logger.info(f"SleeperService.fetch_all_data: User {p_user_id} ({p_display_name}) already exists with a wallet_address or no update needed. No change made to their user record by league sync.")
+
+                # Step 4: Get rosters for this league
+                rosters = self.get_league_rosters(league_id)
+                if not rosters:
+                    self.logger.warning(f"SleeperService.fetch_all_data: No rosters found for league_id {league_id}. Skipping roster processing.")
+                else:
+                    self.logger.info(f"SleeperService.fetch_all_data: Found {len(rosters)} rosters for league {league_id}.")
+                    print(f"DEBUG (SleeperService): Found {len(rosters)} roster records for league {league_id}")
+                    
+                    unique_player_ids_in_league = set()
+
+                    for roster in rosters:
+                        roster_id_str = roster.get("roster_id") 
+                        if roster_id_str is None:
+                            self.logger.warning(f"SleeperService.fetch_all_data: Roster found without roster_id in league {league_id}. Skipping.")
+                            continue
+                        roster_id = str(roster_id_str)
+                        owner_id = roster.get("owner_id") 
+                        
+                        # Determine team_name
+                        team_name_to_store = "Unknown Team"
+                        roster_metadata = roster.get("metadata", {}) or {} # Ensure it's a dict
+                        custom_roster_team_name = roster_metadata.get("team_name")
+
+                        owner_display_name = None
+                        owner_league_specific_team_name = None
+
+                        if owner_id and owner_id in participant_map:
+                            participant_details = participant_map[owner_id]
+                            owner_display_name = participant_details.get("display_name")
+                            participant_user_metadata = participant_details.get("metadata", {}) or {} # Ensure it's a dict
+                            owner_league_specific_team_name = participant_user_metadata.get("team_name")
+                        
+                        if custom_roster_team_name:
+                            team_name_to_store = custom_roster_team_name
+                        elif owner_league_specific_team_name:
+                            team_name_to_store = owner_league_specific_team_name
+                        elif owner_display_name:
+                            team_name_to_store = owner_display_name
+                        
+                        self.logger.debug(f"SleeperService: Determined team name for roster {roster_id} (owner: {owner_id}) as '{team_name_to_store}'")
+
+                        players_list = roster.get("players")
+                        if players_list is None:
+                            self.logger.debug(f"SleeperService: Roster {roster_id} in league {league_id} has a null 'players' field. Storing as empty list.")
+                            players_json = json.dumps([])
+                        elif not isinstance(players_list, list):
+                            self.logger.warning(f"SleeperService: Roster {roster_id} players field is not a list (type: {type(players_list)}). Storing as empty list. Data: {players_list}")
+                            players_json = json.dumps([])
+                        else:
+                            players_json = json.dumps(players_list)
+                            for player_id_val in players_list: # Renamed to avoid conflict
+                                unique_player_ids_in_league.add(player_id_val)
+                        
+                        current_metadata = roster.get("metadata")
+                        metadata_json = json.dumps(current_metadata if current_metadata is not None else {})
+                        reserve_list = roster.get("reserve")
+                        reserve_json = json.dumps(reserve_list if reserve_list else [])
+                        taxi_list = roster.get("taxi")
+                        taxi_json = json.dumps(taxi_list if taxi_list else [])
+                        roster_settings = roster.get("settings", {})
+                        wins = roster_settings.get("wins", 0)
+                        losses = roster_settings.get("losses", 0)
+                        ties = roster_settings.get("ties", 0)
+
+                        self.logger.debug(f"SleeperService.fetch_all_data: Upserting roster_id {roster_id} for league {league_id} with team_name '{team_name_to_store}'.")
+                        print(f"DEBUG_SS_ROSTER_UPSERT: Attempting to upsert roster_id: {roster_id}, league_id: {league_id}, owner_id: {owner_id}, team_name: {team_name_to_store}")
+                        cursor.execute('''
+                            INSERT INTO rosters (
+                                sleeper_roster_id, sleeper_league_id, owner_id, team_name, players, metadata, reserve, taxi,
+                                wins, losses, ties, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                            ON CONFLICT(sleeper_roster_id, sleeper_league_id) DO UPDATE SET
+                                owner_id = excluded.owner_id,
+                                team_name = excluded.team_name,
+                                players = excluded.players,
+                                metadata = excluded.metadata,
+                                reserve = excluded.reserve,
+                                taxi = excluded.taxi,
+                                wins = excluded.wins,
+                                losses = excluded.losses,
+                                ties = excluded.ties,
+                                updated_at = datetime('now')
+                        ''', (
+                            roster_id, league_id, owner_id, team_name_to_store, players_json, metadata_json, 
+                            reserve_json, taxi_json, wins, losses, ties
+                        ))
+                        print(f"DEBUG_SS_ROSTER_UPSERT_RESULT: Roster_id: {roster_id}, league_id: {league_id}, cursor.rowcount: {cursor.rowcount}")
+                    
+                    self.logger.info(f"SleeperService.fetch_all_data: Finished processing {len(rosters)} rosters for league {league_id}.")
+                    print(f"DEBUG (SleeperService): Total unique players found on rosters in league {league_id}: {len(unique_player_ids_in_league)}")
 
                 # Step 5: Get transactions for this league
                 league_transactions = self.get_league_transactions(league_id)
