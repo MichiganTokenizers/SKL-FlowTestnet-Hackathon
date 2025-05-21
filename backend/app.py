@@ -167,6 +167,7 @@ def init_db(force_create=False):
         cursor.execute('''CREATE TABLE IF NOT EXISTS contracts
                           (player_id TEXT,
                            team_id TEXT,
+                           sleeper_league_id TEXT, -- Added
                            draft_amount REAL,
                            contract_year INTEGER,
                            duration INTEGER,
@@ -175,7 +176,9 @@ def init_db(force_create=False):
                            penalty_year INTEGER,
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME,
-                           UNIQUE (player_id, team_id, contract_year))''') # Added UNIQUE constraint
+                           UNIQUE (player_id, team_id, contract_year, sleeper_league_id), -- Updated
+                           FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE -- Added
+                           )''') 
         cursor.execute('''CREATE TABLE IF NOT EXISTS transactions
                           (sleeper_transaction_id TEXT UNIQUE,
                            league_id INTEGER,
@@ -220,6 +223,7 @@ def init_db(force_create=False):
                 original_contract_rowid, 
                 player_id,
                 team_id,                 
+                sleeper_league_id, -- Added
                 contract_start_season,   
                 contract_duration,       
                 year_number_in_contract, 
@@ -229,6 +233,7 @@ def init_db(force_create=False):
                     c.rowid,
                     c.player_id,
                     c.team_id,
+                    c.sleeper_league_id, -- Added
                     c.contract_year,
                     c.duration,
                     1, 
@@ -240,6 +245,7 @@ def init_db(force_create=False):
                     cyc.original_contract_rowid,
                     cyc.player_id,
                     cyc.team_id,
+                    cyc.sleeper_league_id, -- Added
                     cyc.contract_start_season,
                     cyc.contract_duration,
                     cyc.year_number_in_contract + 1,
@@ -254,6 +260,7 @@ def init_db(force_create=False):
                 cyc.player_id,
                 p.name AS player_name, 
                 cyc.team_id,
+                cyc.sleeper_league_id, -- Added
                 cyc.contract_start_season,
                 cyc.contract_duration,
                 cyc.year_number_in_contract,
@@ -1443,26 +1450,24 @@ def get_user_roster_for_league():
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
 
-def _get_player_current_year_cost(player_id: str, team_id: str, current_season_year: int, db_conn: sqlite3.Connection) -> float:
+def _get_player_current_year_cost(player_id: str, team_id: str, sleeper_league_id: str, current_season_year: int, db_conn: sqlite3.Connection) -> float:
     """
-    Determines the current season's contract cost for a player on a specific team.
+    Determines the current season's contract cost for a player on a specific team in a specific league.
     Uses vw_contractByYear first, then falls back to the contracts table for Year 1 costs.
     """
     cursor = db_conn.cursor()
     cost = 0.0
 
     # Attempt 1: Check vw_contractByYear
-    # This view calculates the escalated cost for each year of a contract.
-    # The `year_number_in_contract` combined with `contract_start_season` gives the actual season this cost applies to.
-    # So, we are looking for the row where (contract_start_season + year_number_in_contract - 1) IS the current_season_year.
     try:
         cursor.execute("""
             SELECT cost_for_season
             FROM vw_contractByYear
             WHERE player_id = ? 
               AND team_id = ? 
+              AND sleeper_league_id = ? 
               AND (contract_start_season + year_number_in_contract - 1) = ?
-        """, (player_id, team_id, current_season_year))
+        """, (player_id, team_id, sleeper_league_id, current_season_year))
         row = cursor.fetchone()
         if row and row['cost_for_season'] is not None:
             cost = float(row['cost_for_season'])
@@ -1470,7 +1475,6 @@ def _get_player_current_year_cost(player_id: str, team_id: str, current_season_y
     except Exception as e:
         # Log this error, as an issue with the view or query would be problematic
         app.logger.error(f"Error querying vw_contractByYear for player {player_id}, team {team_id}, year {current_season_year}: {e}")
-
 
     # Attempt 2: Check contracts table directly (primarily for Year 1 costs if not caught by view, or for 1-year contracts)
     # This is important for players newly drafted and assigned a 1-year default contract by SleeperService.
@@ -1480,9 +1484,10 @@ def _get_player_current_year_cost(player_id: str, team_id: str, current_season_y
             FROM contracts
             WHERE player_id = ?
               AND team_id = ?
+              AND sleeper_league_id = ? 
               AND contract_year = ? 
               AND is_active = 1
-        """, (player_id, team_id, current_season_year))
+        """, (player_id, team_id, sleeper_league_id, current_season_year))
         row = cursor.fetchone()
         if row and row['draft_amount'] is not None:
             cost = float(row['draft_amount'])
@@ -1632,7 +1637,7 @@ def get_team_details(team_id):
                             if position not in team_spending_this_iteration:
                                  team_spending_this_iteration[position] = 0.0
 
-                            cost = _get_player_current_year_cost(p_id_str, current_roster_id_in_league, current_processing_year, conn)
+                            cost = _get_player_current_year_cost(p_id_str, current_roster_id_in_league, current_league_id_for_ranks, current_processing_year, conn)
                             if cost > 0:
                                 team_spending_this_iteration[position] += cost
                         
@@ -1670,10 +1675,10 @@ def get_team_details(team_id):
                 SELECT p.sleeper_player_id, p.name, p.position, p.team as nfl_team,
                        c.draft_amount, c.contract_year, c.duration, c.is_active
                 FROM players p
-                LEFT JOIN contracts c ON p.sleeper_player_id = c.player_id AND c.team_id = ? 
+                LEFT JOIN contracts c ON p.sleeper_player_id = c.player_id AND c.team_id = ? AND c.sleeper_league_id = ?
                 WHERE p.sleeper_player_id IN ({placeholders})
             """
-            cursor.execute(query, (team_id, *all_player_ids_on_roster))
+            cursor.execute(query, (team_id, roster_info['sleeper_league_id'], *all_player_ids_on_roster))
             player_details_list = cursor.fetchall()
             player_map = {str(p['sleeper_player_id']): dict(p) for p in player_details_list}
             
@@ -1686,9 +1691,10 @@ def get_team_details(team_id):
                     FROM vw_contractByYear
                     WHERE player_id IN ({costs_placeholders})
                       AND team_id = ?
+                      AND sleeper_league_id = ?
                       AND season_for_this_year_of_contract BETWEEN ? AND ?
                 """
-                cost_params = list(all_player_ids_on_roster) + [team_id, seasons_to_fetch[0], seasons_to_fetch[-1]]
+                cost_params = list(all_player_ids_on_roster) + [team_id, roster_info['sleeper_league_id'], seasons_to_fetch[0], seasons_to_fetch[-1]]
                 cursor.execute(cost_query, cost_params)
                 costs_data = cursor.fetchall()
                 for cost_row in costs_data:
@@ -1991,8 +1997,8 @@ def update_contract_durations(team_id):
                 continue
 
             cursor.execute("""SELECT duration FROM contracts 
-                              WHERE player_id = ? AND team_id = ? AND contract_year = ?""",
-                           (player_id_str, team_id, current_processing_year))
+                              WHERE player_id = ? AND team_id = ? AND contract_year = ? AND sleeper_league_id = ?""",
+                           (player_id_str, team_id, current_processing_year, db_league_id))
             contract_check = cursor.fetchone()
 
             if not contract_check:
@@ -2006,8 +2012,8 @@ def update_contract_durations(team_id):
             
             # Perform the update for this eligible player
             cursor.execute("""UPDATE contracts SET duration = ?, updated_at = datetime('now')
-                              WHERE player_id = ? AND team_id = ? AND contract_year = ?""",
-                           (duration, player_id_str, team_id, current_processing_year))
+                              WHERE player_id = ? AND team_id = ? AND contract_year = ? AND sleeper_league_id = ?""",
+                           (duration, player_id_str, team_id, current_processing_year, db_league_id))
             if cursor.rowcount > 0:
                 updated_count += 1
             else:

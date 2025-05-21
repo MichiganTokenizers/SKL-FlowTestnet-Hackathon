@@ -457,12 +457,22 @@ class SleeperService:
                                                 contract_year_int = int(d_season)
                                                 team_id_str = str(drafting_team_roster_id_int)
 
-                                                self.logger.info(f"SleeperService: Creating default 1-year contract for player {picked_player_id} on team {team_id_str}, amount ${auction_amount}, season {d_season}.")
+                                                # Check if an active contract already exists for this player, team, and league
                                                 cursor.execute('''
-                                                    INSERT OR IGNORE INTO contracts 
-                                                        (player_id, team_id, draft_amount, contract_year, duration, is_active, created_at, updated_at)
-                                                    VALUES (?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))
-                                                ''', (picked_player_id, team_id_str, auction_amount, contract_year_int))
+                                                    SELECT 1 FROM contracts
+                                                    WHERE player_id = ? AND team_id = ? AND sleeper_league_id = ? AND is_active = 1
+                                                ''', (picked_player_id, team_id_str, league_id))
+                                                existing_active_contract = cursor.fetchone()
+
+                                                if not existing_active_contract:
+                                                    self.logger.info(f"SleeperService: No existing active contract for player {picked_player_id}, team {team_id_str}, league {league_id}. Creating default 1-year contract, amount ${auction_amount}, season {d_season}.")
+                                                    cursor.execute('''
+                                                        INSERT OR IGNORE INTO contracts 
+                                                            (player_id, team_id, sleeper_league_id, draft_amount, contract_year, duration, is_active, created_at, updated_at)
+                                                        VALUES (?, ?, ?, ?, ?, 1, 1, datetime('now'), datetime('now'))
+                                                    ''', (picked_player_id, team_id_str, league_id, auction_amount, contract_year_int))
+                                                else:
+                                                    self.logger.info(f"SleeperService: Existing active contract found for player {picked_player_id}, team {team_id_str}, league {league_id}. Skipping default contract creation.")
                                             except ValueError as e:
                                                 self.logger.error(f"SleeperService: Error converting data for default contract for player {picked_player_id}: {e} (amount: {auction_amount_str}, season: {d_season})")
                                         else:
