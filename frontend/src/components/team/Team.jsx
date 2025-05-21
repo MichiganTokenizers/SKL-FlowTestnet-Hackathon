@@ -275,7 +275,10 @@ function Team() {
                     {leagueContext && (
                         <p className="card-text">
                             <strong>Current Season:</strong> {leagueContext.current_season_year} ({leagueContext.is_offseason ? 'Off-season' : 'In-season'})
-                            {leagueContext.is_contract_setting_period_active && <span className="badge bg-success ms-2">Contract Setting Active</span>}
+                            {leagueContext.is_contract_setting_period_active && 
+                                <span className="badge ms-2" style={{ backgroundColor: '#9966CC', color: 'white' }}>
+                                    Contract Setting Active
+                                </span>}
                         </p>
                     )}
                      {/* Spending Ranks Display */}
@@ -285,7 +288,7 @@ function Team() {
                             <ul className="list-inline">
                                 {positionOrder.filter(pos => teamPositionRanks[pos]).map(pos => (
                                     <li key={pos} className="list-inline-item">
-                                        <span className="badge bg-warning-subtle text-dark me-1">{pos}: {teamPositionRanks[pos].rank}/{teamPositionRanks[pos].total_teams}</span>
+                                        <span className="badge text-dark me-1" style={{ backgroundColor: '#CCF5AC' }}>{pos}: {teamPositionRanks[pos].rank}/{teamPositionRanks[pos].total_teams}</span>
                                     </li>
                                 ))}
                             </ul>
@@ -309,7 +312,7 @@ function Team() {
                                         </div>
                                         {rankData && (
                                             <div style={{ marginTop: '0.2rem' }}>
-                                                <span className="badge bg-warning-subtle text-dark">
+                                                <span className="badge text-dark" style={{ backgroundColor: '#CCF5AC' }}>
                                                     Rank: {rankData.rank}/{rankData.total_teams}
                                                 </span>
                                             </div>
@@ -327,7 +330,8 @@ function Team() {
                 <div className="text-end mb-3">
                     <button 
                         onClick={handleSaveContractDurations} 
-                        className="btn btn-primary"
+                        className="btn"
+                        style={{ backgroundColor: '#9966CC', color: 'white' }}
                         disabled={Object.keys(contractDurations).length === 0 || loading}
                     >
                         {loading ? 'Saving...' : 'Save Contract Durations'}

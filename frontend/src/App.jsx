@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Route, Routes, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { TonConnectButton, useTonConnectUI, TonConnectUIProvider } from '@tonconnect/ui-react';
 import ErrorBoundary from './ErrorBoundary';
 import SleeperImport from './SleeperImport';
@@ -72,13 +72,13 @@ function AppContent() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const logout = async () => {
+    const logout = useCallback(async () => {
         try {
-            if (tonConnectUI.connected) {
+            if (tonConnectUI && tonConnectUI.connected) {
                 await tonConnectUI.disconnect();
             }
         } catch (error) {
-            console.error('Error disconnecting wallet:', error);
+            console.error('Error disconnecting wallet programmatically:', error);
         } finally {
             localStorage.removeItem('sessionToken');
             setSessionToken(null);
@@ -86,9 +86,12 @@ function AppContent() {
             setLeagues([]);
             setSelectedLeagueId(null);
             setCurrentUserDetails(null);
-            navigate('/');
+            // Navigate to root only if not already there to avoid redundant navigation warnings/issues
+            if (location.pathname !== '/') {
+                navigate('/');
+            }
         }
-    };
+    }, [tonConnectUI, navigate, location.pathname]); // Removed setSessionToken etc. as they are stable
 
     const fetchAllSleeperData = async (tokenToUse) => {
         if (!tokenToUse) {
@@ -288,6 +291,28 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps 
     }, [connected, tonWallet, navigate]); // location is NOT added here to prevent re-triggering on deliberate navigation
 
+    // Effect to handle wallet disconnection via TonConnectButton or external events
+    useEffect(() => {
+        if (!tonConnectUI) {
+            return;
+        }
+
+        const unsubscribe = tonConnectUI.onStatusChange(
+            (walletInfo) => { // walletInfo is null when disconnected, or an object if connected
+                const currentSessionToken = localStorage.getItem('sessionToken');
+                // If wallet becomes disconnected and we had an active session token
+                if (!walletInfo && currentSessionToken) {
+                    console.log('Wallet disconnected (e.g., via TonConnectButton or provider), triggering app logout.');
+                    logout(); // Call the memoized logout function
+                }
+            }
+        );
+
+        return () => {
+            unsubscribe(); // Cleanup subscription on component unmount
+        };
+    }, [tonConnectUI, logout]); // Dependencies: tonConnectUI and the memoized logout function
+
     const handleLeagueNavChange = (leagueId) => {
         setSelectedLeagueId(leagueId);
         navigate('/league'); // Restore navigation to the league page
@@ -327,7 +352,7 @@ function AppContent() {
 
     return (
         <div className="App min-vh-100 d-flex flex-column">
-            <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
+            <nav className="navbar navbar-expand-lg navbar-dark navbar-custom">
                 <div className="container-fluid px-4">
                     <Link className="navbar-brand" to="/">Supreme Keeper League</Link>
                     <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
@@ -368,23 +393,7 @@ function AppContent() {
                             )}
                         </ul>
                         <div className="d-flex align-items-center">
-                            {sessionToken ? (
-                                <div className="nav-item dropdown">
-                                    <a className="nav-link text-white" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" className="bi bi-list" viewBox="0 0 16 16">
-                                            <path fillRule="evenodd" d="M2.5 12a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h10a.5.5 0 0 1 0 1H3a.5.5 0 0 1-.5-.5z"/>
-                                        </svg>
-                                    </a>
-                                    <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                                        <li><Link className="dropdown-item" to="/account">Account</Link></li>
-                                        <li><Link className="dropdown-item" to="/change-team-name">Change Team Name</Link></li>
-                                        <li><hr className="dropdown-divider" /></li>
-                                        <li><button onClick={logout} className="dropdown-item btn btn-link">Logout</button></li>
-                                    </ul>
-                                </div>
-                            ) : (
-                                <TonConnectButton className="btn btn-outline-light" />
-                            )}
+                            <TonConnectButton className="btn btn-outline-light" />
                         </div>
                     </div>
                 </div>

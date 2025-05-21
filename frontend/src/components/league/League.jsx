@@ -124,9 +124,11 @@ function League(props) { // Accept props
     if (leagues && leagues.length > 0 && !selectedLeagueId && !loading) {
         return (
             <div className="container p-4">
-                <h1 className="display-4 fw-bold mb-4">{leagueName}</h1>
-                <p className="lead">Welcome, {userData.displayName || 'Player'}</p>
-                <div className="alert alert-info">Please select a league from the navbar to view its details.</div>
+                <h1 className="display-4 fw-bold mb-4" style={{ color: 'var(--text-color)' }}>{leagueName}</h1>
+                <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {userData.displayName || 'Player'}</p>
+                <div className="alert" style={{ backgroundColor: 'var(--input-bg-color)', color: 'var(--text-color)', border: '1px solid var(--input-border-color)' }}>
+                    Please select a league from the navbar to view its details.
+                </div>
             </div>
         );
     }
@@ -135,29 +137,29 @@ function League(props) { // Accept props
     if ((!leagues || leagues.length === 0) && !loading) {
          return (
             <div className="container p-4">
-                <h1 className="display-4 fw-bold mb-4">My League</h1>
-                <p className="lead">Welcome, {userData.displayName || 'Player'}</p>
-                <div className="alert alert-warning">No leagues are currently associated with your account. Please import or create a league.</div>
-                 {/* You might want a link here to an import/create league page */}
+                <h1 className="display-4 fw-bold mb-4" style={{ color: 'var(--text-color)' }}>My League</h1>
+                <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {userData.displayName || 'Player'}</p>
+                <div className="alert" style={{ backgroundColor: '#FDEBD0', color: 'var(--text-color)', border: '1px solid var(--header-bg-color)' }}>
+                    No leagues are currently associated with your account. Please import or create a league.
+                </div>
             </div>
         );
     }
 
     return (
         <div className="container p-4">
-            <h1 className="display-4 fw-bold mb-4">
+            <h1 className="display-4 fw-bold mb-4" style={{ color: 'var(--text-color)' }}>
                 {leagueName} 
             </h1>
-            {/* <p className="lead">Displaying data for: <strong>{leagueName}</strong></p> */}
-            <p className="lead">Welcome, {userData.displayName || 'Player'}</p>
+            <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {userData.displayName || 'Player'}</p>
             
             {selectedLeagueId && ( // Only show standings if a league is selected
                 <div className="mt-3">
                     {standings.length > 0 ? (
                         <div>
-                            <h3>League Standings</h3>
+                            <h3 style={{ color: 'var(--text-color)' }}>League Standings</h3>
                             <table className="table table-striped table-hover">
-                                <thead>
+                                <thead className="league-table-header">
                                     <tr>
                                         <th>Team Name</th>
                                         <th>Manager</th>
@@ -171,43 +173,49 @@ function League(props) { // Accept props
                                         <tr key={roster.roster_id}>
                                             <td>
                                                 {roster.roster_id ? (
-                                                    <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`}>
+                                                    <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`} style={{ color: 'var(--accent-color)' }}>
                                                         {roster.team_name || 'Unnamed Team'}
                                                     </Link>
                                                 ) : (
                                                     roster.team_name || 'Unnamed Team' // Fallback if no roster_id
                                                 )}
                                             </td>
-                                            <td>{roster.owner_display_name || roster.owner_id}</td>
-                                            <td>{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
-                                            <td>TBD</td>
-                                            <td>0</td>{/* Placeholder */}
+                                            <td style={{ color: 'var(--text-color)' }}>{roster.owner_display_name || roster.owner_id}</td>
+                                            <td style={{ color: 'var(--text-color)' }}>{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
+                                            <td style={{ color: 'var(--text-color)' }}>TBD</td>
+                                            <td style={{ color: 'var(--text-color)' }}>0</td>{/* Placeholder */}
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
                     ) : (
-                         !loading && <p>No standings data available for this league, or an error occurred fetching them.</p>
+                         !loading && <p style={{ color: 'var(--text-color)' }}>No standings data available for this league, or an error occurred fetching them.</p>
                     )}
                 </div>
             )}
 
             <div className="mt-5">
-                <h3>Recent Transactions</h3>
+                <h3 style={{ color: 'var(--text-color)' }}>Recent Transactions</h3>
                 {transactions.length > 0 ? (
                     <table className="table table-striped table-hover mt-3">
-                        <thead>
+                        <thead className="league-table-header">
                             <tr>
                                 <th>Date</th>
                                 <th>Type</th>
                                 <th>Description</th>
                             </tr>
                         </thead>
-                        <tbody>{transactions.map(tx => (<tr key={tx.id}><td>{tx.date}</td><td>{tx.type}</td><td>{tx.description}</td></tr>))}</tbody>
+                        <tbody>{transactions.map(tx => (
+                            <tr key={tx.id}>
+                                <td style={{ color: 'var(--text-color)' }}>{tx.date}</td>
+                                <td style={{ color: 'var(--text-color)' }}>{tx.type}</td>
+                                <td style={{ color: 'var(--text-color)' }}>{tx.description}</td>
+                            </tr>
+                        ))}</tbody>
                     </table>
                 ) : (
-                    <p className="mt-3">No recent transactions to display.</p>
+                    <p className="mt-3" style={{ color: 'var(--text-color)' }}>No recent transactions to display.</p>
                 )}
             </div>
         </div>

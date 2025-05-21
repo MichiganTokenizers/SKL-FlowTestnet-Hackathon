@@ -1,8 +1,14 @@
 :root{
---accent-color: #7C7799;
---base-color: white;
---text-color: #2E2B41;
---input-color: #F3F0FF;
+  --accent-color: #9966CC;        /* Plum */
+  --base-color: white;            /* White */
+  --text-color: #100B00;          /* Near Black */
+  --input-bg-color: #CCF5AC;      /* Light Green */
+  --input-border-color: #E77728;  /* Orange */
+  --navbar-bg-color: #9966CC;     /* Plum */
+  --header-bg-color: #E77728;     /* Orange */
+  --header-text-color: #100B00;   /* Near Black */
+  --border-color: #3B341F;        /* Dark Brown/Olive */
+  --light-border-color: #E77728;  /* Orange - for subtle borders */
 }
 *{
     margin: 0;
@@ -77,9 +83,9 @@ form input{
     padding: 1em;
     font: inherit;
     border-radius: 0, 10px, 10px, 0;
-    border: 2px solid var(--input-color);
+    border: 2px solid var(--input-border-color);
     border-left: none;
-    background-color: var(--input-color);
+    background-color: var(--input-bg-color);
     transition: 150ms ease;
 }
 form input:hover{
@@ -130,27 +136,40 @@ a:hover{
 
 /* Team Page Position Group Styling */
 .position-group-header td {
-    background-color: var(--accent-color);
-    color: var(--base-color);
+    background-color: var(--header-bg-color);
+    color: var(--header-text-color);
     font-weight: bold;
     padding: 0.5rem 0.75rem;
-    border-top: 2px solid var(--accent-color);
-    border-left: 2px solid var(--accent-color);
-    border-right: 2px solid var(--accent-color);
+    border-top: 2px solid var(--border-color);
+    border-left: 2px solid var(--border-color);
+    border-right: 2px solid var(--border-color);
+    border-bottom: 1px solid var(--border-color);
 }
 
 .player-data-row td {
     padding: 0.5rem 0.75rem;
-    border-left: 2px solid var(--accent-color);
-    border-right: 2px solid var(--accent-color);
-    border-bottom: 1px solid #dee2e6; /* Standard Bootstrap table border color for bottom */
+    border-left: 2px solid var(--border-color);
+    border-right: 2px solid var(--border-color);
+    border-bottom: 1px solid var(--light-border-color); /* Standard Bootstrap table border color for bottom */
 }
 
 .player-data-row:last-child td {
-    border-bottom: 2px solid var(--accent-color); /* Thicker bottom border for the last row in a group */
+    border-bottom: 2px solid var(--border-color); /* Thicker bottom border for the last row in a group */
 }
 
 /* Ensure the first player row under a header doesn't have a top border if cells get default borders */
 .position-group-header + .player-data-row td {
     border-top: none; 
+}
+
+/* Custom Navbar Styling */
+.navbar-custom {
+  background-color: var(--navbar-bg-color) !important; /* Ensures override of Bootstrap default */
+}
+
+/* Custom Table Header Styling for League Page */
+.league-table-header th {
+    background-color: var(--header-bg-color);
+    color: var(--header-text-color);
+    border-bottom: 2px solid var(--border-color); /* Match team page header bottom border */
 }
