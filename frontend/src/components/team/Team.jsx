@@ -383,9 +383,9 @@ function Team() {
                         </div>
                     </div> {/* End of Team Roster Card */}
 
-            {/* Future Spending Totals Card - Moved to Bottom and Full Width */}
+            {/* Future Spending Totals Card - Moved to Bottom and Half Width */}
             <div className="row mt-4 mb-4">
-                <div className="col-12">
+                <div className="col-md-6"> {/* Changed from col-12 to col-md-6 */}
                     <div className="card h-100">
                         <div className="card-body">
                             <h5 className="card-title">Future Spending Totals</h5>
@@ -407,7 +407,7 @@ function Team() {
                                     
                                     return (
                                         <div key={year} className="mb-3" style={{ paddingLeft: '10px', borderLeft: '3px solid #eee' }}>
-                                            <h6><strong>{year}</strong></h6>
+                                            <h6 style={{ textAlign: 'left' }}><strong>{year}</strong></h6>
                                             <table className="table table-sm table-borderless mb-0" style={{fontSize: '0.9rem'}}>
                                                 <tbody>
                                                     <tr>
