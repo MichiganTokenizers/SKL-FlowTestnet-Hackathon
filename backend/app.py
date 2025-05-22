@@ -7,6 +7,13 @@ from pytonconnect.exceptions import TonConnectError
 from sleeper_service import SleeperService
 import json
 import time # Added for potential sleep, though might not be used in final global conn version
+from functools import wraps # Import wraps
+import logging # Add logging import
+from typing import Any
+from utils import get_escalated_contract_costs # Changed to direct import
+
+# Configure basic logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Create Flask app instance at the top
 app = Flask(__name__)
@@ -92,7 +99,7 @@ def init_db(force_create=False):
             print("Forcing recreation of all tables...")
             # Drop existing tables
             tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
-                      "transactions", "traded_picks", "drafts", 
+                      "transactions", "traded_picks", "drafts", "penalties", # Added penalties
                       "LeagueMetadata", "Users", "players", "leagues"] # Added leagues to ensure it's dropped if old schema exists
             for table in tables:
                 try:
@@ -173,13 +180,20 @@ def init_db(force_create=False):
                            contract_year INTEGER,
                            duration INTEGER,
                            is_active BOOLEAN DEFAULT 1,
-                           penalty_incurred REAL,
-                           penalty_year INTEGER,
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME,
                            UNIQUE (player_id, team_id, contract_year, sleeper_league_id), -- Updated
                            FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE -- Added
                            )''') 
+        cursor.execute('''CREATE TABLE IF NOT EXISTS penalties
+                          (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                           contract_id INTEGER,
+                           penalty_year INTEGER,
+                           penalty_amount REAL,
+                           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                           updated_at DATETIME,
+                           FOREIGN KEY (contract_id) REFERENCES contracts(rowid) ON DELETE CASCADE 
+                           )''') # Assuming contract_id refers to contracts.rowid
         cursor.execute('''CREATE TABLE IF NOT EXISTS transactions
                           (sleeper_transaction_id TEXT UNIQUE,
                            league_id INTEGER,
@@ -293,117 +307,84 @@ def init_db(force_create=False):
         _global_db_conn = None
         raise
 
-init_db()
+init_db() # Reverted: No longer forcing recreation
 
 def get_current_season():
-    """Retrieve the current season's year and in-season status from the season_curr table."""
-    try:
-        conn = get_global_db_connection() # Use global connection
-        cursor = conn.cursor()
-        cursor.execute('SELECT current_year, IsOffSeason FROM season_curr LIMIT 1')
-        season_data = cursor.fetchone()
-        
-        if season_data:
-            return {
-                'year': season_data['current_year'],
-                'is_offseason': season_data['IsOffSeason'] == 1
-            }
-        else:
-            # Default values if season_curr table is not set up
-            return {
-                'year': 2025,
-                'is_offseason': True
-            }
-    except Exception as e:
-        print(f"Error getting current season data: {e}")
-        # Default values in case of error
-        return {
-            'year': 2025,
-            'is_offseason': True
-        }
-
-def calculate_penalty(contract, current_year, is_offseason):
-    """Calculate the penalty for waiving a player based on season status."""
-    draft_amount = contract['DraftAmount'] or 0  # Handle NULL as 0
-    contract_year = contract['ContractYear']
-    duration = contract['Duration']
-    
-    # Calculate remaining years
-    if current_year < contract_year:
-        remaining_years = duration  # Contract hasn't started
-    elif contract_year <= current_year <= contract_year + duration - 1:
-        remaining_years = contract_year + duration - current_year
+    # ... (implementation as provided)
+    # For now, returning a fixed value as per original stub
+    # This should be replaced with actual DB lookup from season_curr table
+    # And ensure it returns a dictionary like {"current_year": YYYY, "is_offseason": True/False}
+    # Or handle its absence gracefully in callers.
+    conn = get_global_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT current_year, IsOffSeason FROM season_curr LIMIT 1")
+    season_info = cursor.fetchone()
+    if season_info:
+        # Convert to dictionary for easier access by keys
+        return {"current_year": int(season_info["current_year"]), "is_offseason": bool(season_info["IsOffSeason"])}
     else:
-        remaining_years = 0  # Contract has expired
-    
-    if remaining_years <= 0:
-        return 0  # No penalty if contract is expired
-    
-    if is_offseason:
-        # Off-season: 10% on first year, 5% on future years, rounded up, min $1 per year
-        if remaining_years >= 1:
-            penalty_first_year = int(max(math.ceil(0.1 * draft_amount), 1))
-            if remaining_years > 1:
-                penalty_subsequent = int(max(math.ceil(0.05 * draft_amount), 1))
-                total_penalty = penalty_first_year + (remaining_years - 1) * penalty_subsequent
-            else:
-                total_penalty = penalty_first_year
-        else:
-            total_penalty = 0
-    else:
-        # In-season: 10% of DraftAmount per year, rounded up, min $1 per year
-        penalty_per_year = int(max(math.ceil(0.1 * draft_amount), 1))
-        total_penalty = remaining_years * penalty_per_year
-    
-    return total_penalty
+        # Fallback or error handling if no season info is found
+        # This is critical; consider raising an error or having a well-defined default
+        print("ERROR: No season information found in season_curr table!")
+        return {"current_year": 2025, "is_offseason": True} # Example fallback
 
 # Initialize TonConnect
 ton_connect = TonConnect(
     manifest_url='https://29d4-193-43-135-7.ngrok-free.app/tonconnect-manifest.json'
 )
 
-# Helper function to get current user from session
 def get_current_user():
-    session_token = request.headers.get('Authorization')
-    # Assuming the token might be sent as "Bearer <token>", remove "Bearer " if present.
-    if session_token and session_token.startswith("Bearer "):
-        session_token = session_token.split(" ", 1)[1]
+    """Retrieve the current user.
+    Tries Flask session first, then Authorization header token.
+    """
+    wallet_address = session.get('wallet_address') 
+    
+    if wallet_address:
+        print(f"DEBUG: get_current_user - Found wallet_address in Flask session: {wallet_address}")
+    else:
+        print(f"DEBUG: get_current_user - No wallet_address in Flask session. Checking Authorization header.")
+        auth_header = request.headers.get('Authorization')
+        if auth_header:
+            # Frontend sends token directly as per App.jsx: headers: { 'Authorization': token }
+            # If it could be "Bearer <token>", add splitting logic here.
+            session_token_from_header = auth_header 
 
-    if not session_token:
-        print("DEBUG: get_current_user - No session_token in Authorization header")
-        return None
-
-    try:
-        conn = get_global_db_connection()
-        cursor = conn.cursor()
-        
-        # Get wallet_address from sessions table using the token
-        cursor.execute('SELECT wallet_address FROM sessions WHERE session_token = ?', (session_token,))
-        session_data = cursor.fetchone()
-        
-        if not session_data:
-            print(f"DEBUG: get_current_user - No session found for token: {session_token[:10]}...")
-            return None 
-        
-        wallet_address = session_data['wallet_address']
-        
-        # Now get user details from Users table
-        # Ensure all necessary fields are selected, e.g., username, display_name
-        cursor.execute('SELECT username, display_name, wallet_address, sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
-        user_data = cursor.fetchone()
-        
-        if user_data:
-            print(f"DEBUG: get_current_user - User found: {user_data['wallet_address']}")
-            return dict(user_data) # Return as a dictionary
+            if session_token_from_header:
+                print(f"DEBUG: get_current_user - Found token in Authorization header: {session_token_from_header[:10]}...")
+                conn_header_check = get_global_db_connection()
+                cursor_header_check = conn_header_check.cursor()
+                cursor_header_check.execute("SELECT wallet_address FROM sessions WHERE session_token = ?", (session_token_from_header,))
+                session_db_data = cursor_header_check.fetchone()
+                if session_db_data:
+                    wallet_address = session_db_data['wallet_address']
+                    print(f"DEBUG: get_current_user - Wallet address from DB via header token: {wallet_address}")
+                    # Optionally, set Flask session here for this request if desired, though it might be set by /login already for cookie-based sessions.
+                    # session['wallet_address'] = wallet_address 
+                else:
+                    print(f"DEBUG: get_current_user - Header token invalid or expired. No session found in DB for token {session_token_from_header[:10]}...")
+            else:
+                print(f"DEBUG: get_current_user - Authorization header present but no token value.")
         else:
-            print(f"DEBUG: get_current_user - No user found in Users table for wallet_address: {wallet_address}")
-            return None # Should not happen if session exists and Users table is consistent
-            
-    except Exception as e:
-        print(f"Error in get_current_user: {e}")
-        import traceback
-        traceback.print_exc()
-    return None
+            print(f"DEBUG: get_current_user - No Authorization header found.")
+
+    if not wallet_address:
+        print(f"DEBUG: get_current_user - Still no wallet_address after all checks. Cannot authenticate.")
+        return None
+    
+    # Proceed to fetch user details from Users table with the determined wallet_address
+    conn = get_global_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM Users WHERE wallet_address = ?", (wallet_address,))
+    user = cursor.fetchone()
+
+    if not user:
+        print(f"DEBUG: get_current_user - User not found in DB for wallet_address: {wallet_address}. This is unusual if wallet_address was validated. Clearing Flask session if it was the source.") 
+        if session.get('wallet_address') == wallet_address: # Only pop if this wallet_address came from Flask session
+            session.pop('wallet_address', None) 
+        return None
+        
+    print(f"DEBUG: get_current_user - User authenticated and found in DB: {dict(user) if user else 'None'}") 
+    return dict(user) if user else None
 
 # TonConnect manifest route
 @app.route('/tonconnect-manifest.json')
@@ -525,14 +506,7 @@ def login():
                 (wallet_address,)
             )
             print("Created new user")
-
-        else:
-            # For existing users, trigger a full data pull from Sleeper
-            print("Existing user detected, triggering full Sleeper data pull via /auth/login path")
-            full_data_response = sleeper_service.fetch_all_data(wallet_address)
-            if not full_data_response['success']:
-                print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
-            # Create session
+            # Also create a session for the new user
             cursor.execute('''
                 INSERT OR REPLACE INTO sessions (
                     wallet_address,
@@ -541,7 +515,27 @@ def login():
                 (wallet_address, session_token)
             )
             conn.commit()
-            print("Successfully created session")
+            session['wallet_address'] = wallet_address # Set Flask session
+            print(f"DEBUG: Flask session set for new user: {wallet_address}")
+
+        else:
+            # For existing users, trigger a full data pull from Sleeper
+            print("Existing user detected, triggering full Sleeper data pull via /auth/login path")
+            full_data_response = sleeper_service.fetch_all_data(wallet_address)
+            if not full_data_response['success']:
+                print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
+            # Create or update session
+            cursor.execute('''
+                INSERT OR REPLACE INTO sessions (
+                    wallet_address,
+                    session_token
+                ) VALUES (?, ?)''',
+                (wallet_address, session_token)
+            )
+            conn.commit()
+            session['wallet_address'] = wallet_address # Set Flask session
+            print(f"DEBUG: Flask session set for existing user: {wallet_address}")
+            print("Successfully created/updated session in DB and Flask session")
 
         return jsonify({
             'success': True,
@@ -622,18 +616,13 @@ def logout():
 
 # Decorator for protected routes
 def login_required(f):
+    @wraps(f) # Ensure to use @wraps(f) from functools
     def wrap(*args, **kwargs):
         current_user = get_current_user()
         if not current_user:
-            # For APIs, return a JSON response indicating unauthorized access
-            print(f"DEBUG: login_required - Denying access to {f.__name__} due to failed authentication.")
+            print(f"DEBUG: login_required - Denying access to {f.__name__} because get_current_user returned None.") 
             return jsonify({'success': False, 'error': 'Authentication required'}), 401
-        # Pass the fetched user object to the decorated function, if needed.
-        # This can be done by adding a parameter to the decorated function (e.g., def my_route(current_user_obj):)
-        # and then passing it: return f(current_user_obj, *args, **kwargs)
-        # For now, just call as is if this pattern is not used.
-        return f(*args, **kwargs)
-    wrap.__name__ = f.__name__
+        return f(*args, **kwargs) 
     return wrap
 
 # League page route
@@ -710,82 +699,6 @@ def get_league_data_local():
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 # Waive player route
-@app.route('/waive_player', methods=['POST'])
-@login_required
-def waive_player():
-    conn = None
-    try:
-        conn = get_global_db_connection() # Use global connection
-        cursor = conn.cursor()
-        cursor.execute('PRAGMA foreign_keys = ON;')
-
-        user = get_current_user()
-        cursor.execute('SELECT TeamID FROM User WHERE rowid = ?', (user['id'],))
-        user_data = cursor.fetchone()
-        team_id = user_data['TeamID'] if user_data else None
-        print(f"Team ID: {team_id}")
-        if not team_id:
-            flash('You are not associated with a team.', 'error')
-            return redirect(url_for('league'))
-
-        player_id = request.form.get('player_id')
-        print(f"Player ID: {player_id}")
-        if not player_id:
-            flash('No player selected.', 'error')
-            return redirect(url_for('team', team_id=team_id))
-
-        cursor.execute(
-            'SELECT rowid, * FROM Contract WHERE TeamId = ? AND PlayerId = ? AND IsActive = 1',
-            (team_id, player_id)
-        )
-        contract = cursor.fetchone()
-        print(f"Contract found: {contract}")
-        contract_id = contract['rowid'] if contract else None
-        if not contract:
-            flash('No active contract found for this player on your team.', 'error')
-            return redirect(url_for('team', team_id=team_id))
-
-        season = get_current_season()
-        print(f"Season: {season}")
-        if not season:
-            flash('Season configuration error.', 'error')
-            return redirect(url_for('team', team_id=team_id))
-
-        current_year = season['year']
-        is_offseason = season['is_offseason']
-
-        penalty = calculate_penalty(contract, current_year, is_offseason)
-        print(f"Penalty calculated: {penalty}")
-        penalty_year = current_year + 1 if is_offseason else current_year
-
-        cursor.execute(
-            'UPDATE Contract SET IsActive = 0, PenaltyIncurred = ?, PenaltyYear = ? WHERE rowid = ?',
-            (penalty, penalty_year, contract_id)
-        )
-        print(f"Contract updated, rows affected: {cursor.rowcount}")
-        if cursor.rowcount == 0:
-            flash('Failed to waive player. No active contract updated.', 'error')
-        else:
-            cursor.execute(
-                'INSERT INTO Waived (ContractID, SeasonYear, IsOffseason, WaivedAt) VALUES (?, ?, ?, datetime("now"))',
-                (contract_id, current_year, 1 if is_offseason else 0)
-            )
-            print(f"Waived record inserted, rows affected: {cursor.rowcount}")
-            if cursor.rowcount == 0:
-                print("Warning: No rows inserted into Waived table.")
-            else:
-                conn.commit()
-                flash('Player waived successfully.', 'success')
-
-    except Exception as e:
-        print(f"Error waiving player: {e}")
-        import traceback
-        traceback.print_exc()
-        flash('An error occurred while waiving the player.', 'error')
-        if conn:
-            conn.rollback()
-
-    return redirect(url_for('team', team_id=team_id))
 
 # League connection route
 @app.route('/league/connect', methods=['POST'])
@@ -899,6 +812,8 @@ def fetch_all_data_route():
         return jsonify({'success': False, 'error': 'No session token'}), 401
     
     try:
+        # REMOVE THIS LOGGING LINE
+        # app.logger.info(f"Accessed /sleeper/fetchAll route. Method: {request.method}")
         print(f"DEBUG: /sleeper/fetchAll called, method: {request.method}")
         print(f"DEBUG: Headers: {request.headers}")
         
@@ -932,6 +847,7 @@ def fetch_all_data_route():
             return jsonify({'success': False, 'error': error_message}), status_code
             
         print("DEBUG: /sleeper/fetchAll successful")
+        conn.commit() # Commit changes if fetch_all_data was successful
         return jsonify({'success': True, 'message': 'Full data pull triggered successfully'})
     except Exception as e:
         print(f"ERROR in /sleeper/fetchAll: {str(e)}")
@@ -1548,25 +1464,28 @@ def get_team_details(team_id):
         # Prioritize the team_name from the rosters table. Fallback to manager's name.
         team_name_to_display = roster_info['roster_db_team_name'] if roster_info['roster_db_team_name'] else roster_info['manager_name']
 
+        # <<< CORRECTED LOGIC FOR all_player_ids_on_roster >>>
         main_player_ids = json.loads(roster_info['player_ids_json']) if roster_info['player_ids_json'] else []
         reserve_player_ids = json.loads(roster_info['reserve_ids_json']) if roster_info['reserve_ids_json'] else []
-        all_player_ids_on_roster = list(set(main_player_ids + reserve_player_ids))
-        
+        # MODIFICATION: Use only main_player_ids as per user request for this view
+        all_player_ids_on_roster = main_player_ids
+        app.logger.info(f"DEBUG_TEAM_DETAILS: Using main_player_ids for all_player_ids_on_roster: {all_player_ids_on_roster}")
+
         current_season_data = get_current_season()
-        current_processing_year = int(current_season_data['year']) if current_season_data and current_season_data['year'] else 0
+        current_processing_year = int(current_season_data['current_year']) if current_season_data and current_season_data.get('current_year') else 0
         is_offseason = current_season_data['is_offseason']
         
-        print(f"DEBUG_TEAM_DETAILS_FULL: current_season_data = {current_season_data}")
-        print(f"DEBUG_TEAM_DETAILS_FULL: current_processing_year = {current_processing_year}")
-        print(f"DEBUG_TEAM_DETAILS_FULL: is_offseason = {is_offseason}")
-        print(f"DEBUG_TEAM_DETAILS_FULL: Roster's league_id = {roster_info['sleeper_league_id']}")
+        # print(f"DEBUG_TEAM_DETAILS_FULL: current_season_data = {current_season_data}")
+        # print(f"DEBUG_TEAM_DETAILS_FULL: current_processing_year = {current_processing_year}")
+        # print(f"DEBUG_TEAM_DETAILS_FULL: is_offseason = {is_offseason}")
+        # print(f"DEBUG_TEAM_DETAILS_FULL: Roster's league_id = {roster_info['sleeper_league_id']}")
 
         # Determine if the contract setting period is active for this league
         is_contract_setting_period_active = False
         auction_acquisitions = {} 
         
-        print(f"DEBUG_TEAM_DETAILS: Initial is_contract_setting_period_active: {is_contract_setting_period_active}")
-        print(f"DEBUG_TEAM_DETAILS: Initial auction_acquisitions: {auction_acquisitions}")
+        # print(f"DEBUG_TEAM_DETAILS: Initial is_contract_setting_period_active: {is_contract_setting_period_active}")
+        # print(f"DEBUG_TEAM_DETAILS: Initial auction_acquisitions: {auction_acquisitions}")
 
         if is_offseason and current_processing_year > 0:
             cursor.execute("""
@@ -1576,31 +1495,32 @@ def get_team_details(team_id):
                 ORDER BY start_time DESC LIMIT 1
             """, (roster_info['sleeper_league_id'], str(current_processing_year), "complete"))
             draft_record = cursor.fetchone()
-            print(f"DEBUG_TEAM_DETAILS: Draft record for league {roster_info['sleeper_league_id']} season {current_processing_year}: {draft_record}")
+            # print(f"DEBUG_TEAM_DETAILS: Draft record for league {roster_info['sleeper_league_id']} season {current_processing_year}: {draft_record}")
             
             if draft_record and draft_record['data']:
                 try:
                     draft_picks_data = json.loads(draft_record['data'])
-                    print(f"DEBUG_TEAM_DETAILS: Parsed draft_picks_data: {draft_picks_data}")
+                    # print(f"DEBUG_TEAM_DETAILS: Parsed draft_picks_data: {draft_picks_data}")
                     if isinstance(draft_picks_data, list):
                         is_contract_setting_period_active = True 
                         for pick in draft_picks_data:
                             player_id = pick.get('player_id')
                             metadata = pick.get('metadata', {})
                             amount_str = metadata.get('amount')
-                            print(f"DEBUG_TEAM_DETAILS: Draft pick processing - player_id: {player_id}, amount_str: {amount_str}")
+                            # print(f"DEBUG_TEAM_DETAILS: Draft pick processing - player_id: {player_id}, amount_str: {amount_str}")
                             if player_id and amount_str is not None:
                                 try:
                                     auction_acquisitions[str(player_id)] = int(amount_str)
                                 except ValueError:
                                     app.logger.warning(f"DEBUG_TEAM_DETAILS_FULL: Warning: Could not convert auction amount '{amount_str}' to int for player {player_id}")
                     else:
-                        print(f"DEBUG_TEAM_DETAILS: draft_picks_data is not a list. Type: {type(draft_picks_data)}")
+                        # print(f"DEBUG_TEAM_DETAILS: draft_picks_data is not a list. Type: {type(draft_picks_data)}")
+                        pass # draft_picks_data is not a list, no action needed here
                 except json.JSONDecodeError:
                     app.logger.warning(f"DEBUG_TEAM_DETAILS_FULL: Warning: Could not parse draft data JSON for league {roster_info['sleeper_league_id']} season {current_processing_year}")
         
-        print(f"DEBUG_TEAM_DETAILS: Final is_contract_setting_period_active: {is_contract_setting_period_active}")
-        print(f"DEBUG_TEAM_DETAILS: Final auction_acquisitions: {auction_acquisitions}")
+        # print(f"DEBUG_TEAM_DETAILS: Final is_contract_setting_period_active: {is_contract_setting_period_active}")
+        # print(f"DEBUG_TEAM_DETAILS: Final auction_acquisitions: {auction_acquisitions}")
 
         # <<< START NEW LOGIC FOR LEAGUE SPENDING RANKS >>>
         team_position_spending_ranks = {}
@@ -1691,7 +1611,7 @@ def get_team_details(team_id):
                     seasons_to_rank = [current_processing_year + i for i in range(1, 4)] # For next 3 future years
 
                     # Dictionary to store total spending for each team for each future year
-                    # { year1: [{'team_id': X, 'total_cost': Y}, ...], year2: [...] }
+                    # { year1: [{\'team_id\': X, \'total_cost\': Y}, ...], year2: [...] }
                     league_spending_by_future_year = {year: [] for year in seasons_to_rank}
 
                     for r_id_in_league in all_roster_ids_in_league:
@@ -1728,172 +1648,233 @@ def get_team_details(team_id):
             except Exception as e:
                  app.logger.error(f"Error calculating future yearly total ranks for team {team_id}, league {current_league_id_for_ranks}: {e}")
 
+        # Initialize grouped_players once, correctly, before it might be used or populated.
+        grouped_players = {pos: [] for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'Unknown']}
 
-        player_details = []
-        if all_player_ids_on_roster:
+        # Initialize team_yearly_totals. This should be done regardless of player count initially.
+        team_yearly_totals = {year: 0.0 for year in range(current_processing_year, current_processing_year + 4)}
+
+        # The if block that previously redefined all_player_ids_on_roster is now removed.
+        # We proceed directly to processing if all_player_ids_on_roster (which now correctly includes reserve) has players.
+        
+        # player_details = [] # This seems unused, consider removing if truly not needed later.
+        if all_player_ids_on_roster: # This check now uses the comprehensive list of players
             placeholders = ', '.join('?' * len(all_player_ids_on_roster))
-            
-            # Fetch player static data
-            cursor.execute(f"SELECT sleeper_player_id, name, position, team FROM players WHERE sleeper_player_id IN ({placeholders})", tuple(all_player_ids_on_roster))
-            player_map = {row['sleeper_player_id']: dict(row) for row in cursor.fetchall()}
-
-            # Fetch contract details for these players for this specific team and league
-            # This now correctly filters by team_id (sleeper_roster_id) and sleeper_league_id
+            # Query players table for names, positions, teams
+            app.logger.info(f"DEBUG_TEAM_DETAILS: Querying players table for IDs: {all_player_ids_on_roster}")
             cursor.execute(f"""
-                SELECT 
-                    c.player_id, 
-                    c.draft_amount, 
-                    c.contract_year, 
-                    c.duration,
-                    c.is_active,
-                    (SELECT GROUP_CONCAT(cy.cost_for_season || ':' || (cy.contract_start_season + cy.year_number_in_contract - 1)) 
-                     FROM vw_contractByYear cy 
-                     WHERE cy.original_contract_rowid = c.rowid AND cy.player_id = c.player_id AND cy.team_id = c.team_id AND cy.sleeper_league_id = c.sleeper_league_id
-                    ) as yearly_costs_str
-                FROM contracts c
-                WHERE c.player_id IN ({placeholders}) AND c.team_id = ? AND c.sleeper_league_id = ?
-            """, tuple(all_player_ids_on_roster) + (team_id, roster_info['sleeper_league_id']))
-            
-            contracts_for_roster_map = {}
-            for contract_row in cursor.fetchall():
-                yearly_costs_dict = {}
-                if contract_row['yearly_costs_str']:
-                    for item in contract_row['yearly_costs_str'].split(','):
-                        cost_str, year_str = item.split(':')
-                        yearly_costs_dict[int(year_str)] = float(cost_str)
-                
-                contracts_for_roster_map[contract_row['player_id']] = {
-                    'draft_amount': contract_row['draft_amount'],
-                    'contract_year': contract_row['contract_year'],
-                    'duration': contract_row['duration'],
-                    'is_active': contract_row['is_active'],
-                    'yearly_costs': yearly_costs_dict
-                }
+                SELECT p.sleeper_player_id, p.name, p.position, p.team
+                FROM players p
+                WHERE p.sleeper_player_id IN ({placeholders})
+            """, tuple(all_player_ids_on_roster))
+            team_players_details_list = cursor.fetchall()
+            team_players_details = {row['sleeper_player_id']: dict(row) for row in team_players_details_list}
+            app.logger.info(f"DEBUG_TEAM_DETAILS: Fetched team_players_details map: {team_players_details}")
 
-            for p_id in all_player_ids_on_roster:
-                p_data = player_map.get(p_id)
+            # Prepare a dictionary to hold contract details for each player for faster lookup
+            contracts_info = {}
+            if all_player_ids_on_roster: # Ensure there are players before querying contracts
+                cursor.execute(f"""
+                        SELECT player_id, draft_amount, contract_year, duration, is_active, rowid as contract_rowid
+                        FROM contracts 
+                        WHERE player_id IN ({placeholders}) 
+                        AND team_id = ? 
+                        AND sleeper_league_id = ?
+                """, tuple(all_player_ids_on_roster) + (team_id, roster_info['sleeper_league_id']))
+                
+                for contract_row in cursor.fetchall():
+                        contracts_info[contract_row['player_id']] = dict(contract_row)
+            
+            # DO NOT RE-INITIALIZE grouped_players here. It's done above.
+            # grouped_players = {'QB': [], 'RB': [], 'WR': [], 'TE': [], 'K': [], 'DEF': [], 'Unknown': []} 
+            
+            # team_yearly_totals is already initialized before this block based on players or lack thereof.
+            # However, it's populated inside the loop if players exist and have contracts.
+            # Let's ensure it's initialized if not already done in the 'else' for no players.
+            if not team_yearly_totals: # Should have been caught by the else, but as a safeguard
+                 team_yearly_totals = {year: 0.0 for year in range(current_processing_year, current_processing_year + 4)}
+
+            for p_id in all_player_ids_on_roster: # Iterate in a defined order if necessary, or use original list order
+                p_data = team_players_details.get(p_id)
                 if not p_data:
-                    app.logger.warning(f"Player data not found for ID {p_id} in player_map. Skipping for team details.")
+                    app.logger.warning(f"DEBUG_TEAM_DETAILS_LOOP: Player data for ID {p_id} not found in team_players_details map. SKIPPING THIS PLAYER.")
                     continue
 
-                player_contract_info = contracts_for_roster_map.get(p_id)
-                print(f"DEBUG_TEAM_DETAILS: Player {p_id} ({p_data.get('name', 'N/A')}) - Contract Info from DB: {player_contract_info}")
-                
-                status_text = "Active" # Default
-                if p_id in reserve_player_ids: status_text = "RES" 
-                # Note: Taxi squad status determination might need explicit roster metadata if not simply presence in taxi_list
+                player_contract_info = contracts_info.get(p_id)
+                app.logger.info(f"DEBUG_TEAM_DETAILS_LOOP Player ID: {p_id} ({p_data.get('name', 'N/A')})")
+                app.logger.info(f"  Raw player_contract_info from DB: {player_contract_info}")
 
-                # Player contract context initialization
-                player_contract_context = {'status': 'not_applicable', 'recent_auction_value': None}
+                # Default values
+                draft_amount_for_calc = 0
+                contract_duration_for_calc = 0
+                contract_start_year_for_calc = 0
+                is_active_for_calc = False
+                contract_status = "Free Agent" # Default status
                 years_remaining_display = "N/A"
-                draft_amount_display = None
+                projected_costs = [] # Default empty list
 
-                if is_contract_setting_period_active and p_id in auction_acquisitions:
-                    # This player was acquired in the current year's auction and it's the contract setting period.
+                if player_contract_info:
+                    draft_amount_for_calc = player_contract_info.get('draft_amount', 0)
+                    # Ensure duration and contract_year are treated as int, defaulting to 0 if None/missing
+                    db_duration = player_contract_info.get('duration')
+                    contract_duration_for_calc = int(db_duration) if db_duration is not None else 0
                     
-                    is_overridden_by_prior_active_contract = False
-                    if player_contract_info and player_contract_info['is_active'] and player_contract_info['contract_year'] < current_processing_year:
-                        is_overridden_by_prior_active_contract = True
-                        print(f"DEBUG_TEAM_DETAILS: Player {p_id} - Auction acquisition, but overridden by prior active contract from year {player_contract_info['contract_year']}.")
+                    db_contract_year = player_contract_info.get('contract_year')
+                    contract_start_year_for_calc = int(db_contract_year) if db_contract_year is not None else 0
+                    
+                    is_active_for_calc = bool(player_contract_info.get('is_active', False))
+                    app.logger.info(f"  Derived from contract_info: is_active_for_calc={is_active_for_calc}, duration_for_calc={contract_duration_for_calc}, start_year_for_calc={contract_start_year_for_calc}, draft_amount_for_calc={draft_amount_for_calc}")
 
-                    if is_overridden_by_prior_active_contract:
-                        # Existing prior year active contract takes precedence
-                        player_contract_context['status'] = 'active_contract'
-                        draft_amount_display = player_contract_info['draft_amount']
-                        contract_end_year = player_contract_info['contract_year'] + player_contract_info['duration'] -1
-                        years_remaining = contract_end_year - current_processing_year + 1
-                        years_remaining_display = max(0, years_remaining)
-                        print(f"DEBUG_TEAM_DETAILS: Player {p_id} - Status set to 'active_contract' due to prior year contract.")
-                    else:
-                        # Eligible for pending_setting. This includes cases where:
-                        # 1. No contract exists for the player.
-                        # 2. An inactive contract exists for the player.
-                        # 3. An active contract exists, but it's for the current_processing_year (i.e., the default auction contract).
-                        player_contract_context['status'] = 'pending_setting'
-                        player_contract_context['recent_auction_value'] = auction_acquisitions[p_id]
-                        draft_amount_display = auction_acquisitions[p_id]
-                        # The frontend dropdown will handle displaying 1-4 and defaulting.
-                        # If a contract for the current year exists (e.g. 1-year default), 
-                        # its duration is implicitly what's being potentially changed.
-                        # For display simplicity for 'years_remaining' column before interaction, 1 is a sensible default.
-                        years_remaining_display = 1 
-                        print(f"DEBUG_TEAM_DETAILS: Player {p_id} - Status set to 'pending_setting'. Eligible auction acquisition. Contract info: {player_contract_info}")
-                
-                elif player_contract_info:
-                    # Player is not an auction pick eligible for setting OR contract setting period is not active,
-                    # but contract info exists.
-                    draft_amount_display = player_contract_info['draft_amount']
-                    if player_contract_info['is_active']:
-                        player_contract_context['status'] = 'active_contract'
-                        contract_end_year = player_contract_info['contract_year'] + player_contract_info['duration'] -1
-                        years_remaining = contract_end_year - current_processing_year + 1
-                        years_remaining_display = max(0, years_remaining) 
+
+                    if is_active_for_calc:
+                        contract_status = "Active Contract"
+                        
+                        # CRITICAL: Ensure contract_duration_for_calc and contract_start_year_for_calc are positive for calculations
+                        if contract_duration_for_calc > 0 and contract_start_year_for_calc > 0:
+                            contract_end_year = contract_start_year_for_calc + contract_duration_for_calc - 1
+                            years_left = contract_end_year - current_processing_year + 1
+                            
+                            if years_left <= 0: 
+                                years_remaining_display = "Expires " + str(contract_end_year) if contract_end_year >= current_processing_year else "Expired"
+                            else: 
+                                years_remaining_display = str(years_left)
+                            
+                            # Also ensure draft_amount is floatable for get_escalated_contract_costs
+                            current_draft_amount = float(draft_amount_for_calc if draft_amount_for_calc is not None else 0.0)
+
+                            projected_costs = get_escalated_contract_costs(
+                                draft_amount=current_draft_amount, 
+                                duration=int(contract_duration_for_calc), 
+                                contract_start_year=int(contract_start_year_for_calc)
+                            )
+                            app.logger.info(f"  Player {p_id} calculated projected_costs: {projected_costs}")
+                            
+                            for cost_info in projected_costs:
+                                cost_year = cost_info['year']
+                                cost_value = cost_info['cost']
+                                if current_processing_year <= cost_year < current_processing_year + 4:
+                                    team_yearly_totals[cost_year] += cost_value
+                        else:
+                            app.logger.warning(f"  Player {p_id} has active contract but duration ({contract_duration_for_calc}) or start_year ({contract_start_year_for_calc}) is invalid (zero or None). Costs/Years not calculated.")
+                            years_remaining_display = "Error" # Indicate data issue for frontend
+                            projected_costs = [] # Ensure it's empty
                     else: 
-                        player_contract_context['status'] = 'inactive_contract'
-                        years_remaining_display = 0
-                    print(f"DEBUG_TEAM_DETAILS: Player {p_id} - Existing contract (not pending auction or period inactive). Status: {player_contract_context['status']}")
+                        contract_status = "Inactive Contract" # Contract exists but is_active = 0
+                        years_remaining_display = "N/A" # Inactive contracts don't have remaining years in this context
+                        projected_costs = []
+                else: # No player_contract_info at all
+                    app.logger.info(f"  No player_contract_info found for player {p_id}. Defaulting to Free Agent status.")
+                    # contract_status remains "Free Agent", years_remaining_display "N/A", projected_costs empty
+
+                app.logger.info(f"  Before auction override: status='{contract_status}', yrs_rem='{years_remaining_display}', projected_costs_count={len(projected_costs)}")
                 
+                # Override status for auction acquisitions during contract setting period
+                is_auction_acquisition = p_id in auction_acquisitions
+                # Refined logic: Only set to "Pending Contract Setting" if it's an auction acquisition,
+                # contract setting period is active, AND (no contract exists OR the existing one is specifically the 1-year default that needs setting)
+                # A player with an already set multi-year contract (even if is_active=0 briefly before season start) should not revert to pending.
+                # The key is often that a 1-year, $X contract is created by sleeper_service for new draftees.
+                
+                # If it's an auction acquisition, and the period is active...
+                if is_auction_acquisition and is_contract_setting_period_active:
+                    # Check if the existing contract (if any) looks like the default 1-year placeholder
+                    # OR if no contract exists yet for this player on this team for this year.
+                    is_default_placeholder = False
+                    if player_contract_info:
+                        # A common placeholder is duration=1 and contract_year = current_processing_year
+                        if contract_duration_for_calc == 1 and contract_start_year_for_calc == current_processing_year:
+                           is_default_placeholder = True 
+                    
+                    if not player_contract_info or is_default_placeholder:
+                        contract_status = "Pending Contract Setting"
+                        draft_amount_for_calc = auction_acquisitions.get(p_id, 0) # Use auction amount for display
+                        years_remaining_display = "Set Duration" 
+                        projected_costs = [] # Clear any prior projected costs
+                        app.logger.info(f"  Player {p_id} is an auction acquisition in setting period. Status OVERRIDDEN to 'Pending Contract Setting'. Placeholder contract was: {is_default_placeholder}")
+                    # else:
+                        # It's an auction acquisition in setting period, but already has a non-placeholder contract (e.g., user set it, then page reloaded)
+                        # In this case, we want to keep showing the set contract details but still allow edits.
+                        # The contract_status will be "Active Contract" (if is_active_for_calc was true)
+                        # The frontend handles editability based on 'Pending Contract Setting' OR (is_contract_setting_period_active AND is_auction_acquisition)
+                        # So, the main loop's 'Active Contract' status is fine, frontend can still show dropdowns.
+                        # We might need to explicitly set 'years_remaining_display' to 'Set Duration' if we want the dropdown visible.
+                        # For now, let existing calculated years_remaining_display and projected_costs stand if a contract has been set.
+                        # The key is the frontend check: player.contract_status === 'Pending Contract Setting' || (teamData.is_contract_setting_period_active && teamData.auction_acquisitions_for_team && teamData.auction_acquisitions_for_team[player.id] !== undefined)
+
+                app.logger.info(f"  FINAL for player {p_id} ({p_data.get('name', 'N/A')}):")
+                app.logger.info(f"    contract_status: '{contract_status}'")
+                app.logger.info(f"    years_remaining_display: '{years_remaining_display}'")
+                app.logger.info(f"    draft_amount_for_calc: {draft_amount_for_calc}")
+                app.logger.info(f"    projected_costs: {projected_costs}")
+                app.logger.info(f"    is_on_reserve: {p_id in reserve_player_ids}")
+                app.logger.info(f"    contract_rowid: {player_contract_info.get('contract_rowid') if player_contract_info else None}")
+                app.logger.info(f"    contract_duration_db: {int(contract_duration_for_calc) if player_contract_info and contract_duration_for_calc else None}")
+                app.logger.info(f"    contract_start_year_db: {int(contract_start_year_for_calc) if player_contract_info and contract_start_year_for_calc else None}")
+
+                # MODIFICATION for UI: If contract setting period is active and it's an auction acquisition,
+                # ensure status is 'Pending Contract Setting' for UI editability,
+                # and years_remaining is 'Set Duration'. Projected costs should still reflect the saved value.
+                if is_contract_setting_period_active and is_auction_acquisition:
+                    contract_status_for_frontend = "Pending Contract Setting"
+                    years_remaining_display_for_frontend = "Set Duration"
+                    # The draft_amount_for_calc and projected_costs should reflect the current DB state for information,
+                    # but the status and years_remaining text will control editability.
+                    app.logger.info(f"  UI OVERRIDE for auction player {p_id}: contract_status to 'Pending Contract Setting', years_remaining_display to 'Set Duration'")
                 else:
-                    # No contract info, and not an eligible auction acquisition for setting.
-                    # Defaults for status ('not_applicable'), draft_amount_display (None), years_remaining_display ("N/A") are already set.
-                    print(f"DEBUG_TEAM_DETAILS: Player {p_id} - No specific contract context. Status remains: {player_contract_context['status']}")
+                    contract_status_for_frontend = contract_status
+                    years_remaining_display_for_frontend = years_remaining_display
 
-                player_details.append({
+                player_data_for_frontend = {
                     'id': p_id,
-                    'name': p_data['name'],
-                    'position': p_data['position'],
-                    'team': p_data['team'], # NFL team
-                    'status': status_text, # Roster status (Active, RES, etc.)
-                    'draft_amount': draft_amount_display,
-                    'years_remaining': years_remaining_display,
-                    'player_contract_context': player_contract_context,
-                    'yearly_costs': player_contract_info['yearly_costs'] if player_contract_info else {}
-                })
+                    'name': p_data.get('name', 'N/A'),
+                    'position': p_data.get('position', 'N/A'),
+                    'team_nfl': p_data.get('team', 'N/A'),
+                    'draft_amount': draft_amount_for_calc, 
+                    'contract_status': contract_status_for_frontend, # Use the potentially overridden status for UI
+                    'years_remaining': years_remaining_display_for_frontend, # Use the potentially overridden display for UI
+                    'projected_costs': projected_costs, # Always show actual projected costs based on DB
+                    'is_on_reserve': p_id in reserve_player_ids,
+                    'contract_rowid': player_contract_info.get('contract_rowid') if player_contract_info else None,
+                    'contract_duration_db': int(contract_duration_for_calc) if player_contract_info and contract_duration_for_calc else None,
+                    'contract_start_year_db': int(contract_start_year_for_calc) if player_contract_info and contract_start_year_for_calc else None,
+                }
+                
+                position_group = p_data.get('position', 'Unknown')
+                if position_group not in grouped_players:
+                    position_group = 'Unknown' # Fallback for unexpected positions
+                grouped_players[position_group].append(player_data_for_frontend)
 
-        roster_details = {
-            'id': roster_info['sleeper_roster_id'],
-            'league_id': roster_info['sleeper_league_id'],
-            'name': team_name_to_display, # Use the determined team_name
-            'manager': {
-                'display_name': roster_info['manager_name'], # This is already a COALESCE of display_name, username
-                'sleeper_username': roster_info['sleeper_username'],
-                # Add avatar if available and needed:
-                # 'avatar': roster_info['manager_avatar'] # (if 'manager_avatar' is selected in SQL)
-            },
-            'roster': player_details, # This will be populated below by processing player_details
-            # Add other high-level roster details if necessary, e.g., wins/losses, from roster_info
-        }
-        
-        # Structure for league_context (adjust as per frontend needs)
-        league_context = {
-            'league_id': roster_info['sleeper_league_id'],
-            'league_name': league_name_for_context, 
-            'current_season_year': current_processing_year,
-            'is_offseason': is_offseason,
-            'is_contract_setting_period_active': is_contract_setting_period_active
-        }
-        
-        print(f"DEBUG_TEAM_DETAILS_FULL: Final team_position_spending_ranks: {team_position_spending_ranks}")
-        print(f"DEBUG_TEAM_DETAILS_FULL: Final future_yearly_total_ranks: {future_yearly_total_ranks}")
+        # Sort players within each position group by draft_amount (descending) or name (ascending)
+        for position in grouped_players:
+            grouped_players[position].sort(key=lambda x: (-x.get('draft_amount', 0), x.get('name', '')))
+
+        # print(f"DEBUG_TEAM_DETAILS_FULL: Final team_position_spending_ranks: {team_position_spending_ranks}")
+        # print(f"DEBUG_TEAM_DETAILS_FULL: Final future_yearly_total_ranks: {future_yearly_total_ranks}")
 
         return jsonify({
             'success': True,
-            'team': roster_details,
-            'league_context': league_context,
+            'team_id': team_id,
+            'team_name': team_name_to_display, # Use the determined team name
+            'manager_name': roster_info['manager_name'],
+            'sleeper_username': roster_info['sleeper_username'],
+            'league_id': roster_info['sleeper_league_id'],
+            'league_name': league_name_for_context,
+            'players_by_position': grouped_players,
+            'is_contract_setting_period_active': is_contract_setting_period_active,
+            'is_offseason': is_offseason,  # Added this line
+            'current_processing_year': current_processing_year,
+            'auction_acquisitions_for_team': {p:a for p,a in auction_acquisitions.items() if p in all_player_ids_on_roster}, # Only those on this team
+            'team_yearly_totals': team_yearly_totals,
             'team_position_spending_ranks': team_position_spending_ranks,
             'future_yearly_total_ranks': future_yearly_total_ranks
+
         })
 
-    except sqlite3.Error as e:
-        app.logger.error(f"Database error in /team/{team_id}: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
     except Exception as e:
-        app.logger.error(f"Unexpected error in /team/{team_id}: {str(e)}")
+        app.logger.error(f"Error fetching details for team {team_id}, league {league_id_from_query}: {e}")
         import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 @app.route('/api/team/<team_id>/contracts/durations', methods=['POST'])
 @login_required
@@ -1942,7 +1923,7 @@ def update_contract_durations(team_id):
         
         # 2. Check if contract setting period is active
         current_season_data = get_current_season()
-        current_processing_year = int(current_season_data['year']) if current_season_data and current_season_data['year'] else 0
+        current_processing_year = int(current_season_data['current_year']) if current_season_data and current_season_data.get('current_year') else 0
         is_offseason = current_season_data['is_offseason']
         
         is_contract_setting_period_active = False

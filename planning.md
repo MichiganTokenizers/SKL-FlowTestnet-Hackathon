@@ -22,7 +22,18 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
   - `AssociateSleeper.jsx`: Component to handle user input of Sleeper username and trigger backend association.
 - **League Management**: Viewing league details, standings.
 - **Team Management**: Rosters for the most part will be managed on Sleeper app. 
-   -Waiving player will take place on Sleeper app, but Sleeper API pull will detect the missing contracted player, update contracts with IsActive = 0, penalty_incurred, and penalty_year. 
+   - **Waived Player Detection and Penalty Process**:
+     - Players are waived directly on the Sleeper platform.
+     - During the `fetch_all_data` process (triggered on login/association or manually), the system compares the latest Sleeper roster for a team against the roster previously stored in `keeper.db`.
+     - If a player with an active contract in `keeper.db` is no longer on the team's Sleeper roster, they are considered "dropped" or "waived".
+     - For each dropped player with an active contract:
+       - The `calculate_penalty` function is called. Penalties are 10% of the contract's value for that specific year, rounded up, for each remaining year of the contract. This applies regardless of off-season status.
+       - For example, a 4-year $1 contract dropped before Year 1 would incur four separate penalties: $1 for Year 1, $1 for Year 2, $1 for Year 3, and $1 for Year 4. If the same contract was dropped before Year 3, it would incur two penalties: $1 for Year 3 and $1 for Year 4.
+       - The corresponding contract record in the `contracts` table is updated:
+         - `IsActive` is set to `0`.
+       - A new table, `penalties`, will store individual penalty entries, linking back to the original contract. Each entry will include `contract_id`, `penalty_year`, and `penalty_amount`.
+         - `updated_at` is refreshed on the original contract.
+     - This ensures penalties are assessed based on the contract state *before* the local roster is updated with the latest API data. The local roster is then updated (upserted) with the current player list from Sleeper.
    - Trading player on Supreme Keeper League site with options for trading next year's auction money. The trade will have to also take place on Sleeper app with players only.
   - **Team Page Analytics & Display**:
     - **Current Year Positional Spending Ranks**: Displays the team's total contract spending for each player position (QB, RB, WR, TE, etc.) for the current season. This is ranked against all other teams in the league to show comparative spending by position.

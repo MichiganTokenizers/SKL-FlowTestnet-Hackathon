@@ -16,6 +16,8 @@
   - [x] Tables: Remove avatar display from tables.
 
 - [ ] Add "Recent Transactions" table to League page (Started: 2025-05-28)
+- [ ] Get nfl state for offseason inseason toggle from SLeeper API
+- [ ] Disable draft data pull in `SleeperService.fetch_all_data` if league status is "InSeason" (or NFL state indicates active season). (Started: 2025-05-22)
 - [x] Build out Team Page functionality (Started: 2025-05-29) (Completed: 2025-07-28)
   - [x] 'My Team' link in navbar goes to logged-in user's team page (Completed: 2023-10-27)
   - [x] Team names in standings table link to respective team pages (Completed: 2023-10-27)
@@ -31,6 +33,8 @@
 - [ ] Build Trade Desk (big)
 - [ ] Build league fee structure in keeper.db
 - [ ] Add pay league fee button in league page
+
+- [x] Clean up navbar hamburger menu issue (Started: 2025-07-29)
 
 ## Discovered During Work
 
