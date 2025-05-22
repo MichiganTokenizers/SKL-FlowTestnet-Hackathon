@@ -510,46 +510,6 @@ class SleeperService:
                                 updated_at = datetime('now')
                         ''', (d_draft_id, league_id, d_season, d_status, d_start_time_iso, d_data_json))
             
-            # Step 8: Consolidate and store all unique players from rosters
-            self.logger.info("SleeperService.fetch_all_data: Starting general player data import...")
-            print("DEBUG (SleeperService): Starting player data import...")
-            all_players_api_data = self.get_players()
-            if not all_players_api_data:
-                self.logger.error("SleeperService.fetch_all_data: Failed to retrieve any player data from Sleeper API.")
-            else:
-                self.logger.info(f"SleeperService.fetch_all_data: Retrieved {len(all_players_api_data)} players from Sleeper API for general import.")
-                print(f"DEBUG (SleeperService): Retrieved {len(all_players_api_data)} players from Sleeper API")
-                players_to_insert = []
-                allowed_positions = {'QB', 'RB', 'WR', 'TE', 'DEF'}
-                for player_id, player_info in all_players_api_data.items():
-                    player_position = player_info.get('position')
-                    if player_position in allowed_positions:
-                        players_to_insert.append((
-                            player_id,
-                            player_info.get('full_name', player_info.get('first_name', '') + ' ' + player_info.get('last_name', '')).strip(),
-                            player_position,
-                            player_info.get('team')
-                        ))
-                    else:
-                        self.logger.debug(f"SleeperService.fetch_all_data: Skipping player {player_id} (Name: {player_info.get('full_name', 'N/A')}) due to position: {player_position}")
-                
-                if players_to_insert:
-                    self.logger.info(f"SleeperService.fetch_all_data: Bulk inserting/updating {len(players_to_insert)} players into DB.")
-                    cursor.executemany('''
-                        INSERT INTO players (sleeper_player_id, name, position, team, created_at, updated_at)
-                        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-                        ON CONFLICT(sleeper_player_id) DO UPDATE SET
-                            name=excluded.name, 
-                            position=excluded.position, 
-                            team=excluded.team,
-                            updated_at=datetime('now')
-                    ''', players_to_insert)
-                    self.logger.info(f"SleeperService.fetch_all_data: Added/Updated {len(players_to_insert)} players to the database.")
-                    print(f"DEBUG (SleeperService): Added {len(players_to_insert)} players to the database")
-                else:
-                    self.logger.info("SleeperService.fetch_all_data: No players matched the position criteria (QB, RB, WR, TE, DEF) to be inserted/updated.")
-                    print("DEBUG (SleeperService): No players matched position criteria for DB operation.")
-
             self.logger.info(f"SleeperService.fetch_all_data: Completed processing for wallet {wallet_address}.")
             return {"success": True, "message": "All data fetched and stored successfully"}
 
@@ -563,4 +523,75 @@ class SleeperService:
             self.logger.error(f"SleeperService.fetch_all_data: Unexpected error for wallet {wallet_address}: {str(e)}")
             import traceback
             self.logger.error(traceback.format_exc())
+            return {"success": False, "error": f"Server error: {str(e)}"} 
+
+    def update_all_sleeper_players(self) -> Dict[str, Any]:
+        """
+        Fetch all NFL players from Sleeper API and update the local players table.
+        This should be called periodically (e.g., daily/weekly) rather than on every user action.
+
+        Returns:
+            Dict: Result of the operation with success status and message/error.
+        """
+        self.logger.info("SleeperService.update_all_sleeper_players: Starting general player data update...")
+        print("DEBUG (SleeperService): Starting update_all_sleeper_players...")
+        try:
+            cursor = self._get_db_cursor()
+            
+            all_players_api_data = self.get_players()
+            if not all_players_api_data:
+                self.logger.error("SleeperService.update_all_sleeper_players: Failed to retrieve any player data from Sleeper API.")
+                return {"success": False, "error": "Failed to retrieve player data from Sleeper API."}
+            
+            self.logger.info(f"SleeperService.update_all_sleeper_players: Retrieved {len(all_players_api_data)} players from Sleeper API.")
+            print(f"DEBUG (SleeperService): Retrieved {len(all_players_api_data)} players from Sleeper API for general update.")
+            
+            players_to_insert = []
+            # Define allowed positions. Consider making this a class constant or configurable if it changes.
+            allowed_positions = {'QB', 'RB', 'WR', 'TE', 'DEF'} 
+            
+            for player_id, player_info in all_players_api_data.items():
+                player_position = player_info.get('position')
+                if player_position in allowed_positions:
+                    players_to_insert.append((
+                        player_id,
+                        player_info.get('full_name', player_info.get('first_name', '') + ' ' + player_info.get('last_name', '')).strip(),
+                        player_position,
+                        player_info.get('team') # This will be None if the player is a free agent
+                    ))
+                else:
+                    self.logger.debug(f"SleeperService.update_all_sleeper_players: Skipping player {player_id} (Name: {player_info.get('full_name', 'N/A')}) due to position: {player_position}")
+            
+            if players_to_insert:
+                self.logger.info(f"SleeperService.update_all_sleeper_players: Bulk inserting/updating {len(players_to_insert)} players into DB.")
+                cursor.executemany('''
+                    INSERT INTO players (sleeper_player_id, name, position, team, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+                    ON CONFLICT(sleeper_player_id) DO UPDATE SET
+                        name=excluded.name, 
+                        position=excluded.position, 
+                        team=excluded.team,
+                        updated_at=datetime('now')
+                ''', players_to_insert)
+                # self.conn.commit() # Commit changes if autocommit is not enabled
+                self.logger.info(f"SleeperService.update_all_sleeper_players: Added/Updated {len(players_to_insert)} players to the database.")
+                print(f"DEBUG (SleeperService): update_all_sleeper_players - Added/Updated {len(players_to_insert)} players.")
+                return {"success": True, "message": f"Successfully updated {len(players_to_insert)} players."}
+            else:
+                self.logger.info("SleeperService.update_all_sleeper_players: No players matched the position criteria (QB, RB, WR, TE, DEF) to be inserted/updated.")
+                print("DEBUG (SleeperService): update_all_sleeper_players - No players matched position criteria.")
+                return {"success": True, "message": "No players matched criteria to update."}
+
+        except sqlite3.Error as sqle:
+            self.logger.error(f"SleeperService.update_all_sleeper_players: SQLite error: {str(sqle)}")
+            # self.conn.rollback() # Rollback in case of error
+            return {"success": False, "error": f"Database error: {str(sqle)}"}
+        except ValueError as ve: # For _get_db_cursor errors
+            self.logger.error(f"SleeperService.update_all_sleeper_players: Value error (likely DB connection issue): {str(ve)}")
+            return {"success": False, "error": f"Configuration error: {str(ve)}"}
+        except Exception as e:
+            self.logger.error(f"SleeperService.update_all_sleeper_players: Unexpected error: {str(e)}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            # self.conn.rollback() # Rollback in case of error
             return {"success": False, "error": f"Server error: {str(e)}"} 
