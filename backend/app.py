@@ -1298,23 +1298,6 @@ def update_season_settings():
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
 
-@app.route('/auth/me', methods=['GET'])
-@login_required
-def get_me():
-    """Returns the details of the currently authenticated user."""
-    user = get_current_user() # This already fetches from DB based on session token
-    if not user:
-        # This case should ideally be handled by @login_required, 
-        # but as a safeguard:
-        return jsonify({'success': False, 'error': 'User not authenticated or session invalid'}), 401
-    
-    # get_current_user() returns a dict. We can augment or filter it if needed.
-    # For now, return what get_current_user() provides.
-    # Ensure sensitive data is not exposed if get_current_user() returns more than needed.
-    # Based on its definition, it returns: {'username', 'display_name', 'wallet_address', 'sleeper_user_id'}
-    
-    print(f"DEBUG: /auth/me - Returning user data: {user}")
-    return jsonify({'success': True, 'user': user}), 200
 
 @app.route('/api/user/roster', methods=['GET'])
 @login_required
@@ -2007,11 +1990,6 @@ def update_contract_durations(team_id):
 
             if not contract_check:
                 warnings.append(f"No existing default contract found for player {player_id_str} on team {team_id} for season {current_processing_year} to update. Skipped.")
-                continue
-            
-            if contract_check['duration'] != 1:
-                # This is now a warning, and we skip this player, not an error for the whole batch
-                warnings.append(f"Contract for player {player_id_str} on team {team_id} for season {current_processing_year} is not a 1-year default (current duration: {contract_check['duration']}). Skipped.")
                 continue
             
             # Perform the update for this eligible player
