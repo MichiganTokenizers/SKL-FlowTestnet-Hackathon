@@ -154,27 +154,30 @@ function Team() {
     };
 
     const futureYearlyTotals = {};
-    if (teamData && allPlayersList.length > 0 && teamData.current_processing_year && yearlyCostColumnHeaders.length > 1) {
+    if (teamData && teamData.current_processing_year && yearlyCostColumnHeaders.length > 1) {
         yearlyCostColumnHeaders.slice(1).forEach(year => {
-            let totalForYear = 0;
-            allPlayersList.forEach(p => {
+            let contractTotalForYear = 0;
+            allPlayersList.forEach(p => { 
                 let cost = null;
                 if (p.projected_costs) {
                     const yearCostInfo = p.projected_costs.find(pc => pc.year === year);
-                    if (yearCostInfo && p.contract_status === "Active Contract") {
+                    if (yearCostInfo) { 
                         cost = yearCostInfo.cost;
                     }
                 }
                 if (cost !== null && cost !== undefined) {
-                    totalForYear += cost;
+                    contractTotalForYear += cost;
                 }
             });
 
-            if (teamData.team_yearly_penalty_totals && teamData.team_yearly_penalty_totals[year]) {
-                totalForYear += teamData.team_yearly_penalty_totals[year];
-            }
+            const penaltyTotalForYear = (teamData.team_yearly_penalty_totals && teamData.team_yearly_penalty_totals[year])
+                ? teamData.team_yearly_penalty_totals[year]
+                : 0;
 
-            futureYearlyTotals[year] = totalForYear;
+            futureYearlyTotals[year] = {
+                contractTotal: contractTotalForYear,
+                penaltyTotal: penaltyTotalForYear
+            };
         });
     }
 
@@ -269,68 +272,6 @@ function Team() {
                 </div>
             </div>
 
-            {/* Current Year Spending and Ranks */}
-            <div className="row mb-4">
-                <div className="col-md-6">
-                    <div className="card h-100">
-                    <div className="card-body">
-                            <h5 className="card-title">Current Season Spending ({teamData.current_processing_year})</h5>
-                            <table className="table table-sm table-borderless">
-                                <tbody>
-                                    {positionOrder.filter(pos => teamData.team_yearly_totals && teamData.team_yearly_totals[teamData.current_processing_year] && teamData.team_yearly_totals[teamData.current_processing_year][pos] > 0).map(pos => (
-                                        <tr key={pos}>
-                                            <td>{pos} Spending:</td>
-                                            <td className="text-end">${(teamData.team_yearly_totals[teamData.current_processing_year]?.[pos] || 0).toFixed(2)}</td>
-                                            {teamPositionRanks && teamPositionRanks[teamData.current_processing_year] && teamPositionRanks[teamData.current_processing_year][pos] && (
-                                                <td className="text-end text-muted ps-2">
-                                                    (Rank {teamPositionRanks[teamData.current_processing_year][pos].rank} of {teamPositionRanks[teamData.current_processing_year][pos].total_teams})
-                                                </td>
-                                            )}
-                                        </tr>
-                                    ))}
-                                    <tr>
-                                        <td><strong>Total Budget Hit:</strong></td>
-                                        <td className="text-end"><strong>${(teamData.team_yearly_totals[teamData.current_processing_year]?.total || 0).toFixed(2)}</strong></td>
-                                        {teamPositionRanks && teamPositionRanks[teamData.current_processing_year] && teamPositionRanks[teamData.current_processing_year].total && (
-                                            <td className="text-end text-muted ps-2">
-                                                (Rank {teamPositionRanks[teamData.current_processing_year].total.rank} of {teamPositionRanks[teamData.current_processing_year].total.total_teams})
-                                            </td>
-                                        )}
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                                    </div>
-
-                <div className="col-md-6">
-                    <div className="card h-100">
-                        <div className="card-body">
-                            <h5 className="card-title">Future Spending Totals</h5>
-                            {futureYearlyTotalRanks && Object.keys(futureYearlyTotalRanks).length > 0 ? (
-                                <table className="table table-sm table-borderless">
-                                    <tbody>
-                                        {yearlyCostColumnHeaders.slice(1).map(year => (
-                                            <tr key={year}>
-                                                <td>{year} Total:</td>
-                                                <td className="text-end">${(futureYearlyTotals[year] || 0).toFixed(2)}</td>
-                                                {futureYearlyTotalRanks[year] && (
-                                                    <td className="text-end text-muted ps-2">
-                                                        (Projected Rank {futureYearlyTotalRanks[year].rank} of {futureYearlyTotalRanks[year].total_teams})
-                                                    </td>
-                                                )}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            ) : (
-                                <p>No future contract data available.</p>
-                            )}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {canSetContracts && (
             <div className="mb-3">
                     <button 
@@ -344,7 +285,8 @@ function Team() {
                 </div>
             )}
 
-            <div className="card">
+            {/* Team Roster Card */}
+            <div className="card mb-4"> {/* Added mb-4 for spacing before future totals */}
                 <div className="card-header">
                     <h5 className="mb-0">Team Roster</h5>
                 </div>
@@ -439,9 +381,69 @@ function Team() {
                                 </table>
                             </div>
                         </div>
+                    </div> {/* End of Team Roster Card */}
+
+            {/* Future Spending Totals Card - Moved to Bottom and Full Width */}
+            <div className="row mt-4 mb-4">
+                <div className="col-12">
+                    <div className="card h-100">
+                        <div className="card-body">
+                            <h5 className="card-title">Future Spending Totals</h5>
+                            {(yearlyCostColumnHeaders.length > 1 && Object.keys(futureYearlyTotals).some(yr => futureYearlyTotals[yr] && (futureYearlyTotals[yr].contractTotal > 0 || futureYearlyTotals[yr].penaltyTotal > 0 || (futureYearlyTotalRanks && futureYearlyTotalRanks[yr])))) ? (
+                                yearlyCostColumnHeaders.slice(1).map(year => {
+                                    const yearData = futureYearlyTotals[year];
+                                    const rankInfo = futureYearlyTotalRanks && futureYearlyTotalRanks[year];
+
+                                    const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
+                                    const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
+
+                                    // Only render the section for the year if there's actual data (contracts or penalties or rank)
+                                    if (contractTotal === 0 && penaltyTotal === 0 && !rankInfo) return null;
+
+                                    const displayContractTotal = contractTotal.toFixed(2);
+                                    const displayPenaltyTotal = penaltyTotal.toFixed(2);
+                                    const overallTotalVal = contractTotal + penaltyTotal;
+                                    const displayOverallTotal = overallTotalVal.toFixed(2);
+                                    
+                                    return (
+                                        <div key={year} className="mb-3" style={{ paddingLeft: '10px', borderLeft: '3px solid #eee' }}>
+                                            <h6><strong>{year}</strong></h6>
+                                            <table className="table table-sm table-borderless mb-0" style={{fontSize: '0.9rem'}}>
+                                                <tbody>
+                                                    <tr>
+                                                        <td style={{width: '80px'}}>Contracts:</td>
+                                                        <td className="text-end">${displayContractTotal}</td>
+                                                        <td style={{minWidth: '130px'}}></td> {/* Spacer for rank alignment */}
+                                                    </tr>
+                                                    <tr>
+                                                        <td style={{width: '80px'}}>Penalties:</td>
+                                                        <td className="text-end">${displayPenaltyTotal}</td>
+                                                        <td style={{minWidth: '130px'}}></td> {/* Spacer for rank alignment */}
+                                                    </tr>
+                                                    <tr style={{borderTop: '1px solid #ddd'}}>
+                                                        <td style={{width: '80px'}}><strong>Total:</strong></td>
+                                                        <td className="text-end"><strong>${displayOverallTotal}</strong></td>
+                                                        {rankInfo && (
+                                                            <td className="text-end text-muted ps-2" style={{minWidth: '130px'}}>
+                                                                (Rank {rankInfo.rank} of {rankInfo.total_teams})
+                                                            </td>
+                                                        )}
+                                                        {!rankInfo && <td style={{minWidth: '130px'}}></td>}
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    );
+                                })
+                            ) : (
+                                <p>No future spending data available.</p>
+                            )}
+                        </div>
                     </div>
                 </div>
+            </div>
 
+        </div>
     );
 }
 

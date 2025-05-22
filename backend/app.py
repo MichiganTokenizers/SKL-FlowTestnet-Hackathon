@@ -1851,6 +1851,34 @@ def get_team_details(team_id):
         # print(f"DEBUG_TEAM_DETAILS_FULL: Final team_position_spending_ranks: {team_position_spending_ranks}")
         # print(f"DEBUG_TEAM_DETAILS_FULL: Final future_yearly_total_ranks: {future_yearly_total_ranks}")
 
+        # Calculate team_yearly_penalty_totals
+        team_yearly_penalty_totals = {}
+        try:
+            # Get all contract_ids for the current team and league that are NOT active
+            # (penalties are typically associated with inactive/dropped contracts)
+            # However, penalties are directly linked to contracts.id (rowid), and penalties.contract_id points to contracts.rowid
+            # We need to sum penalties for this team based on contracts associated with this team.
+            # The `penalties` table itself doesn't directly link to team_id, but `contracts` does.
+            # So, we join penalties with contracts where contracts.team_id matches.
+            cursor.execute("""
+                SELECT p.penalty_year, SUM(p.penalty_amount) as total_penalty_for_year
+                FROM penalties p
+                JOIN contracts c ON p.contract_id = c.rowid
+                WHERE c.team_id = ? AND c.sleeper_league_id = ?
+                GROUP BY p.penalty_year
+            """, (team_id, roster_info['sleeper_league_id']))
+            
+            penalty_rows = cursor.fetchall()
+            for row in penalty_rows:
+                team_yearly_penalty_totals[str(row['penalty_year'])] = row['total_penalty_for_year']
+            app.logger.info(f"DEBUG_TEAM_DETAILS: Calculated team_yearly_penalty_totals: {team_yearly_penalty_totals}")
+
+        except Exception as e:
+            app.logger.error(f"Error calculating team_yearly_penalty_totals for team {team_id}, league {roster_info['sleeper_league_id']}: {e}")
+            # Initialize to empty if error, so frontend doesn't break
+            team_yearly_penalty_totals = {}
+
+
         return jsonify({
             'success': True,
             'team_id': team_id,
@@ -1865,6 +1893,7 @@ def get_team_details(team_id):
             'current_processing_year': current_processing_year,
             'auction_acquisitions_for_team': {p:a for p,a in auction_acquisitions.items() if p in all_player_ids_on_roster}, # Only those on this team
             'team_yearly_totals': team_yearly_totals,
+            'team_yearly_penalty_totals': team_yearly_penalty_totals, # Added this line
             'team_position_spending_ranks': team_position_spending_ranks,
             'future_yearly_total_ranks': future_yearly_total_ranks
 
