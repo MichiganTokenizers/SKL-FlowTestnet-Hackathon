@@ -272,169 +272,71 @@ function Team() {
                 </div>
             </div>
 
-            {canSetContracts && (
-            <div className="mb-3">
-                    <button 
-                        onClick={handleSaveContractDurations} 
-                    className="btn btn-primary"
-                        disabled={Object.keys(contractDurations).length === 0 || loading}
-                    >
-                        {loading ? 'Saving...' : 'Save Contract Durations'}
-                    </button>
-                {error && <p className="text-danger mt-2">{error}</p>}
-                </div>
-            )}
-
-            {/* Team Roster Card */}
-            <div className="card mb-4"> {/* Added mb-4 for spacing before future totals */}
-                <div className="card-header">
-                    <h5 className="mb-0">Team Roster</h5>
-                </div>
-                <div className="card-body p-0">
-                            <div className="table-responsive">
-                                <table className="table table-hover mb-0">
-                                    <thead className="table-light">
-                                        <tr>
-                                            <th>Name</th>
-                                            <th>Team</th>
-                                            <th>Draft $</th>
-                                            <th>Yrs Rem</th>
-                                            {yearlyCostColumnHeaders.map(year => (
-                                                <th key={`header-cost-${year}`}>{year} $</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                    {(() => {
-                                        let currentPosition = null;
-                                        return allPlayersSorted.map(player => {
-                                            const showPositionHeader = player.position !== currentPosition;
-                                            if (showPositionHeader) {
-                                                currentPosition = player.position;
-                                            }
-                                            const currentPositionTotal = positionGroupTotals[currentPosition] !== undefined ? positionGroupTotals[currentPosition] : 0;
-                                            const positionRankData = teamPositionRanks && teamPositionRanks[currentPosition];
-
-                                            return (
-                                                <React.Fragment key={player.id}>
-                                                    {showPositionHeader && (
-                                                        <tr className="position-group-header">
-                                                            <td colSpan={numDataColumns}>
-                                                                <h5 className="m-1" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                                                    <span>{currentPosition || 'Unknown'}</span> 
-                                                                    {teamData.current_processing_year && (
-                                                                        <span style={{ fontWeight: 'normal', fontSize: '0.9rem' }}>
-                                                                            {teamData.current_processing_year} Total: ${currentPositionTotal.toFixed(0)}
-                                                                            {positionRankData && (
-                                                                                ` (Rank: ${positionRankData.rank}/${positionRankData.total_teams})`
-                                                                            )}
-                                                                        </span>
-                                                                    )}
-                                                                </h5>
-                                                            </td>
-                                                        </tr>
-                                                    )}
-                                                    <tr className="player-data-row">
-                                                        <td>
-                                                            {player.name}
-                                                            {player.status && player.status !== 'Active' && player.status !== 'Free Agent' && player.contract_status !== 'Pending Contract Setting' && (
-                                                                <sup style={{ marginLeft: '4px', color: player.status === 'IR' ? 'red' : 'orange' }}>
-                                                                    {player.status.substring(0,2).toUpperCase()}
-                                                                </sup>
-                                                            )}
-                                                        </td>
-                                                        <td>{player.team_nfl}</td>
-                                                        <td>${player.draft_amount !== null && player.draft_amount !== undefined ? player.draft_amount : 'N/A'}</td>
-                                                        <td>
-                                                            {teamData.is_contract_setting_period_active && player.contract_status === 'Pending Contract Setting' ? (
-                                                                <select 
-                                                                    className="form-select form-select-sm" 
-                                                                    value={contractDurations[player.id] !== undefined ? contractDurations[player.id] : (player.contract_duration_db || 1)}
-                                                                    onChange={(e) => handleDurationChange(player.id, parseInt(e.target.value))}
-                                                                >
-                                                                    {[1, 2, 3, 4].map(yearVal => (
-                                                                        <option key={yearVal} value={yearVal}>{yearVal}</option>
-                                                                    ))}
-                                                                </select>
-                                                            ) : player.contract_duration_db && (player.contract_status === 'Active Contract' || player.contract_status === 'Pending Contract Setting') ? (
-                                                                `${player.contract_duration_db}`
-                                                            ) : (
-                                                                player.years_remaining !== null && player.years_remaining !== undefined ? player.years_remaining : 'N/A'
-                                                            )}
-                                                        </td>
-                                                        {yearlyCostColumnHeaders.map(year => {
-                                                            const cellCost = getSortableCost(player, year);
-                                                            const displayCost = cellCost === -1 ? null : cellCost;
-                                                            
-                                                            return (
-                                                                <td key={`cost-${player.id}-${year}`} style={getCostCellStyle(displayCost)}>
-                                                                    {displayCost !== null && displayCost !== undefined ? `$${displayCost}` : '-'}
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                </React.Fragment>
-                                            );
-                                        });
-                                    })()}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div> {/* End of Team Roster Card */}
-
-            {/* Future Spending Totals Card - Moved to Bottom and Half Width */}
+            {/* Future Spending ($200/yr budget) */}
             <div className="row mt-4 mb-4">
                 <div className="col-md-6"> {/* Changed from col-12 to col-md-6 */}
                     <div className="card h-100">
                         <div className="card-body">
-                            <h5 className="card-title">Future Spending Totals</h5>
+                            <h5 className="card-title">Future Spending ($200/yr budget)</h5>
                             {(yearlyCostColumnHeaders.length > 1 && Object.keys(futureYearlyTotals).some(yr => futureYearlyTotals[yr] && (futureYearlyTotals[yr].contractTotal > 0 || futureYearlyTotals[yr].penaltyTotal > 0 || (futureYearlyTotalRanks && futureYearlyTotalRanks[yr])))) ? (
-                                yearlyCostColumnHeaders.slice(1).map(year => {
-                                    const yearData = futureYearlyTotals[year];
-                                    const rankInfo = futureYearlyTotalRanks && futureYearlyTotalRanks[year];
-
-                                    const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
-                                    const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
-
-                                    // Only render the section for the year if there's actual data (contracts or penalties or rank)
-                                    if (contractTotal === 0 && penaltyTotal === 0 && !rankInfo) return null;
-
-                                    const displayContractTotal = contractTotal.toFixed(2);
-                                    const displayPenaltyTotal = penaltyTotal.toFixed(2);
-                                    const overallTotalVal = contractTotal + penaltyTotal;
-                                    const displayOverallTotal = overallTotalVal.toFixed(2);
-                                    
-                                    return (
-                                        <div key={year} className="mb-3" style={{ paddingLeft: '10px', borderLeft: '3px solid #eee' }}>
-                                            <h6 style={{ textAlign: 'left' }}><strong>{year}</strong></h6>
-                                            <table className="table table-sm table-borderless mb-0" style={{fontSize: '0.9rem'}}>
-                                                <tbody>
-                                                    <tr>
-                                                        <td style={{width: '80px'}}>Contracts:</td>
-                                                        <td className="text-end">${displayContractTotal}</td>
-                                                        <td style={{minWidth: '130px'}}></td> {/* Spacer for rank alignment */}
-                                                    </tr>
-                                                    <tr>
-                                                        <td style={{width: '80px'}}>Penalties:</td>
-                                                        <td className="text-end">${displayPenaltyTotal}</td>
-                                                        <td style={{minWidth: '130px'}}></td> {/* Spacer for rank alignment */}
-                                                    </tr>
-                                                    <tr style={{borderTop: '1px solid #ddd'}}>
-                                                        <td style={{width: '80px'}}><strong>Total:</strong></td>
-                                                        <td className="text-end"><strong>${displayOverallTotal}</strong></td>
-                                                        {rankInfo && (
-                                                            <td className="text-end text-muted ps-2" style={{minWidth: '130px'}}>
-                                                                (Rank {rankInfo.rank} of {rankInfo.total_teams})
-                                                            </td>
-                                                        )}
-                                                        {!rankInfo && <td style={{minWidth: '130px'}}></td>}
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    );
-                                })
+                                <div className="table-responsive">
+                                    <table className="table table-sm table-bordered text-center">
+                                        <thead className="table-light">
+                                            <tr>
+                                                <th></th>
+                                                {yearlyCostColumnHeaders.slice(1).map(year => (
+                                                    <th key={`future-header-${year}`}>{year}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <td className="text-start fw-bold">Contracts</td>
+                                                {yearlyCostColumnHeaders.slice(1).map(year => {
+                                                    const yearData = futureYearlyTotals[year];
+                                                    const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
+                                                    return <td key={`contracts-${year}`}>${contractTotal.toFixed(2)}</td>;
+                                                })}
+                                            </tr>
+                                            <tr>
+                                                <td className="text-start fw-bold">Penalties</td>
+                                                {yearlyCostColumnHeaders.slice(1).map(year => {
+                                                    const yearData = futureYearlyTotals[year];
+                                                    const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
+                                                    return <td key={`penalties-${year}`}>${penaltyTotal.toFixed(2)}</td>;
+                                                })}
+                                            </tr>
+                                            <tr>
+                                                <td className="text-start fw-bold">Trades</td>
+                                                {yearlyCostColumnHeaders.slice(1).map(year => {
+                                                    const tradesTotal = 0; // Placeholder for trades data
+                                                    return <td key={`trades-${year}`}>${tradesTotal.toFixed(2)}</td>;
+                                                })}
+                                            </tr>
+                                            <tr className="fw-bold table-group-divider">
+                                                <td className="text-start">Total</td>
+                                                {yearlyCostColumnHeaders.slice(1).map(year => {
+                                                    const yearData = futureYearlyTotals[year];
+                                                    const rankInfo = futureYearlyTotalRanks && futureYearlyTotalRanks[year];
+                                                    const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
+                                                    const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
+                                                    const tradesTotal = 0; // Placeholder
+                                                    const overallTotalVal = contractTotal + penaltyTotal + tradesTotal;
+                                                    return (
+                                                        <td key={`total-${year}`}>
+                                                            ${overallTotalVal.toFixed(2)}
+                                                            {rankInfo && (
+                                                                <div className="text-muted" style={{fontSize: '0.8rem', marginTop: '0.25rem'}}>
+                                                                    (Rank {rankInfo.rank}/{rankInfo.total_teams})
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
                             ) : (
                                 <p>No future spending data available.</p>
                             )}
@@ -443,6 +345,115 @@ function Team() {
                 </div>
             </div>
 
+            {/* Team Roster Card */}
+            <div className="card mb-4">
+                <div className="card-header d-flex justify-content-between align-items-center">
+                    <h5 className="mb-0">Team Roster</h5>
+                    {canSetContracts && (
+                        <div className="ms-3">
+                            <button 
+                                onClick={handleSaveContractDurations} 
+                                className="btn btn-primary btn-sm"
+                                disabled={Object.keys(contractDurations).length === 0 || loading}
+                            >
+                                {loading ? 'Saving...' : 'Save Contracts'}
+                            </button>
+                        </div>
+                    )}
+                </div>
+                <div className="card-body p-0">
+                    {error && canSetContracts && <p className="text-danger p-3 mb-0">{error}</p>}
+                    <div className="table-responsive">
+                        <table className="table table-hover mb-0">
+                            <thead className="table-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Team</th>
+                                    <th>Draft $</th>
+                                    <th>Yrs Rem</th>
+                                    {yearlyCostColumnHeaders.map(year => (
+                                        <th key={`header-cost-${year}`}>{year} $</th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                            {(() => {
+                                let currentPosition = null;
+                                return allPlayersSorted.map(player => {
+                                    const showPositionHeader = player.position !== currentPosition;
+                                    if (showPositionHeader) {
+                                        currentPosition = player.position;
+                                    }
+                                    const currentPositionTotal = positionGroupTotals[currentPosition] !== undefined ? positionGroupTotals[currentPosition] : 0;
+                                    const positionRankData = teamPositionRanks && teamPositionRanks[currentPosition];
+
+                                    return (
+                                        <React.Fragment key={player.id}>
+                                            {showPositionHeader && (
+                                                <tr className="position-group-header">
+                                                    <td colSpan={numDataColumns}>
+                                                        <h5 className="m-1" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                                            <span>{currentPosition || 'Unknown'}</span> 
+                                                            {teamData.current_processing_year && (
+                                                                <span style={{ fontWeight: 'normal', fontSize: '0.9rem' }}>
+                                                                    {teamData.current_processing_year} Total: ${currentPositionTotal.toFixed(0)}
+                                                                    {positionRankData && (
+                                                                        ` (Rank: ${positionRankData.rank}/${positionRankData.total_teams})`
+                                                                    )}
+                                                                </span>
+                                                            )}
+                                                        </h5>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                            <tr className="player-data-row">
+                                                <td>
+                                                    {player.name}
+                                                    {player.status && player.status !== 'Active' && player.status !== 'Free Agent' && player.contract_status !== 'Pending Contract Setting' && (
+                                                        <sup style={{ marginLeft: '4px', color: player.status === 'IR' ? 'red' : 'orange' }}>
+                                                            {player.status.substring(0,2).toUpperCase()}
+                                                        </sup>
+                                                    )}
+                                                </td>
+                                                <td>{player.team_nfl}</td>
+                                                <td>${player.draft_amount !== null && player.draft_amount !== undefined ? player.draft_amount : 'N/A'}</td>
+                                                <td>
+                                                    {teamData.is_contract_setting_period_active && player.contract_status === 'Pending Contract Setting' ? (
+                                                        <select 
+                                                            className="form-select form-select-sm" 
+                                                            value={contractDurations[player.id] !== undefined ? contractDurations[player.id] : (player.contract_duration_db || 1)}
+                                                            onChange={(e) => handleDurationChange(player.id, parseInt(e.target.value))}
+                                                        >
+                                                            {[1, 2, 3, 4].map(yearVal => (
+                                                                <option key={yearVal} value={yearVal}>{yearVal}</option>
+                                                            ))}
+                                                        </select>
+                                                    ) : player.contract_duration_db && (player.contract_status === 'Active Contract' || player.contract_status === 'Pending Contract Setting') ? (
+                                                        `${player.contract_duration_db}`
+                                                    ) : (
+                                                        player.years_remaining !== null && player.years_remaining !== undefined ? player.years_remaining : 'N/A'
+                                                    )}
+                                                </td>
+                                                {yearlyCostColumnHeaders.map(year => {
+                                                    const cellCost = getSortableCost(player, year);
+                                                    const displayCost = cellCost === -1 ? null : cellCost;
+                                                    
+                                                    return (
+                                                        <td key={`cost-${player.id}-${year}`} style={getCostCellStyle(displayCost)}>
+                                                            {displayCost !== null && displayCost !== undefined ? `$${displayCost}` : '-'}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        </React.Fragment>
+                                    );
+                                });
+                            })()}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 }

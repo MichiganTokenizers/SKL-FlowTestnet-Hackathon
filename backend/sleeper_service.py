@@ -208,6 +208,53 @@ class SleeperService:
             sleeper_user_id = user_data_row['sleeper_user_id']
             # self.logger.info(f"SleeperService.fetch_all_data: Processing for wallet {wallet_address}, sleeper_user_id {sleeper_user_id}")
 
+            # --- Fetch and Update NFL State (Season Info) ---
+            self.logger.info(f"SleeperService.fetch_all_data: Attempting to fetch NFL state from API for wallet {wallet_address}.")
+            nfl_state_from_api = self.get_nfl_state()
+            if nfl_state_from_api:
+                year_str = nfl_state_from_api.get('season')
+                season_type = nfl_state_from_api.get('season_type', '').lower()
+                api_year = None
+                api_is_offseason = None
+
+                if year_str:
+                    try:
+                        api_year = int(year_str)
+                    except ValueError:
+                        self.logger.error(f"SleeperService.fetch_all_data: NFL state API returned non-integer season: {year_str}")
+                
+                if season_type in ['off', 'pre']:
+                    api_is_offseason = True
+                elif season_type in ['regular', 'post']:
+                    api_is_offseason = False
+                else:
+                    self.logger.warning(f"SleeperService.fetch_all_data: NFL state API returned unexpected season_type: '{season_type}'. Defaulting to offseason.")
+                    api_is_offseason = True # Default to offseason if unclear
+
+                if api_year is not None and api_is_offseason is not None:
+                    self.logger.info(f"SleeperService.fetch_all_data: Fetched from API: Year={api_year}, IsOffseason={api_is_offseason}. Updating season_curr table.")
+                    try:
+                        api_is_offseason_int = 1 if api_is_offseason else 0
+                        cursor.execute('''
+                            INSERT OR REPLACE INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
+                            VALUES (1, ?, ?, datetime('now'))
+                        ''', (str(api_year), api_is_offseason_int))
+                        # Commit this change immediately so _get_current_season_details picks it up if called
+                        self.conn.commit() 
+                        self.logger.info(f"SleeperService.fetch_all_data: Successfully updated season_curr table with API data: Year={api_year}, IsOffseason={api_is_offseason}.")
+                    except sqlite3.Error as db_e:
+                        self.logger.error(f"SleeperService.fetch_all_data: Failed to update season_curr table with API data: {db_e}")
+                        # If self.conn is available and a transaction was started implicitly, rollback.
+                        # However, individual execute calls are often autocommitted or committed explicitly.
+                        # For safety, if an explicit commit isn't made, a rollback here might be good.
+                        # But since we commit above, this rollback might not be necessary unless get_global_db_connection uses begin_transaction.
+                        # For now, just log the error. The main transaction will rollback at the end if this causes further issues.
+                else:
+                    self.logger.error(f"SleeperService.fetch_all_data: Failed to parse year or determine offseason status from NFL state API response: {nfl_state_from_api}")
+            else:
+                self.logger.warning(f"SleeperService.fetch_all_data: Could not fetch NFL state from API for wallet {wallet_address}. season_curr table not updated by this step.")
+            # --- End of Fetch and Update NFL State ---
+
             season_details = self._get_current_season_details()
             if not season_details:
                 self.logger.error(f"SleeperService.fetch_all_data: Critical - could not retrieve current season details for wallet {wallet_address}. Penalty processing will be impacted and likely skipped for dropped players.")
@@ -407,12 +454,15 @@ class SleeperService:
                                         if None in [contract_primary_key_id, draft_amount, contract_duration, contract_start_year, year_dropped]:
                                             self.logger.error(f"SleeperService: CRITICAL - Missing one or more key contract details for applying penalty... Skipping for player {dropped_player_id}.")
                                         else:
+                                            current_is_offseason = season_details.get('is_offseason', True) # Default to True if not found, safer for penalties
+                                            self.logger.info(f"SleeperService DEBUG: Passing is_currently_offseason_when_dropped={current_is_offseason} to penalty function for player {dropped_player_id}.")
                                             apply_contract_penalties_and_deactivate(
                                                 contract_row_id=contract_primary_key_id,
                                                 draft_amount=float(draft_amount),
                                                 contract_duration=int(contract_duration),
                                                 contract_start_year=int(contract_start_year),
                                                 year_dropped=year_dropped,
+                                                is_currently_offseason_when_dropped=current_is_offseason, # Pass the flag
                                                 db_conn=self.conn,
                                                 logger=self.logger
                                             )

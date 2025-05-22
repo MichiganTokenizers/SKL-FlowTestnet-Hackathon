@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, flash, redirect, url_for, ses
 import sqlite3, math
 import os
 import secrets
+import requests # Added import for requests
 from pytonconnect import TonConnect
 from pytonconnect.exceptions import TonConnectError
 from sleeper_service import SleeperService
@@ -310,23 +311,29 @@ def init_db(force_create=False):
 init_db() # Reverted: No longer forcing recreation
 
 def get_current_season():
-    # ... (implementation as provided)
-    # For now, returning a fixed value as per original stub
-    # This should be replaced with actual DB lookup from season_curr table
-    # And ensure it returns a dictionary like {"current_year": YYYY, "is_offseason": True/False}
-    # Or handle its absence gracefully in callers.
-    conn = get_global_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT current_year, IsOffSeason FROM season_curr LIMIT 1")
-    season_info = cursor.fetchone()
-    if season_info:
-        # Convert to dictionary for easier access by keys
-        return {"current_year": int(season_info["current_year"]), "is_offseason": bool(season_info["IsOffSeason"])}
-    else:
-        # Fallback or error handling if no season info is found
-        # This is critical; consider raising an error or having a well-defined default
-        print("ERROR: No season information found in season_curr table!")
-        return {"current_year": 2025, "is_offseason": True} # Example fallback
+    """Fetches the current season year and off-season status from the local season_curr table."""
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+        # Ensure we fetch from rowid=1 as per INSERT OR REPLACE logic in sleeper_service
+        cursor.execute("SELECT current_year, IsOffSeason FROM season_curr WHERE rowid = 1 LIMIT 1")
+        season_info_db = cursor.fetchone()
+
+        if season_info_db and season_info_db["current_year"] is not None and season_info_db["IsOffSeason"] is not None:
+            year_db = int(season_info_db["current_year"])
+            is_offseason_db = bool(season_info_db["IsOffSeason"])
+            app.logger.info(f"get_current_season: Retrieved season info from DB: Year={year_db}, IsOffseason={is_offseason_db}")
+            return {"current_year": year_db, "is_offseason": is_offseason_db}
+        else:
+            app.logger.error("get_current_season: CRITICAL - No valid season information found in season_curr table. Using hardcoded defaults.")
+            return {"current_year": 2025, "is_offseason": True} # Fallback to hardcoded defaults
+
+    except sqlite3.Error as e:
+        app.logger.error(f"get_current_season: Database error when fetching from season_curr: {e}. Using hardcoded defaults.")
+        return {"current_year": 2025, "is_offseason": True} # Fallback for DB errors
+    except Exception as e:
+        app.logger.error(f"get_current_season: Unexpected error: {e}. Using hardcoded defaults.")
+        return {"current_year": 2025, "is_offseason": True} # General fallback
 
 # Initialize TonConnect
 ton_connect = TonConnect(
@@ -1231,69 +1238,6 @@ def get_season_settings():
             })
     except Exception as e:
         print(f"Error in /season/settings: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
-
-@app.route('/season/settings', methods=['POST'])
-def update_season_settings():
-    session_token = request.headers.get('Authorization')
-    if not session_token:
-        return jsonify({'success': False, 'error': 'No session token'}), 401
-    
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'success': False, 'error': 'Invalid request data'}), 400
-        
-        year = data.get('year')
-        is_offseason = data.get('is_offseason')
-        
-        if year is None and is_offseason is None:
-            return jsonify({'success': False, 'error': 'No settings provided to update'}), 400
-        
-        # Verify session
-        with get_global_db_connection() as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute('SELECT current_year, IsOffSeason FROM season_curr LIMIT 1')
-            current_settings = cursor.fetchone()
-            
-            if current_settings:
-                # Use current values for any missing parameters
-                if year is None:
-                    year = current_settings['current_year']
-                if is_offseason is None:
-                    is_offseason = current_settings['IsOffSeason'] == 1
-            else:
-                # Default values if no current settings
-                if year is None:
-                    year = 2025
-                if is_offseason is None:
-                    is_offseason = True
-            
-            # Convert is_offseason to integer
-            is_offseason_int = 1 if is_offseason else 0
-            
-            # Update settings
-            cursor.execute('DELETE FROM season_curr')
-            cursor.execute('''
-                INSERT INTO season_curr (current_year, IsOffSeason, updated_at)
-                VALUES (?, ?, datetime("now"))
-            ''', (year, is_offseason_int))
-            
-            conn.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': 'Season settings updated successfully',
-                'season': {
-                    'year': year,
-                    'is_offseason': is_offseason_int == 1
-                }
-            })
-    except Exception as e:
-        print(f"Error in update_season_settings: {str(e)}")
         import traceback
         traceback.print_exc()
         return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
