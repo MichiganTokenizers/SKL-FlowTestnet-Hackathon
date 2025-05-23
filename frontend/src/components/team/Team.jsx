@@ -271,9 +271,62 @@ function Team() {
                 </div>
             </div>
 
-            {/* Future Spending ($200/yr budget) */}
+            {/* Future Spending & Roster Analysis Row */}
             <div className="row mt-4 mb-4">
-                <div className="col-md-6"> {/* Changed from col-12 to col-md-6 */}
+                {/* Current Year Roster Analysis Table Column (MOVED TO LEFT) */}
+                <div className="col-md-6">
+                    <div className="card h-100">
+                        <div className="card-body">
+                            <h5 className="card-title">{teamData.current_processing_year} Roster Analysis</h5>
+                            {teamData && teamData.current_processing_year && teamData.players_by_position ? (
+                                <div className="table-responsive">
+                                    <table className="table table-sm table-bordered">
+                                        <thead className="table-light">
+                                            <tr>
+                                                <th className="text-start">Position</th>
+                                                <th className="text-center">Players</th>
+                                                <th className="text-center">Total Contract $</th>
+                                                <th className="text-center">Spending Rank</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {positionOrder.map(position => {
+                                                const playersInPosition = allPlayersSorted.filter(p => p.position === position);
+                                                const playerCount = playersInPosition.length;
+                                                const positionTotalCost = positionGroupTotals[position] || 0;
+                                                const rankData = teamPositionRanks && teamPositionRanks[position];
+
+                                                if (playerCount === 0 && positionTotalCost === 0 && (!rankData || rankData.total_teams === 0)) return null;
+
+                                                return (
+                                                    <tr key={`roster-analysis-${position}`}>
+                                                        <td className="text-start fw-bold">{position}</td>
+                                                        <td className="text-center">{playerCount}</td>
+                                                        <td className="text-center">
+                                                            ${positionTotalCost.toFixed(0)}
+                                                        </td>
+                                                        <td className="text-center">
+                                                            {rankData ? 
+                                                                <div className="text-muted" style={{fontSize: '0.8rem', marginTop: '0px'}}>
+                                                                    <strong>{`(Rank ${rankData.rank}/${rankData.total_teams})`}</strong>
+                                                                </div> 
+                                                                : 'N/A'}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <p>No current year data available for roster analysis.</p>
+                            )}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Future Spending Table Column (MOVED TO RIGHT) */}
+                <div className="col-md-6">
                     <div className="card h-100">
                         <div className="card-body">
                             <h5 className="card-title">Future Spending ($200/yr budget)</h5>
@@ -294,7 +347,7 @@ function Team() {
                                                 {yearlyCostColumnHeaders.slice(1).map(year => {
                                                     const yearData = futureYearlyTotals[year];
                                                     const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
-                                                    return <td key={`contracts-${year}`}>${contractTotal.toFixed(2)}</td>;
+                                                    return <td key={`contracts-${year}`}>${contractTotal.toFixed(0)}</td>;
                                                 })}
                                             </tr>
                                             <tr>
@@ -302,14 +355,14 @@ function Team() {
                                                 {yearlyCostColumnHeaders.slice(1).map(year => {
                                                     const yearData = futureYearlyTotals[year];
                                                     const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
-                                                    return <td key={`penalties-${year}`}>${penaltyTotal.toFixed(2)}</td>;
+                                                    return <td key={`penalties-${year}`}>${penaltyTotal.toFixed(0)}</td>;
                                                 })}
                                             </tr>
                                             <tr>
                                                 <td className="text-start fw-bold">Trades</td>
                                                 {yearlyCostColumnHeaders.slice(1).map(year => {
                                                     const tradesTotal = 0; // Placeholder for trades data
-                                                    return <td key={`trades-${year}`}>${tradesTotal.toFixed(2)}</td>;
+                                                    return <td key={`trades-${year}`}>${tradesTotal.toFixed(0)}</td>;
                                                 })}
                                             </tr>
                                             <tr className="fw-bold table-group-divider">
@@ -323,12 +376,28 @@ function Team() {
                                                     const overallTotalVal = contractTotal + penaltyTotal + tradesTotal;
                                                     return (
                                                         <td key={`total-${year}`}>
-                                                            ${overallTotalVal.toFixed(2)}
+                                                            ${overallTotalVal.toFixed(0)}
                                                             {rankInfo && (
                                                                 <div className="text-muted" style={{fontSize: '0.8rem', marginTop: '0.25rem'}}>
-                                                                    (Rank {rankInfo.rank}/{rankInfo.total_teams})
+                                                                    <strong>{`(Rank ${rankInfo.rank}/${rankInfo.total_teams})`}</strong>
                                                                 </div>
                                                             )}
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                            <tr className="fw-bold table-group-divider">
+                                                <td className="text-start">Remaining Budget</td>
+                                                {yearlyCostColumnHeaders.slice(1).map(year => {
+                                                    const yearData = futureYearlyTotals[year];
+                                                    const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
+                                                    const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
+                                                    const tradesTotal = 0; // Placeholder
+                                                    const overallTotalVal = contractTotal + penaltyTotal + tradesTotal;
+                                                    const remainingBudget = 200 - overallTotalVal;
+                                                    return (
+                                                        <td key={`remaining-budget-${year}`}>
+                                                            ${remainingBudget.toFixed(0)}
                                                         </td>
                                                     );
                                                 })}
@@ -353,6 +422,7 @@ function Team() {
                             <button 
                                 onClick={handleSaveContractDurations} 
                                 className="btn btn-primary btn-sm"
+                                style={{ backgroundColor: '#9966CC', borderColor: '#9966CC' }}
                                 disabled={Object.keys(contractDurations).length === 0 || loading}
                             >
                                 {loading ? 'Saving...' : 'Save Contracts'}

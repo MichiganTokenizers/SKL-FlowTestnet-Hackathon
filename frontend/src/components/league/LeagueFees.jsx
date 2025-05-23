@@ -150,17 +150,28 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                         <p>{queriedSeasonYear ? `${queriedSeasonYear} fee not yet set.` : 'Fee not yet set.'}</p>
                     )}
                     {isCommissioner && (
-                        <button 
-                            className="btn btn-sm btn-outline-primary mt-1" 
-                            onClick={() => setShowFeeForm(!showFeeForm)}
-                            type="button"
-                            data-bs-toggle="collapse"
-                            data-bs-target="#feeFormCollapseArea"
-                            aria-expanded={showFeeForm}
-                            aria-controls="feeFormCollapseArea"
-                        >
-                            {showFeeForm ? 'Cancel' : (leagueFeeSettings && leagueFeeSettings.fee_amount !== null ? 'Update Fee' : 'Set Fee')}
-                        </button>
+                        <div className="mt-1">
+                            <button 
+                                className="btn btn-sm me-2" 
+                                style={{ backgroundColor: '#9966CC', color: 'white', border: 'none' }}
+                                onClick={() => setShowFeeForm(!showFeeForm)}
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#feeFormCollapseArea"
+                                aria-expanded={showFeeForm}
+                                aria-controls="feeFormCollapseArea"
+                            >
+                                {showFeeForm ? 'Cancel' : (leagueFeeSettings && leagueFeeSettings.fee_amount !== null ? 'Update Fee' : 'Set Fee')}
+                            </button>
+                            <button 
+                                className="btn btn-sm" 
+                                style={{ backgroundColor: '#9966CC', color: 'white', border: 'none' }}
+                                type="button" 
+                                onClick={() => alert('Pay League Fee functionality to be implemented.')} // Placeholder action
+                            >
+                                Pay League Fee
+                            </button>
+                        </div>
                     )}
                 </div>
 
