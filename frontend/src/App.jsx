@@ -264,7 +264,22 @@ function AppContent() {
     };
 
     const handleAssociationSuccess = async () => {
-        // ... existing code ...
+        const currentToken = localStorage.getItem('sessionToken'); // Or use state: sessionToken
+        if (currentToken) {
+            setIsNewUser(false); // User is no longer "new" after association
+            setIsAppReady(false); // Indicate that we are re-fetching data
+            
+            await fetchUserLeagues(currentToken); // Re-fetch leagues and user info
+            
+            // After fetching, isNewUser is false, and leagues should be populated.
+            // The main routing logic should now direct to /league.
+            setIsAppReady(true); 
+            navigate('/league'); // Explicitly navigate to the league page
+        } else {
+            // Should not happen if association was called, but handle defensively
+            console.error("Session token missing after association success.");
+            logout(); // Or navigate to login
+        }
     };
 
     return (

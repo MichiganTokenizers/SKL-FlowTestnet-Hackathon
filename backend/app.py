@@ -134,6 +134,7 @@ def init_db(force_create=False):
         cursor.execute('''CREATE TABLE IF NOT EXISTS UserLeagueLinks (
                             wallet_address TEXT,
                             sleeper_league_id TEXT,
+                            is_commissioner INTEGER DEFAULT 0, -- Changed to INTEGER
                             PRIMARY KEY (wallet_address, sleeper_league_id),
                             FOREIGN KEY (wallet_address) REFERENCES Users(wallet_address) ON DELETE CASCADE,
                             FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE
@@ -795,23 +796,6 @@ def import_sleeper_data():
         print(f"Error in /sleeper/import: {str(e)}")
         return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
 
-@app.route('/auth/associate_sleeper', methods=['POST'])
-def associate_sleeper():
-    data = request.get_json()
-    wallet_address = data.get('walletAddress')
-    sleeper_id = data.get('sleeperId')
-    
-    if not wallet_address or not sleeper_id:
-        return jsonify({'error': 'Missing walletAddress or sleeperId'}), 400
-    
-    db = KeeperDB()
-    db.associate_sleeper(wallet_address, sleeper_id)
-    
-    # Trigger full data pull for the associated Sleeper account
-    sleeper_service.fetch_all_data(wallet_address)
-    
-    return jsonify({'message': 'Sleeper account associated successfully'}), 200
-
 @app.route('/sleeper/fetchAll', methods=['POST'])
 def fetch_all_data_route():
     session_token = request.headers.get('Authorization')
@@ -1136,8 +1120,29 @@ def complete_sleeper_association():
         print(f"DEBUG: Internal fetch_all_data result: {fetch_result}")
         
         if fetch_result.get('success'):
-            conn.commit() # Commit changes made by fetch_all_data
-            print(f"DEBUG: conn.commit() executed for wallet_address: {wallet_address} (after successful fetch_all_data)")
+            # Designate commissioner if this is the first user for any of their leagues
+            cursor.execute("SELECT sleeper_league_id FROM UserLeagueLinks WHERE wallet_address = ?", (wallet_address,))
+            user_leagues = cursor.fetchall()
+            for league_row in user_leagues:
+                current_league_id = league_row['sleeper_league_id']
+                # Check if any other user is already commissioner for this league
+                cursor.execute("""
+                    SELECT COUNT(*) FROM UserLeagueLinks 
+                    WHERE sleeper_league_id = ? AND is_commissioner = 1 AND wallet_address != ?
+                """, (current_league_id, wallet_address))
+                commissioner_count = cursor.fetchone()[0]
+                
+                if commissioner_count == 0:
+                    # No other commissioner, make this user the commissioner for this league
+                    print(f"DEBUG: Designating {wallet_address} as commissioner for league {current_league_id}")
+                    cursor.execute("""
+                        UPDATE UserLeagueLinks 
+                        SET is_commissioner = 1 
+                        WHERE wallet_address = ? AND sleeper_league_id = ?
+                    """, (wallet_address, current_league_id))
+            
+            conn.commit() # Commit changes made by fetch_all_data and commissioner designation
+            print(f"DEBUG: conn.commit() executed for wallet_address: {wallet_address} (after successful fetch_all_data and commissioner check)")
         elif fetch_result.get('error'): # Make sure to check if 'error' key exists
             # Log this error, but the association itself was successful.
             # The client will attempt another fetch via onAssociationSuccess anyway.

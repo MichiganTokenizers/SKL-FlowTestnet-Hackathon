@@ -72,8 +72,7 @@ const AssociateSleeper = ({ onAssociationSuccess }) => {
                 To access your league data, please enter your Sleeper username.
               </p>
               <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label htmlFor="sleeperUsername" className="form-label">Sleeper Username</label>
+                <div className="mb-3 d-flex flex-column">
                   <input 
                     type="text" 
                     className="form-control"
@@ -94,7 +93,7 @@ const AssociateSleeper = ({ onAssociationSuccess }) => {
                 <div className="d-grid">
                   <button 
                     type="submit" 
-                    className="btn btn-primary btn-lg"
+                    className=""
                     disabled={isLoading}
                   >
                     {isLoading ? (

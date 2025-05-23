@@ -52,7 +52,7 @@ h1{
 form{
     width: min(400px, 100%);
     margin-top: 20px;
-    margin-bottom: 50px;
+    margin-bottom: 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -107,7 +107,7 @@ form button{
     margin-top: 10px;
     border: none;
     border-radius: 1000px;
-    padding: .85em 4em;
+    padding: .6em 4em;
     background-color: var(--accent-color);
     color: var(--base-color);
     font-family: var(--primary-font-family);

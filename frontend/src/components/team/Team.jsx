@@ -67,10 +67,6 @@ function Team() {
 
     const positionOrder = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF', 'DL', 'LB', 'DB'];
 
-    const allPlayersList = teamData.players_by_position 
-        ? Object.values(teamData.players_by_position).flat() 
-        : [];
-
     const getSortableCost = (player, currentProcessingYearForCostFunc) => {
         let cost = null;
         if (player.contract_status === 'Pending Contract Setting' && currentProcessingYearForCostFunc === teamData.current_processing_year) {
@@ -87,7 +83,10 @@ function Team() {
         return cost === null || cost === undefined ? -1 : Number(cost);
     };
 
-    const allPlayersSorted = [...allPlayersList].sort((a, b) => {
+    const allPlayersSorted = (teamData.players_by_position 
+        ? Object.values(teamData.players_by_position).flat() 
+        : []
+    ).sort((a, b) => {
         const posA = a.position || 'Unknown';
         const posB = b.position || 'Unknown';
         const indexA = positionOrder.indexOf(posA);
@@ -157,7 +156,7 @@ function Team() {
     if (teamData && teamData.current_processing_year && yearlyCostColumnHeaders.length > 1) {
         yearlyCostColumnHeaders.slice(1).forEach(year => {
             let contractTotalForYear = 0;
-            allPlayersList.forEach(p => { 
+            allPlayersSorted.forEach(p => { 
                 let cost = null;
                 if (p.projected_costs) {
                     const yearCostInfo = p.projected_costs.find(pc => pc.year === year);
@@ -183,7 +182,7 @@ function Team() {
 
     const canSetContracts = teamData && 
                             teamData.is_contract_setting_period_active &&
-                            allPlayersList.some(p => p.contract_status === 'Pending Contract Setting');
+                            allPlayersSorted.some(p => p.contract_status === 'Pending Contract Setting');
 
     const handleSaveContractDurations = async () => {
         if (!teamData || !teamData.league_id) {
@@ -235,7 +234,7 @@ function Team() {
     if (teamData && teamData.players_by_position) {
         console.log("Team.jsx - teamData (includes all context like fields):", teamData);
         console.log("Team.jsx - teamData.players_by_position:", teamData.players_by_position);
-        allPlayersList.forEach(player => {
+        allPlayersSorted.forEach(player => {
             console.log(`Team.jsx - Player ${player.id} (${player.name}) contract_status:`, player.contract_status, "draft_amount:", player.draft_amount, "projected_costs:", player.projected_costs);
         });
     }
