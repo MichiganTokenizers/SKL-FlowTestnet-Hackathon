@@ -101,7 +101,7 @@ def init_db(force_create=False):
             # Drop existing tables
             tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
                       "transactions", "traded_picks", "drafts", "penalties", # Added penalties
-                      "LeagueMetadata", "Users", "players", "leagues"] # Added leagues to ensure it's dropped if old schema exists
+                      "LeagueMetadata", "Users", "players", "leagues", "LeagueFees"] # Added leagues and LeagueFees
             for table in tables:
                 try:
                     cursor.execute(f"DROP TABLE IF EXISTS {table}")
@@ -131,10 +131,24 @@ def init_db(force_create=False):
                             updated_at DATETIME
                             )''')
 
+        cursor.execute('''CREATE TABLE IF NOT EXISTS LeagueFees (
+                            sleeper_league_id TEXT NOT NULL,
+                            season_year INTEGER NOT NULL,
+                            fee_amount REAL,
+                            fee_currency TEXT DEFAULT 'USD', -- e.g., 'USD', 'TON'
+                            notes TEXT,
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME,
+                            PRIMARY KEY (sleeper_league_id, season_year),
+                            FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE
+                            )''')
+
         cursor.execute('''CREATE TABLE IF NOT EXISTS UserLeagueLinks (
                             wallet_address TEXT,
                             sleeper_league_id TEXT,
-                            is_commissioner INTEGER DEFAULT 0, -- Changed to INTEGER
+                            is_commissioner INTEGER DEFAULT 0,
+                            fee_paid_amount REAL DEFAULT 0.0,
+                            fee_payment_status TEXT DEFAULT 'unpaid', -- e.g., 'unpaid', 'paid', 'partially_paid', 'waived'
                             PRIMARY KEY (wallet_address, sleeper_league_id),
                             FOREIGN KEY (wallet_address) REFERENCES Users(wallet_address) ON DELETE CASCADE,
                             FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE
@@ -1970,6 +1984,204 @@ def update_contract_durations(team_id):
         print(f"ERROR: /api/team/{team_id}/contracts/durations - Unexpected error: {str(e)}")
         import traceback
         traceback.print_exc()
+        return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
+
+@app.route('/league/<league_id>/fees', methods=['GET'])
+@login_required
+def get_league_fees(league_id):
+    """Fetches league fee information and payment status for all rosters in a league for a given season."""
+    user = get_current_user()
+    wallet_address = user['wallet_address']
+    
+    requested_season_year_str = request.args.get('season_year')
+    current_season_details = get_current_season()
+    target_season_year = None
+
+    if requested_season_year_str:
+        try:
+            year_val = int(requested_season_year_str)
+            target_season_year = str(year_val) 
+        except ValueError:
+            app.logger.warning(f"Invalid season_year format received: {requested_season_year_str}")
+            return jsonify({'success': False, 'error': 'Invalid season_year format. Must be a number.'}), 400
+    else:
+        target_season_year = str(current_season_details['current_year'])
+
+    app.logger.info(f"Fetching fees for league {league_id}, wallet {wallet_address}, target_season_year: {target_season_year}")
+
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT 1 FROM UserLeagueLinks WHERE wallet_address = ? AND sleeper_league_id = ?", 
+                       (wallet_address, league_id))
+        if not cursor.fetchone():
+            app.logger.warning(f"User {wallet_address} tried to access fees for league {league_id} they are not part of.")
+            return jsonify({'success': False, 'error': 'User not authorized for this league or league link does not exist.'}), 403
+
+        cursor.execute("SELECT name FROM LeagueMetadata WHERE sleeper_league_id = ?", (league_id,))
+        league_meta = cursor.fetchone()
+        if not league_meta:
+            app.logger.error(f"LeagueMetadata not found for {league_id} in get_league_fees.")
+            return jsonify({'success': False, 'error': f'League metadata not found for ID {league_id}.'}), 404
+        league_name = league_meta['name']
+
+        cursor.execute("SELECT fee_amount, fee_currency, notes FROM LeagueFees WHERE sleeper_league_id = ? AND season_year = ?", 
+                       (league_id, target_season_year))
+        fee_settings_row = cursor.fetchone()
+        league_fee_details = {
+            'fee_amount': fee_settings_row['fee_amount'] if fee_settings_row else None,
+            'fee_currency': fee_settings_row['fee_currency'] if fee_settings_row else 'USD',
+            'notes': fee_settings_row['notes'] if fee_settings_row else ''
+        }
+
+        # Fetch all rosters for the league, then join with Users and UserLeagueLinks
+        # rosters.owner_id is sleeper_user_id
+        # Users.wallet_address links Users to UserLeagueLinks
+        query = """
+            SELECT 
+                r.sleeper_roster_id,
+                r.team_name AS roster_team_name,
+                r.owner_id AS sleeper_owner_id,
+                u.wallet_address,
+                COALESCE(u.display_name, u.username) AS manager_display_name,
+                u.avatar,
+                ull.is_commissioner,
+                ull.fee_paid_amount,
+                ull.fee_payment_status
+            FROM rosters r
+            LEFT JOIN Users u ON r.owner_id = u.sleeper_user_id
+            LEFT JOIN UserLeagueLinks ull ON u.wallet_address = ull.wallet_address AND ull.sleeper_league_id = r.sleeper_league_id
+            WHERE r.sleeper_league_id = ?
+            ORDER BY manager_display_name, r.team_name 
+        """
+        cursor.execute(query, (league_id,))
+        roster_data = cursor.fetchall()
+        
+        roster_payment_details_list = []
+        for row in roster_data:
+            team_name = row['roster_team_name']
+            manager_name = row['manager_display_name']
+
+            if not row['sleeper_owner_id']: # Roster has no owner_id
+                manager_name = "Open Slot"
+                if not team_name: team_name = f"Team (Roster {row['sleeper_roster_id']})"
+            elif not manager_name: # Roster has owner_id, but user not in our system or no display name
+                 manager_name = "Unknown Manager" # Default if owner_id exists but no corresponding user / display name
+                 if not team_name: team_name = f"Team {row['sleeper_owner_id'][:6]}..." # Fallback team name
+            
+            if not team_name: # General fallback if team_name is still null
+                team_name = f"Team (Roster {row['sleeper_roster_id']})"
+
+            roster_payment_details_list.append({
+                'roster_id': row['sleeper_roster_id'],
+                'team_name': team_name,
+                'manager_display_name': manager_name,
+                'wallet_address': row['wallet_address'], # Will be null if user not in our system
+                'is_commissioner': bool(row['is_commissioner']) if row['is_commissioner'] is not None else False,
+                'paid_amount': row['fee_paid_amount'] if row['fee_paid_amount'] is not None else 0.0,
+                'payment_status': row['fee_payment_status'] if row['fee_payment_status'] else 'unpaid'
+            })
+
+        return jsonify({
+            'success': True,
+            'league_id': league_id,
+            'league_name': league_name,
+            'queried_season_year': target_season_year,
+            'fee_settings': league_fee_details,
+            'roster_payment_details': roster_payment_details_list # Changed key name
+        }), 200
+
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error in /league/{league_id}/fees GET: {str(e)}")
+        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
+    except Exception as e:
+        app.logger.error(f"Unexpected error in /league/{league_id}/fees GET: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
+
+@app.route('/league/<league_id>/fees', methods=['POST'])
+@login_required
+def set_league_fees(league_id):
+    """Sets or updates the league fee details for a specific league and season. Only accessible by the commissioner."""
+    user = get_current_user()
+    wallet_address = user['wallet_address']
+
+    # Determine the season year to update for
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'Missing JSON payload.'}), 400
+
+    requested_season_year_str = data.get('season_year') # Get from payload
+    current_season_details = get_current_season()
+    target_season_year = None
+
+    if requested_season_year_str:
+        try:
+            year_val = int(requested_season_year_str)
+            target_season_year = str(year_val)
+        except ValueError:
+            return jsonify({'success': False, 'error': 'Invalid season_year format in payload.'}), 400
+    else:
+        target_season_year = str(current_season_details['current_year'])
+
+    app.logger.info(f"Setting fees for league {league_id}, wallet {wallet_address}, target_season_year: {target_season_year}")
+
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        # Verify the user is the commissioner for this league
+        cursor.execute("""SELECT is_commissioner 
+                          FROM UserLeagueLinks 
+                          WHERE wallet_address = ? AND sleeper_league_id = ?""", 
+                       (wallet_address, league_id))
+        commish_status = cursor.fetchone()
+
+        if not commish_status or not commish_status['is_commissioner']:
+            app.logger.warning(f"User {wallet_address} (not commish) tried to set fees for league {league_id}.")
+            return jsonify({'success': False, 'error': 'User is not authorized to set fees for this league.'}), 403
+
+        # Data for fees is already in 'data' variable from above
+        fee_amount = data.get('fee_amount')
+        fee_currency = data.get('fee_currency', 'USD') 
+        notes = data.get('notes', '')
+
+        if fee_amount is None:
+            return jsonify({'success': False, 'error': 'Missing fee_amount.'}), 400
+        
+        try:
+            fee_amount_float = float(fee_amount)
+            if fee_amount_float < 0:
+                return jsonify({'success': False, 'error': 'fee_amount cannot be negative.'}), 400
+        except ValueError:
+            return jsonify({'success': False, 'error': 'fee_amount must be a valid number.'}), 400
+        
+        if not isinstance(fee_currency, str) or len(fee_currency) > 10:
+             return jsonify({'success': False, 'error': 'Invalid fee_currency.'}), 400
+        if not isinstance(notes, str):
+            notes = str(notes) 
+
+        # Insert or replace fee details for the target season
+        cursor.execute("""INSERT OR REPLACE INTO LeagueFees 
+                            (sleeper_league_id, season_year, fee_amount, fee_currency, notes, updated_at) 
+                            VALUES (?, ?, ?, ?, ?, datetime('now'))
+                       """, (league_id, target_season_year, fee_amount_float, fee_currency, notes))
+        conn.commit()
+
+        app.logger.info(f"Commissioner {wallet_address} updated fees for league {league_id} season {target_season_year}: Amount={fee_amount_float}, Currency={fee_currency}")
+        return jsonify({'success': True, 'message': f'League fees for season {target_season_year} updated successfully.'}), 200
+
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error in POST /league/{league_id}/fees (season {target_season_year}): {str(e)}")
+        if conn: conn.rollback()
+        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
+    except Exception as e:
+        app.logger.error(f"Unexpected error in POST /league/{league_id}/fees (season {target_season_year}): {str(e)}")
+        if conn: conn.rollback()
+        import traceback
+        app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
 
 if __name__ == '__main__':

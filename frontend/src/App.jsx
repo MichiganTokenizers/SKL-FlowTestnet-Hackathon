@@ -165,7 +165,7 @@ function AppContent() {
             verifyAndSetStates();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [loginProcessJustCompleted, logout]); // Dependencies: loginProcessJustCompleted, logout. fetchUserLeagues/setIsNewUser are stable.
+    }, [loginProcessJustCompleted]); // REMOVED logout from dependencies
 
     // Login Effect: Handles new wallet connection via TonConnect
     useEffect(() => {

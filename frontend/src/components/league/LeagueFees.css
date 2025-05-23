@@ -1,0 +1,52 @@
+.league-fees-container {
+    /* Add styles if needed, but Bootstrap classes handle most things */
+}
+
+.commissioner-form h5 {
+    margin-bottom: 1rem;
+}
+
+.avatar-sm {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+/* Responsive table for smaller screens if needed */
+@media (max-width: 768px) {
+    .table-responsive table thead {
+        /* display: none; */ /* Optional: Hide headers on very small screens */
+    }
+    .table-responsive table tbody tr {
+        /* display: block; */ /* Optional: Stack rows */
+        /* margin-bottom: 1rem; */
+        /* border: 1px solid #ddd; */
+    }
+    .table-responsive table tbody td {
+        /* display: block; */
+        /* text-align: right; */
+        /* padding-left: 50%; */
+        /* position: relative; */
+    }
+    .table-responsive table tbody td::before {
+        /* content: attr(data-label); */ /* For custom data labels if stacking */
+        /* position: absolute; */
+        /* left: 0; */
+        /* width: 45%; */
+        /* padding-left: 15px; */
+        /* font-weight: bold; */
+        /* text-align: left; */
+    }
+}
+
+/* Hide spinners from number input */
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type='number'] {
+    -moz-appearance: textfield; /* Firefox */
+} 

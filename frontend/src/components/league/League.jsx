@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; // Import Link
+import LeagueFees from './LeagueFees'; // Import the new component
 // import { Link, useNavigate } from 'react-router-dom'; // Link and useNavigate might not be needed directly if navigation is handled by App.jsx
 
 const API_BASE_URL = "http://localhost:5000";
@@ -128,6 +129,9 @@ function League(props) { // Accept props
             </h1>
             <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {currentUserDetails?.display_name || 'Player'}</p>
             
+            {/* League Fees Section - only if a league is selected */}
+            {selectedLeagueId && <LeagueFees leagueId={selectedLeagueId} currentUser={currentUserDetails} sessionToken={sessionToken} />}
+
             {selectedLeagueId && ( // Only show standings if a league is selected
                 <div className="mt-3">
                     {standings.length > 0 ? (
