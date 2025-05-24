@@ -281,12 +281,12 @@ function Team() {
                             {teamData && teamData.current_processing_year && teamData.players_by_position ? (
                                 <div className="table-responsive">
                                     <table className="table table-sm table-bordered">
-                                        <thead className="table-light">
+                                        <thead>
                                             <tr>
-                                                <th className="text-start">Position</th>
-                                                <th className="text-center">Players</th>
-                                                <th className="text-center">Total Contract $</th>
-                                                <th className="text-center">Spending Rank</th>
+                                                <th className="text-start" style={{ backgroundColor: '#E77728', color: '#100B00' }}>Position</th>
+                                                <th className="text-center" style={{ backgroundColor: '#E77728', color: '#100B00' }}>Players</th>
+                                                <th className="text-center" style={{ backgroundColor: '#E77728', color: '#100B00' }}>Total Contract $</th>
+                                                <th className="text-center" style={{ backgroundColor: '#E77728', color: '#100B00' }}>Spending Rank</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -333,11 +333,11 @@ function Team() {
                             {(yearlyCostColumnHeaders.length > 1 && Object.keys(futureYearlyTotals).some(yr => futureYearlyTotals[yr] && (futureYearlyTotals[yr].contractTotal > 0 || futureYearlyTotals[yr].penaltyTotal > 0 || (futureYearlyTotalRanks && futureYearlyTotalRanks[yr])))) ? (
                                 <div className="table-responsive">
                                     <table className="table table-sm table-bordered text-center">
-                                        <thead className="table-light">
+                                        <thead>
                                             <tr>
-                                                <th></th>
+                                                <th style={{ backgroundColor: '#E77728', color: '#100B00' }}></th>
                                                 {yearlyCostColumnHeaders.slice(1).map(year => (
-                                                    <th key={`future-header-${year}`}>{year}</th>
+                                                    <th key={`future-header-${year}`} style={{ backgroundColor: '#E77728', color: '#100B00' }}>{year}</th>
                                                 ))}
                                             </tr>
                                         </thead>
@@ -369,7 +369,6 @@ function Team() {
                                                 <td className="text-start">Total</td>
                                                 {yearlyCostColumnHeaders.slice(1).map(year => {
                                                     const yearData = futureYearlyTotals[year];
-                                                    const rankInfo = futureYearlyTotalRanks && futureYearlyTotalRanks[year];
                                                     const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
                                                     const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
                                                     const tradesTotal = 0; // Placeholder
@@ -377,11 +376,6 @@ function Team() {
                                                     return (
                                                         <td key={`total-${year}`}>
                                                             ${overallTotalVal.toFixed(0)}
-                                                            {rankInfo && (
-                                                                <div className="text-muted" style={{fontSize: '0.8rem', marginTop: '0.25rem'}}>
-                                                                    <strong>{`(Rank ${rankInfo.rank}/${rankInfo.total_teams})`}</strong>
-                                                                </div>
-                                                            )}
                                                         </td>
                                                     );
                                                 })}
@@ -390,6 +384,7 @@ function Team() {
                                                 <td className="text-start">Remaining Budget</td>
                                                 {yearlyCostColumnHeaders.slice(1).map(year => {
                                                     const yearData = futureYearlyTotals[year];
+                                                    const rankInfo = futureYearlyTotalRanks && futureYearlyTotalRanks[year];
                                                     const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
                                                     const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
                                                     const tradesTotal = 0; // Placeholder
@@ -398,6 +393,11 @@ function Team() {
                                                     return (
                                                         <td key={`remaining-budget-${year}`}>
                                                             ${remainingBudget.toFixed(0)}
+                                                            {rankInfo && (
+                                                                <div className="text-muted" style={{fontSize: '0.8rem', marginTop: '0.25rem'}}>
+                                                                    <strong>{`(Rank ${rankInfo.rank}/${rankInfo.total_teams})`}</strong>
+                                                                </div>
+                                                            )}
                                                         </td>
                                                     );
                                                 })}
