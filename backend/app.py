@@ -3,8 +3,6 @@ import sqlite3, math
 import os
 import secrets
 import requests # Added import for requests
-from pytonconnect import TonConnect
-from pytonconnect.exceptions import TonConnectError
 from sleeper_service import SleeperService
 import json
 import time # Added for potential sleep, though might not be used in final global conn version
@@ -351,9 +349,9 @@ def get_current_season():
         return {"current_year": 2025, "is_offseason": True} # General fallback
 
 # Initialize TonConnect
-ton_connect = TonConnect(
-    manifest_url='https://29d4-193-43-135-7.ngrok-free.app/tonconnect-manifest.json'
-)
+# ton_connect = TonConnect( # Commented out
+#     manifest_url='https://29d4-193-43-135-7.ngrok-free.app/tonconnect-manifest.json' # Commented out
+# ) # Commented out
 
 def get_current_user():
     """Retrieve the current user.
@@ -409,76 +407,76 @@ def get_current_user():
     return dict(user) if user else None
 
 # TonConnect manifest route
-@app.route('/tonconnect-manifest.json')
-def tonconnect_manifest():
-    return {
-        "url": "https://29d4-193-43-135-7.ngrok-free.app",
-        "name": "Supreme Keeper League",
-        "iconUrl": "https://29d4-193-43-135-7.ngrok-free.app/static/icon.png"
-    }
+# @app.route('/tonconnect-manifest.json') # Commented out
+# def tonconnect_manifest(): # Commented out
+#     return { # Commented out
+#         "url": "https://29d4-193-43-135-7.ngrok-free.app", # Commented out
+#         "name": "Supreme Keeper League", # Commented out
+#         "iconUrl": "https://29d4-193-43-135-7.ngrok-free.app/static/icon.png" # Commented out
+#     } # Commented out
 
-# TonConnect login initiation
-@app.route('/login', methods=['GET'])
-def initiate_login():
-    if get_current_user():
-        user = get_current_user()
-        conn = get_global_db_connection() # Use global connection
-        cursor = conn.cursor()
-        cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (user['wallet_address'],))
-        result = cursor.fetchone()
-        if result and result['sleeper_user_id']:
-            print("User already authenticated and associated with Sleeper")
-            # Fetch user's leagues
-            cursor = conn.cursor()
-            # The 'leagues' table was an old schema. User's leagues are now in UserLeagueLinks.
-            # We need to join with LeagueMetadata to get details if needed, or just the IDs.
-            # For now, let's fetch linked league_ids.
-            cursor.execute('''
-                SELECT ull.sleeper_league_id 
-                FROM UserLeagueLinks ull
-                WHERE ull.wallet_address = ?
-            ''', (user['wallet_address'],))
-            leagues = cursor.fetchall()
-            if leagues:
-                first_league_id = leagues[0]['sleeper_league_id']
-                # Redirect to the standings page for the first league
-                return redirect(url_for('get_league_standings_local', league_id=first_league_id))
-            else:
-                # No specific league, redirect to the user's general league data page
-                return redirect(url_for('get_league_data_local'))
-        else:
-            print("User authenticated but not associated with Sleeper")
-            # Bypassing Sleeper association, redirect to the user's general league data page
-            return redirect(url_for('get_league_data_local'))
-    flash('Please connect your TON wallet from the frontend.', 'info')
-    return redirect("http://localhost:5173")
+# TonConnect login initiation - This GET /login is different from POST /auth/login
+# @app.route('/login', methods=['GET']) # Commented out
+# def initiate_login(): # Commented out
+#     if get_current_user(): # Commented out
+#         user = get_current_user() # Commented out
+#         conn = get_global_db_connection() # Use global connection # Commented out
+#         cursor = conn.cursor() # Commented out
+#         cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (user['wallet_address'],)) # Commented out
+#         result = cursor.fetchone() # Commented out
+#         if result and result['sleeper_user_id']: # Commented out
+#             print("User already authenticated and associated with Sleeper") # Commented out
+#             # Fetch user's leagues # Commented out
+#             cursor = conn.cursor() # Commented out
+#             # The 'leagues' table was an old schema. User's leagues are now in UserLeagueLinks. # Commented out
+#             # We need to join with LeagueMetadata to get details if needed, or just the IDs. # Commented out
+#             # For now, let's fetch linked league_ids. # Commented out
+#             cursor.execute(''' # Commented out
+#                 SELECT ull.sleeper_league_id # Commented out
+#                 FROM UserLeagueLinks ull # Commented out
+#                 WHERE ull.wallet_address = ? # Commented out
+#             ''', (user['wallet_address'],)) # Commented out
+#             leagues = cursor.fetchall() # Commented out
+#             if leagues: # Commented out
+#                 first_league_id = leagues[0]['sleeper_league_id'] # Commented out
+#                 # Redirect to the standings page for the first league # Commented out
+#                 return redirect(url_for('get_league_standings_local', league_id=first_league_id)) # Commented out
+#             else: # Commented out
+#                 # No specific league, redirect to the user's general league data page # Commented out
+#                 return redirect(url_for('get_league_data_local')) # Commented out
+#         else: # Commented out
+#             print("User authenticated but not associated with Sleeper") # Commented out
+#             # Bypassing Sleeper association, redirect to the user's general league data page # Commented out
+#             return redirect(url_for('get_league_data_local')) # Commented out
+#     flash('Please connect your TON wallet from the frontend.', 'info') # Commented out
+#     return redirect("http://localhost:5173") # Commented out
 
 # TonConnect callback (optional, if used by frontend)
-@app.route('/tonconnect-callback', methods=['GET'])
-def tonconnect_callback():
-    try:
-        proof = request.args.get('proof')
-        address = request.args.get('address')
-        if ton_connect.verify_proof(proof, address):
-            conn = get_global_db_connection() # Use global connection
-            cursor = conn.cursor()
-            cursor.execute('SELECT wallet_address FROM Users WHERE wallet_address = ?', (address,))
-            user = cursor.fetchone()
-            if not user:
-                cursor.execute('INSERT INTO Users (wallet_address, CreatedAt) VALUES (?, datetime("now"))', (address,))
-                conn.commit()
-                user_id = cursor.lastrowid
-            else:
-                user_id = user['wallet_address']
-            session['wallet_address'] = address
-            flash('Logged in successfully.', 'success')
-            return redirect(url_for('get_league_data_local'))
-        else:
-            flash('Invalid TonConnect proof.', 'error')
-            return redirect(url_for('initiate_login'))
-    except TonConnectError as e:
-        flash(f'TonConnect error: {str(e)}', 'error')
-        return redirect(url_for('initiate_login'))
+# @app.route('/tonconnect-callback', methods=['GET']) # Commented out
+# def tonconnect_callback(): # Commented out
+#     try: # Commented out
+#         proof = request.args.get('proof') # Commented out
+#         address = request.args.get('address') # Commented out
+#         if ton_connect.verify_proof(proof, address): # Commented out
+#             conn = get_global_db_connection() # Use global connection # Commented out
+#             cursor = conn.cursor() # Commented out
+#             cursor.execute('SELECT wallet_address FROM Users WHERE wallet_address = ?', (address,)) # Commented out
+#             user = cursor.fetchone() # Commented out
+#             if not user: # Commented out
+#                 cursor.execute('INSERT INTO Users (wallet_address, CreatedAt) VALUES (?, datetime("now"))', (address,)) # Commented out
+#                 conn.commit() # Commented out
+#                 user_id = cursor.lastrowid # Commented out
+#             else: # Commented out
+#                 user_id = user['wallet_address'] # Commented out
+#             session['wallet_address'] = address # Commented out
+#             flash('Logged in successfully.', 'success') # Commented out
+#             return redirect(url_for('get_league_data_local')) # Commented out
+#         else: # Commented out
+#             flash('Invalid TonConnect proof.', 'error') # Commented out
+#             return redirect(url_for('initiate_login')) # Commented out
+#     except TonConnectError as e: # Commented out
+#         flash(f'TonConnect error: {str(e)}', 'error') # Commented out
+#         return redirect(url_for('initiate_login')) # Commented out
 
 # Auth login route (for frontend to verify TonConnect proof)
 @app.route('/auth/login', methods=['POST', 'OPTIONS'])
@@ -501,11 +499,10 @@ def login():
             return jsonify({'success': False, 'error': 'Invalid JSON payload'}), 400
 
         wallet_address = data.get('walletAddress')
-        nonce = data.get('nonce')
 
-        if not wallet_address or not nonce:
-            print("Missing walletAddress or nonce")
-            return jsonify({'success': False, 'error': 'Missing walletAddress or nonce'}), 400
+        if not wallet_address:
+            print("Missing walletAddress")
+            return jsonify({'success': False, 'error': 'Missing walletAddress'}), 400
 
         session_token = secrets.token_urlsafe(32)
         print(f"Generated session token: {session_token}")

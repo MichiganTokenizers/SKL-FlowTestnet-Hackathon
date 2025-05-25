@@ -1,23 +1,23 @@
 import { BrowserRouter as Router, Route, Routes, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
-import { TonConnectButton, useTonConnectUI, TonConnectUIProvider } from '@tonconnect/ui-react';
+import * as fcl from "@onflow/fcl";
 import ErrorBoundary from './ErrorBoundary';
 import SleeperImport from './SleeperImport';
 import AssociateSleeper from './components/auth/AssociateSleeper';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 import './App.css';
-import { useTonConnect } from './hooks/useTonConnect';
-import { useTonWallet } from '@tonconnect/ui-react';
 import Home from './components/common/Home';
 import Profile from './components/profile/Profile';
 import League from './components/league/League';
 import Team from './components/team/Team';
 
 // Define the base API URL
-const API_BASE_URL = "http://localhost:5000"; // Changed from ngrok URL to local development server
+const API_BASE_URL = "http://localhost:5000";
 
-// League Connect Component
+// League Connect Component - Will be refactored or removed later
+// For now, let's comment it out to avoid errors with removed TON hooks
+/*
 function LeagueConnect({ sessionToken, onSuccess }) {
     const { connected } = useTonConnect();
     const tonWallet = useTonWallet();
@@ -58,11 +58,13 @@ function LeagueConnect({ sessionToken, onSuccess }) {
         </div>
     );
 }
+*/
 
 // App Content Component
 function AppContent() {
-    const { connected } = useTonConnect();
-    const tonWallet = useTonWallet();
+    // const { connected } = useTonConnect(); // Removed
+    // const tonWallet = useTonWallet(); // Removed
+    const [flowUser, setFlowUser] = useState(null); // Added FCL user state
     const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
     const [isNewUser, setIsNewUser] = useState(false);
     const [leagues, setLeagues] = useState([]);
@@ -70,15 +72,21 @@ function AppContent() {
     const [currentUserDetails, setCurrentUserDetails] = useState(null);
     const [loginProcessJustCompleted, setLoginProcessJustCompleted] = useState(false);
     const [isAppReady, setIsAppReady] = useState(false);
-    const tonConnectUI = useTonConnectUI()[0];
+    // const tonConnectUI = useTonConnectUI()[0]; // Removed
     const navigate = useNavigate();
     const location = useLocation();
 
+    // Subscribe to FCL current user
+    useEffect(() => {
+      fcl.currentUser.subscribe(setFlowUser);
+    }, []);
+
     const logout = useCallback(async () => {
         try {
-            if (tonConnectUI && tonConnectUI.connected) {
-                await tonConnectUI.disconnect();
-            }
+            // if (tonConnectUI && tonConnectUI.connected) { // Removed
+            // await tonConnectUI.disconnect(); // Removed
+            // }
+            await fcl.unauthenticate(); // Added FCL logout
         } catch (error) {
             console.error('Error disconnecting wallet programmatically:', error);
         } finally {
@@ -89,11 +97,13 @@ function AppContent() {
             setSelectedLeagueId(null);
             setCurrentUserDetails(null);
             setIsAppReady(false);
+            // setFlowUser(null); // FCL subscription will handle this
             if (location.pathname !== '/') {
                 navigate('/');
             }
         }
-    }, [tonConnectUI, navigate, location.pathname]);
+    // }, [tonConnectUI, navigate, location.pathname]); // Removed tonConnectUI
+    }, [navigate, location.pathname]); // Updated dependencies
 
     const fetchUserLeagues = async (token) => {
         if (!token) return { success: false, leagues: [], error: 'No token for fetchUserLeagues' };
@@ -167,18 +177,16 @@ function AppContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [loginProcessJustCompleted]); // REMOVED logout from dependencies
 
-    // Login Effect: Handles new wallet connection via TonConnect
+    // Login Effect: Handles new Flow wallet connection
     useEffect(() => {
-        if (connected && tonWallet && !sessionToken && !localStorage.getItem('sessionToken')) {
+        if (flowUser && flowUser.addr && !sessionToken && !localStorage.getItem('sessionToken')) { // New Flow logic
             const login = async () => {
                 try {
-                    const nonce = Math.random().toString(36).substring(2);
                     const response = await fetch(`${API_BASE_URL}/auth/login`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            walletAddress: tonWallet.account.address,
-                            nonce: nonce
+                            walletAddress: flowUser.addr, // Use flowUser.addr
                         })
                     });
                     const loginData = await response.json();
@@ -187,44 +195,34 @@ function AppContent() {
                         localStorage.setItem('sessionToken', newSessionToken);
                         setSessionToken(newSessionToken);
                         setIsNewUser(loginData.isNewUser);
-                        setLoginProcessJustCompleted(true); // Signal that login just completed
-
+                        setLoginProcessJustCompleted(true);
                         if (!loginData.isNewUser) {
-                            await fetchUserLeagues(newSessionToken); // Fetch leagues for existing user
+                            await fetchUserLeagues(newSessionToken);
                         }
-                        setIsAppReady(true); // Set app ready after all states are set
+                        setIsAppReady(true);
                     } else {
                         console.error("Login failed:", loginData.error);
-                        setIsAppReady(false); // Ensure app is not ready on login failure
+                        setIsAppReady(false);
                     }
                 } catch (error) {
                     console.error('Login process error:', error);
-                    setIsAppReady(false); // Ensure app is not ready on error
+                    setIsAppReady(false);
                 }
             };
             login();
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [connected, tonWallet]); // Dependencies: connected, tonWallet. Setters & fetchUserLeagues are stable. navigate removed.
+    }, [flowUser, sessionToken]); // New Flow dependencies.
 
-    // Wallet Disconnection Effect
+    // Flow Wallet Disconnection Effect
     useEffect(() => {
-        if (!tonConnectUI) {
-            return;
+        const currentToken = localStorage.getItem('sessionToken');
+        if (currentToken && (!flowUser || !flowUser.addr)) {
+            console.log('Flow user logged out from wallet or became unavailable. Triggering app logout.');
+            logout();
         }
-        const unsubscribe = tonConnectUI.onStatusChange(
-            (walletInfo) => {
-                const currentSessionToken = localStorage.getItem('sessionToken');
-                if (!walletInfo && currentSessionToken) {
-                    console.log('Wallet disconnected, triggering app logout.');
-                    logout();
-                }
-            }
-        );
-        return () => {
-            unsubscribe();
-        };
-    }, [tonConnectUI, logout]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [flowUser]);
 
     const handleLeagueNavChange = (leagueId) => {
         setSelectedLeagueId(leagueId);
@@ -323,9 +321,20 @@ function AppContent() {
                                     </li>
                                 </>
                             )}
+                             {sessionToken && (
+                                <li className="nav-item">
+                                    <Link className="nav-link" to="/profile">Profile</Link>
+                                </li>
+                            )}
                         </ul>
                         <div className="d-flex align-items-center">
-                            <TonConnectButton className="btn btn-outline-light" />
+                            {!flowUser?.addr && !sessionToken && (
+                                <button className="btn btn-outline-light me-2" onClick={() => fcl.logIn()}>Login with Flow</button>
+                            )}
+                            {(flowUser?.addr || sessionToken) && (
+                                <button className="btn btn-outline-light" onClick={logout}>Logout</button>
+                            )}
+                            {flowUser?.addr && <span className="navbar-text ms-2 text-white">{flowUser.addr}</span>}
                         </div>
                     </div>
                 </div>
@@ -374,7 +383,7 @@ function AppContent() {
                         sessionToken && isAppReady ? /* Also protect association route if needed, or handle differently */ 
                         <AssociateSleeper onAssociationSuccess={handleAssociationSuccess} /> : <Navigate to="/" replace />
                     } />
-                    <Route path="/league-connect" element={
+                    {/* <Route path="/league-connect" element={ // Commenting out LeagueConnect route
                         sessionToken && isAppReady && isNewUser ? (
                             <LeagueConnect sessionToken={sessionToken} onSuccess={() => {
                                 setIsNewUser(false); 
@@ -384,7 +393,7 @@ function AppContent() {
                         ) : (
                             <Navigate to="/" replace />
                         )
-                    } />
+                    } /> */}
                 </Routes>
             </main>
         </div>
@@ -394,11 +403,13 @@ function AppContent() {
 // Main App Component
 function App() {
     return (
-        <TonConnectUIProvider manifestUrl="https://29d4-193-43-135-7.ngrok-free.app/tonconnect-manifest.json">
+        // <TonConnectUIProvider manifestUrl={`${API_BASE_URL}/tonconnect-manifest.json`}> // Removed Provider
             <Router>
-                <AppContent />
+                <ErrorBoundary>
+                    <AppContent />
+                </ErrorBoundary>
             </Router>
-        </TonConnectUIProvider>
+        // </TonConnectUIProvider> // Removed Provider
     );
 }
 

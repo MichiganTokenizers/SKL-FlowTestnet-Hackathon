@@ -1,0 +1,7 @@
+Flask
+Flask-Session
+python-dotenv
+requests
+SQLAlchemy
+pydantic
+flow-py-sdk 
