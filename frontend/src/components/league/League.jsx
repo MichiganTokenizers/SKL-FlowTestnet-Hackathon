@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; // Import Link
 import LeagueFees from './LeagueFees'; // Import the new component
+// import RecentTransactionsTable from './RecentTransactionsTable'; // Import the new transactions table
 // import { Link, useNavigate } from 'react-router-dom'; // Link and useNavigate might not be needed directly if navigation is handled by App.jsx
 
 const API_BASE_URL = "http://localhost:5000";
@@ -9,7 +10,7 @@ function League(props) { // Accept props
     const { leagues, selectedLeagueId, sessionToken, currentUserDetails } = props; // Destructure props, add currentUserDetails
 
     const [standings, setStandings] = useState([]);
-    const [transactions, setTransactions] = useState([]); // State for recent transactions (mocked for now)
+    // const [transactions, setTransactions] = useState([]); // State for recent transactions (mocked for now) - REMOVED
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     // const navigate = useNavigate(); // Removed, navigation handled by App.jsx
@@ -60,6 +61,7 @@ function League(props) { // Accept props
     };
     
     // Mock transactions - this should be moved to App.jsx if it needs to persist across league selections or be global
+    /* REMOVED MOCK TRANSACTIONS useEffect
     useEffect(() => {
         setTransactions([
             { id: 1, date: '2024-05-27', type: 'Trade', description: 'Team A trades Player X to Team B for Player Y' },
@@ -67,6 +69,7 @@ function League(props) { // Accept props
             { id: 3, date: '2024-05-25', type: 'Trade', description: 'Team D trades Pick 1.05 to Team E for Player W' },
         ]);
     }, []);
+    */
 
     if (loading && standings.length === 0 && selectedLeagueId) { // Refined loading condition
         return (
@@ -174,29 +177,12 @@ function League(props) { // Accept props
                 </div>
             )}
 
-            <div className="mt-5">
-                <h3 style={{ color: 'var(--text-color)' }}>Recent Transactions</h3>
-                {transactions.length > 0 ? (
-                    <table className="table table-striped table-hover mt-3">
-                        <thead className="league-table-header">
-                            <tr>
-                                <th>Date</th>
-                                <th>Type</th>
-                                <th>Description</th>
-                            </tr>
-                        </thead>
-                        <tbody>{transactions.map(tx => (
-                            <tr key={tx.id}>
-                                <td style={{ color: 'var(--text-color)' }}>{tx.date}</td>
-                                <td style={{ color: 'var(--text-color)' }}>{tx.type}</td>
-                                <td style={{ color: 'var(--text-color)' }}>{tx.description}</td>
-                            </tr>
-                        ))}</tbody>
-                    </table>
-                ) : (
-                    <p className="mt-3" style={{ color: 'var(--text-color)' }}>No recent transactions to display.</p>
-                )}
-            </div>
+            {/* Recent Transactions Section - only if a league is selected */}
+            {selectedLeagueId && (
+                <div className="mt-5">
+                    {/* <RecentTransactionsTable /> */}
+                </div>
+            )}
         </div>
     );
 }

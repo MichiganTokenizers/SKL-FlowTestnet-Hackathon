@@ -359,7 +359,7 @@ function AppContent() {
                             ) : (
                                 <div className="text-center">
                                     <h2>Welcome to Supreme Keeper League</h2>
-                                    <p>Please connect your TON wallet to continue</p>
+                                    <p>Please connect your Flow wallet to continue</p>
                                 </div>
                             )
                         )

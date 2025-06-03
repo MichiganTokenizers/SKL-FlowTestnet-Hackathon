@@ -239,10 +239,6 @@ def init_db(force_create=False):
                           (current_year TEXT,
                            IsOffSeason INTEGER,
                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-        # Optionally, insert a default row if it's always needed, or update existing if it exists.
-        # Using INSERT OR REPLACE to handle the single-row nature:
-        cursor.execute('''INSERT OR REPLACE INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
-                          VALUES (1, ?, ?, datetime('now'))''', ('2025', 1)) # Using fixed rowid=1
 
         # Create the vw_contractByYear view
         # This view calculates the escalated cost for each year of every contract
@@ -322,6 +318,7 @@ def init_db(force_create=False):
         raise
 
 init_db() # Reverted: No longer forcing recreation
+print("DEBUG: init_db() call completed. Proceeding to define routes and helpers...")
 
 def get_current_season():
     """Fetches the current season year and off-season status from the local season_curr table."""
@@ -2181,12 +2178,17 @@ def set_league_fees(league_id):
         app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
 
+print("DEBUG: All routes and helpers defined. Entering __main__ block...")
 if __name__ == '__main__':
+    print("DEBUG: Inside __main__ block. About to call app.run()")
     # Ensure global connection is initialized before app runs,
     # especially if any routes might be hit immediately or by background tasks.
     # However, get_global_db_connection() is designed to init on first call.
     # init_db() call above should have initialized it.
     app.run(debug=True, port=5000)
+    print("DEBUG: app.run() has exited.")
+
+
 
 
 

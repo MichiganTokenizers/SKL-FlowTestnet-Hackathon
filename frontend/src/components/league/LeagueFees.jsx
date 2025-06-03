@@ -12,6 +12,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState(null);
     const [isCommissioner, setIsCommissioner] = useState(false);
+    const [currentUserFeeDetails, setCurrentUserFeeDetails] = useState(null);
     const [queriedSeasonYear, setQueriedSeasonYear] = useState(null);
     const [showFeeForm, setShowFeeForm] = useState(false);
 
@@ -57,21 +58,17 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                     setEditFeeAmount(data.fee_settings.fee_amount !== null ? String(data.fee_settings.fee_amount) : '');
                     setEditFeeCurrency(data.fee_settings.fee_currency || 'USD');
                     setEditNotes(data.fee_settings.notes || '');
-                    // setShowFeeForm(false); // Ensures form is collapsed by default, even if fees are set
-                    // If fees are not set (fee_amount is null) and user is commish, they still need to click to expand.
-                } else { // If data.fee_settings is null (no record in LeagueFees table for the season)
+                } else { 
                     setEditFeeAmount('');
                     setEditFeeCurrency('USD');
                     setEditNotes('');
-                    // setShowFeeForm(false); // Ensures form is collapsed by default for commish to set initial fees
                 }
-                // Explicitly ensure showFeeForm is false after initial load to default to collapsed.
                 setShowFeeForm(false);
             } else {
                 setError(data.error || 'Failed to load league fee data.');
             }
         } catch (err) {
-            console.error("Error fetching league fee data:", err);
+            // console.error("Error fetching league fee data:", err); // Keep this commented unless specific debug needed
             setError(err.message || 'An error occurred while fetching fee data.');
         } finally {
             setIsLoading(false);
@@ -79,14 +76,35 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
     }, [leagueId, currentUser, sessionToken]);
 
     useEffect(() => {
-        if (leagueId && currentUser && sessionToken) { // Ensure sessionToken is present
+        if (leagueId && currentUser && sessionToken) { 
             fetchLeagueFeeData();
         }
     }, [leagueId, currentUser, sessionToken, fetchLeagueFeeData]);
 
+    useEffect(() => {
+        if (currentUser && rosterPaymentDetails.length > 0 && leagueFeeSettings) {
+            const userWallet = currentUser.wallet_address;
+            const userFeeRecord = rosterPaymentDetails.find(
+                (roster) => roster.wallet_address === userWallet
+            );
+
+            if (userFeeRecord) {
+                setCurrentUserFeeDetails({
+                    status: userFeeRecord.payment_status, 
+                    paid_amount: userFeeRecord.paid_amount, 
+                    is_commissioner: userFeeRecord.is_commissioner 
+                });
+            } else {
+                setCurrentUserFeeDetails(null); 
+            }
+        } else {
+            setCurrentUserFeeDetails(null);
+        }
+    }, [currentUser, rosterPaymentDetails, leagueFeeSettings]);
+
     const handleFeeSettingsSubmit = async (e) => {
         e.preventDefault();
-        if (!isCommissioner || !sessionToken) return; // Check for token
+        if (!isCommissioner || !sessionToken) return; 
 
         setIsSubmitting(true);
         setError(null);
@@ -95,7 +113,6 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                 fee_amount: parseFloat(editFeeAmount),
                 fee_currency: editFeeCurrency,
                 notes: editNotes,
-                // season_year: could be added here if frontend allows selecting season
             };
             const response = await fetch(`${API_BASE_URL}/league/${leagueId}/fees`, {
                 method: 'POST',
@@ -113,7 +130,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                 setError(data.error || 'Failed to update league fees.');
             }
         } catch (err) {
-            console.error("Error updating league fees:", err);
+            // console.error("Error updating league fees:", err); // Keep this commented unless specific debug needed
             setError(err.message || 'An error occurred while updating fees.');
         } finally {
             setIsSubmitting(false);
@@ -128,13 +145,20 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
         return <div className="league-fees-container alert alert-danger"><p>Error: {error}</p></div>;
     }
 
+    const shouldShowPayButton = currentUserFeeDetails &&
+                                leagueFeeSettings &&
+                                leagueFeeSettings.fee_amount > 0 &&
+                                (currentUserFeeDetails.status === 'unpaid' || 
+                                 (currentUserFeeDetails.status === 'partially_paid' && currentUserFeeDetails.paid_amount < leagueFeeSettings.fee_amount));
+
+    const payButtonText = currentUserFeeDetails?.status === 'partially_paid' ? 'Pay Remaining Fees' : 'Pay League Fee';
+
     return (
         <div className="league-fees-container card mb-4">
             <div className="card-header">
                 <h4>League Fee Information</h4>
             </div>
             <div className="card-body">
-                {/* Updated Fee Amount Display Section (handles both cases) */}
                 <div className="fee-amount-section mb-3">
                     <h5>Required Fees</h5>
                     {leagueFeeSettings && leagueFeeSettings.fee_amount !== null ? (
@@ -163,19 +187,38 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                             >
                                 {showFeeForm ? 'Cancel' : (leagueFeeSettings && leagueFeeSettings.fee_amount !== null ? 'Update Fee' : 'Set Fee')}
                             </button>
+                        </div>
+                    )}
+                    {shouldShowPayButton && !isCommissioner && (
+                         <div className="mt-2">
                             <button 
                                 className="btn btn-sm" 
-                                style={{ backgroundColor: '#9966CC', color: 'white', border: 'none' }}
+                                style={{ backgroundColor: '#28a745', color: 'white', border: 'none' }} 
                                 type="button" 
-                                onClick={() => alert('Pay League Fee functionality to be implemented.')} // Placeholder action
+                                onClick={() => alert(`${payButtonText} functionality to be implemented.`)}
                             >
-                                Pay League Fee
+                                {payButtonText}
                             </button>
                         </div>
                     )}
+                    {shouldShowPayButton && isCommissioner && (
+                         <div className="mt-2">
+                             <p className="small text-muted fst-italic">
+                                 As commissioner, your fee status is: {currentUserFeeDetails.status}. 
+                                 You can pay your fee if applicable, or it might be considered waived.
+                             </p>
+                             <button
+                                 className="btn btn-sm"
+                                 style={{ backgroundColor: '#28a745', color: 'white', border: 'none' }}
+                                 type="button"
+                                 onClick={() => alert(`Commissioner ${payButtonText} functionality to be implemented.`)}
+                             >
+                                 {payButtonText} (My Fee)
+                             </button>
+                         </div>
+                    )}
                 </div>
 
-                {/* Commissioner's Form - conditionally rendered and collapsible */} 
                 {isCommissioner && (
                     <div 
                         className={`commissioner-form mt-3 mb-3 p-3 border rounded collapse ${showFeeForm ? 'show' : ''}`}
@@ -265,7 +308,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                                         </td>
                                         <td>
                                             <span className={`badge bg-${roster.payment_status === 'paid' ? 'success' : (roster.payment_status === 'partially_paid' ? 'warning' : 'danger')}`}>
-                                                {roster.payment_status.replace('_', ' ').toUpperCase()}
+                                                {roster.payment_status ? roster.payment_status.replace('_', ' ').toUpperCase() : 'N/A'}
                                             </span>
                                         </td>
                                         <td>

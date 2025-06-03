@@ -15,7 +15,8 @@
   - [x] Welcome Message: Remove wallet address display.
   - [x] Tables: Remove avatar display from tables.
 
-- [ ] Add "Recent Transactions" table to League page (Started: 2025-05-28)
+- [x] Add "Recent Transactions" table to League page (Started: 2025-05-28) (Completed: 2025-07-30)
+  - [ ] Refine `RecentTransactionsTable.jsx` - `renderTransactionDetails` function to correctly parse and display various transaction types based on `SleeperService.py` data structure (Discovered: 2025-07-30)
 - [x] Get nfl state for offseason inseason toggle from SLeeper API
 - [ ] Disable draft data pull in `SleeperService.fetch_all_data` if league status is "InSeason" (or NFL state indicates active season). (Started: 2025-05-22)
 - [x] Build out Team Page functionality (Started: 2025-05-29) (Completed: 2025-07-28)
@@ -28,15 +29,17 @@
   - [x] Team page displays "Projected Future Yearly Contract Totals" (Completed: 2025-07-28)
   - [x] Team page implements UI for setting new player contract durations during the contract setting window (Completed: 2025-07-28)
   - [x] Backend supports fetching 4-year costs and saving contract durations (Completed: 2025-07-28)
-- [ ] Clean up routes upon login with TonConnect, seeing an error page before correct league page loads
-- [ ] Detect players who have been waived from Sleeper team but still have an active contract during season
+- [ ] Clean up routes upon login with Flow, seeing an error page before correct league page loads
+- [x] Detect players who have been waived from Sleeper team but still have an active contract during season
 - [ ] Build Trade Desk (big)
 - [ ] Build league fee structure in keeper.db
 - [ ] Add pay league fee button in league page
+- [ ] Correct commissioner status for user LordTokenizer (wallet 0xf8d6e0586b0a20c7) in league 1230890383865552896 in keeper.db (Discovered: 2025-06-03)
 
 - [x] Clean up navbar hamburger menu issue (Started: 2025-07-29)
 
 ## Discovered During Work
+- Refine `RecentTransactionsTable.jsx` - `renderTransactionDetails` function to correctly parse and display various transaction types based on `SleeperService.py` data structure (From: Add "Recent Transactions" table to League page, Date: 2025-07-30)
 
 ## Completed Tasks
 
@@ -68,98 +71,6 @@
   - [x] Backend: `/auth/complete_association` - call `sleeper_service.fetch_all_data()`
   - [x] Backend: `/auth/complete_association` - return success/error JSON response
 
-### Database Setup
-- [ ] Create SQLite database schema
-- [ ] Set up database migrations
-- [ ] Implement database connection handling
-- [ ] Add database backup system
-- [ ] Create database indexes for performance
-
-### League Management
-- [ ] Create league creation endpoint
-- [ ] Implement league joining functionality
-- [ ] Add league settings management
-- [ ] Create league standings view
-- [ ] Implement league member management
-
-### Contract System
-- [ ] Design contract creation flow
-- [ ] Implement contract tracking
-- [ ] Add contract waiver system
-- [ ] Create penalty calculation system
-- [ ] Implement contract expiration handling
-- [ ] Rewrite waive player route
-  - [ ] Add proper authentication checks
-  - [ ] Implement contract validation
-  - [ ] Calculate waiver penalties
-  - [ ] Update player status
-  - [ ] Handle waiver wire priority
-  - [ ] Add transaction logging
-  - [ ] Implement error handling
-
-### Sleeper Integration
-- [ ] Set up Sleeper API connection
-- [ ] Implement league data sync
-- [ ] Create player data import
-- [ ] Add roster sync functionality
-- [ ] Implement standings sync
-
-## Medium Priority Tasks
-
-### Frontend Development
-- [ ] Set up React project structure
-- [ ] Create responsive navigation
-- [ ] Implement league dashboard
-- [ ] Add team management interface
-- [ ] Create contract management UI
-- [ ] Design and implement profile page
-- [ ] Add loading states and error handling
-
-### Backend Development
-- [ ] Set up Flask project structure
-- [ ] Implement API endpoints
-- [ ] Add request validation
-- [ ] Create error handling middleware
-- [ ] Implement logging system
-- [ ] Add API documentation
-
-### Payment Integration
-- [ ] Set up TON payment processing
-- [ ] Implement league fee collection
-- [ ] Add payment verification
-- [ ] Create payment history tracking
-- [ ] Implement refund handling
-
-## Low Priority Tasks
-
-### Testing
-- [ ] Write unit tests for backend
-- [ ] Add integration tests
-- [ ] Create frontend component tests
-- [ ] Implement end-to-end tests
-- [ ] Add performance testing
-
-### Documentation
-- [ ] Create API documentation
-- [ ] Write user documentation
-- [ ] Add developer setup guide
-- [ ] Create deployment documentation
-- [ ] Document database schema
-
-### UI/UX Improvements
-- [ ] Add dark mode support
-- [ ] Implement responsive design
-- [ ] Create loading animations
-- [ ] Add success/error notifications
-- [ ] Improve form validation feedback
-
-## Future Enhancements
-- [ ] Add advanced statistics
-- [ ] Implement trade management system
-- [ ] Create contract negotiation features
-- [ ] Add league history tracking
-- [ ] Implement mobile app
-- [ ] Add social features
 
 ## Notes
 - Tasks are organized by priority and category
