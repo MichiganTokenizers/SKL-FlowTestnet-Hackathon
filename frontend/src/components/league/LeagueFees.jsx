@@ -1,8 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as fcl from "@onflow/fcl";
 // import api from '../../services/api'; // No longer using a separate API service file
 import './LeagueFees.css';
 
+// Enable FCL debug logging and configure discovery wallet
+fcl.config({
+    "fcl.limit": 9999,
+    "debug.level": 5, // Set to 5 for maximum debug output
+    "discovery.wallet": "https://fcl-discovery.onflow.org/api/v1/dapps/mainnet/authn", // Explicitly set Mainnet discovery
+});
+
 const API_BASE_URL = "http://localhost:5000"; // Define API_BASE_URL here
+
+// SKL Payment wallet address - same for all leagues
+const SKL_PAYMENT_WALLET_ADDRESS = "0xa30279e4e80d4216"; // Corrected to the actual SKL wallet address
 
 const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
     // const { leagueId } = useParams(); // Remove useParams, leagueId comes from props
@@ -15,10 +26,12 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
     const [currentUserFeeDetails, setCurrentUserFeeDetails] = useState(null);
     const [queriedSeasonYear, setQueriedSeasonYear] = useState(null);
     const [showFeeForm, setShowFeeForm] = useState(false);
+    const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
+    const [showVaultSetupOption, setShowVaultSetupOption] = useState(false);
 
     // For commissioner form
     const [editFeeAmount, setEditFeeAmount] = useState('');
-    const [editFeeCurrency, setEditFeeCurrency] = useState('USD');
+    const [editFeeCurrency, setEditFeeCurrency] = useState('FLOW');
     const [editNotes, setEditNotes] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -56,11 +69,11 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
 
                 if (data.fee_settings) {
                     setEditFeeAmount(data.fee_settings.fee_amount !== null ? String(data.fee_settings.fee_amount) : '');
-                    setEditFeeCurrency(data.fee_settings.fee_currency || 'USD');
+                    setEditFeeCurrency(data.fee_settings.fee_currency || 'FLOW');
                     setEditNotes(data.fee_settings.notes || '');
                 } else { 
                     setEditFeeAmount('');
-                    setEditFeeCurrency('USD');
+                    setEditFeeCurrency('FLOW');
                     setEditNotes('');
                 }
                 setShowFeeForm(false);
@@ -137,12 +150,296 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
         }
     };
 
+    const handleSetupVaults = async () => {
+        setError(null);
+
+        console.log('handleSetupVaults: Initiating vault setup...');
+
+        const fclUserSnapshot = await fcl.currentUser().snapshot();
+        console.log('handleSetupVaults: FCL user snapshot:', fclUserSnapshot);
+
+        if (!fclUserSnapshot.loggedIn) {
+            console.log('handleSetupVaults: FCL user not logged in. Prompting for authentication...');
+            setError('Please connect your Flow wallet using the main Login button to set up vaults.');
+            return;
+        }
+
+        setIsPaymentProcessing(true);
+        console.log('handleSetupVaults: isPaymentProcessing set to true.');
+
+        try {
+            console.log('handleSetupVaults: Preparing fcl.mutate call...');
+            const transactionId = await fcl.mutate({
+                cadence: `
+                    import FlowToken from 0x1654653399040a61
+                    import FungibleToken from 0xf233dcee88fe0abe
+                    import EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed from 0x1e4aa0b87d10b141
+
+                    transaction {
+                        prepare(signer: auth(Storage, Capabilities) &Account) {
+                            // Setup FlowToken Vault if not already set up
+                            if signer.storage.borrow<&FlowToken.Vault>(from: /storage/flowTokenVault) == nil {
+                                signer.storage.save(<- FlowToken.createEmptyVault(vaultType: Type<@FlowToken.Vault>()), to: /storage/flowTokenVault)
+                            }
+                            // Always publish or re-publish the FlowToken receiver capability
+                            if signer.capabilities.get<&{FungibleToken.Receiver}>(/public/flowTokenReceiver).borrow() == nil {
+                                signer.capabilities.publish(
+                                    signer.capabilities.storage.issue<&FlowToken.Vault>(/storage/flowTokenVault),
+                                    at: /public/flowTokenReceiver
+                                )
+                            }
+
+                            // Setup USDF Vault if not already set up (replaces FUSD setup)
+                            if signer.storage.borrow<&EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed.Vault>(from: /storage/EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabedVault) == nil {
+                                signer.storage.save(<- EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed.createEmptyVault(vaultType: Type<@EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed.Vault>()), to: /storage/EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabedVault)
+                            }
+                            // Always publish or re-publish the USDF receiver capability
+                            if signer.capabilities.get<&{FungibleToken.Receiver}>(/public/usdfReceiver).borrow() == nil {
+                                signer.capabilities.publish(
+                                    signer.capabilities.storage.issue<&EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed.Vault>(/storage/EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabedVault),
+                                    at: /public/usdfReceiver
+                                )
+                            }
+                        }
+                    }
+                `,
+                proposer: fcl.currentUser,
+                payer: fcl.currentUser,
+                authorizations: [fcl.currentUser],
+                limit: 999
+            });
+
+            console.log('Vault setup transaction submitted:', transactionId);
+            const transaction = await fcl.tx(transactionId).onceSealed();
+            console.log('Vault setup transaction sealed:', transaction);
+
+            if (transaction.status === 4) {
+                alert('Flow and USDF vaults initialized successfully! Please try your payment again.');
+                setShowVaultSetupOption(false); // Hide the button after success
+                fetchLeagueFeeData(); // Refresh data in case something changed
+            } else {
+                throw new Error('Vault setup transaction failed.');
+            }
+        } catch (error) {
+            console.error('Vault setup error:', error);
+            setError(`Failed to set up vaults: ${error.message || 'Unknown error occurred'}. Please ensure your wallet is connected and has enough FLOW for transaction fees.`);
+        } finally {
+            // console.log('handleSetupVaults: finally block executed'); // Removed debug log
+            setIsPaymentProcessing(false);
+        }
+    };
+
+    const recordPaymentOnBackend = async (txId, amount, currency) => {
+        try {
+            const payload = {
+                payer_wallet_address: currentUser.wallet_address,
+                amount: amount,
+                currency: currency,
+                transaction_id: txId,
+                league_id: leagueId, // Pass league_id to backend
+            };
+            const response = await fetch(`${API_BASE_URL}/league/${leagueId}/fees/record-payment`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': sessionToken,
+                },
+                body: JSON.stringify(payload),
+            });
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                console.log('Backend successfully recorded payment:', data);
+                // Potentially refresh league data again to show immediate status update
+                fetchLeagueFeeData(); 
+            } else {
+                console.error('Failed to record payment on backend:', data.error || 'Unknown error');
+                setError(data.error || 'Failed to record payment on backend.');
+            }
+        } catch (err) {
+            console.error('Error sending payment record to backend:', err);
+            setError('Error sending payment record to backend: ' + (err.message || 'Unknown error'));
+        }
+    };
+
+    const handlePaymentClick = async () => {
+        console.log('handlePaymentClick triggered');
+        // console.log('leagueFeeSettings:', leagueFeeSettings); // Removed debug log
+        // console.log('currentUserFeeDetails:', currentUserFeeDetails); // Removed debug log
+
+        // Ensure FCL user is logged in before proceeding with any transaction
+        const fclUserSnapshot = await fcl.currentUser().snapshot(); // Await the snapshot
+        console.log('FCL User Snapshot (resolved):', fclUserSnapshot); // New debug log
+
+        if (!fclUserSnapshot.loggedIn) {
+            console.log('handlePaymentClick: FCL user not logged in. Prompting for authentication...');
+            setError('Please connect your Flow wallet using the main Login button to proceed with payment.');
+            return; // Exit early if not authenticated
+        }
+        
+        if (!leagueFeeSettings || !currentUserFeeDetails) {
+            console.log('Early exit: Missing leagueFeeSettings or currentUserFeeDetails');
+            // This condition should ideally not be hit if fetchLeagueFeeData is working correctly
+            setError('Missing league fee data. Please refresh the page.');
+            return;
+        }
+        
+        setIsPaymentProcessing(true);
+        console.log('isPaymentProcessing set to true (before mutate)'); // New debug log
+        setError(null); // Clear previous errors
+        setShowVaultSetupOption(false); // Hide setup option at the start of a new payment attempt
+        // console.log('handlePaymentClick: fcl.currentUser snapshot:', fcl.currentUser.snapshot()); // Removed debug log
+        try {
+            let amountToPay;
+            if (currentUserFeeDetails.status === 'partially_paid') {
+                amountToPay = leagueFeeSettings.fee_amount - currentUserFeeDetails.paid_amount;
+            } else {
+                amountToPay = leagueFeeSettings.fee_amount;
+            }
+
+            console.log('Fee Currency to process:', leagueFeeSettings.fee_currency); // New debug log
+            console.log('Amount to pay:', amountToPay); // New debug log
+
+            if (leagueFeeSettings.fee_currency === 'FLOW') {
+                console.log('Attempting FLOW payment fcl.mutate...'); // New debug log
+                // For Flow token payments
+                const transactionId = await fcl.mutate({
+                    cadence: `
+                        import FlowToken from 0x1654653399040a61
+                        import FungibleToken from 0xf233dcee88fe0abe
+
+                        transaction(amount: UFix64, recipient: Address) {
+                            let sentVault: @{FungibleToken.Vault}
+
+                            prepare(signer: auth(BorrowValue, Storage) &Account) {
+                                let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
+                                    ?? panic("Could not borrow reference to the owner's Vault!")
+                                
+                                self.sentVault <- vaultRef.withdraw(amount: amount)
+                            }
+
+                            execute {
+                                let recipientRef = getAccount(recipient)
+                                    .capabilities.get<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                                    .borrow()
+                                    ?? panic("Could not borrow receiver reference to the recipient's Vault")
+
+                                recipientRef.deposit(from: <-self.sentVault)
+                            }
+                        }
+                    `,
+                    args: (arg, t) => [
+                        arg(amountToPay.toFixed(8), t.UFix64),
+                        arg(SKL_PAYMENT_WALLET_ADDRESS, t.Address)
+                    ],
+                    proposer: fcl.currentUser,
+                    payer: fcl.currentUser,
+                    authorizations: [fcl.currentUser],
+                    limit: 999
+                });
+
+                console.log('FLOW payment transaction submitted:', transactionId);
+                
+                const transaction = await fcl.tx(transactionId).onceSealed();
+                console.log('FLOW payment transaction sealed:', transaction);
+
+                if (transaction.status === 4) {
+                    alert(`Payment of ${amountToPay} FLOW sent successfully! Transaction ID: ${transactionId}`);
+                    await recordPaymentOnBackend(transactionId, amountToPay, 'FLOW'); // Notify backend
+                } else {
+                    throw new Error('Transaction failed');
+                }
+            } else if (leagueFeeSettings.fee_currency === 'USDF') {
+                console.log('Attempting USDF payment fcl.mutate...'); // Updated debug log
+                // For USDF payments - using correct mainnet contract
+                const transactionId = await fcl.mutate({
+                    cadence: `
+                        import FungibleToken from 0xf233dcee88fe0abe
+                        import EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed from 0x1e4aa0b87d10b141
+
+                        transaction(amount: UFix64, recipient: Address) {
+                            let sentVault: @{FungibleToken.Vault}
+
+                            prepare(signer: auth(BorrowValue, Storage) &Account) {
+                                let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed.Vault>(from: /storage/EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabedVault)
+                                    ?? panic("Could not borrow reference to the owner's USDF Vault!")
+                                
+                                self.sentVault <- vaultRef.withdraw(amount: amount)
+                            }
+
+                            execute {
+                                let recipientRef = getAccount(recipient)
+                                    .capabilities.get<&{FungibleToken.Receiver}>(/public/usdfReceiver)
+                                    .borrow()
+                                    ?? panic("Could not borrow receiver reference to the recipient's USDF Vault")
+
+                                recipientRef.deposit(from: <-self.sentVault)
+                            }
+                        }
+                    `,
+                    args: (arg, t) => [
+                        arg(amountToPay.toFixed(8), t.UFix64),
+                        arg(SKL_PAYMENT_WALLET_ADDRESS, t.Address)
+                    ],
+                    proposer: fcl.currentUser,
+                    payer: fcl.currentUser,
+                    authorizations: [fcl.currentUser],
+                    limit: 999
+                });
+
+                console.log('USDF payment transaction submitted:', transactionId);
+                
+                const transaction = await fcl.tx(transactionId).onceSealed();
+                console.log('USDF payment transaction sealed:', transaction);
+
+                if (transaction.status === 4) {
+                    alert(`Payment of ${amountToPay} USDF sent successfully! Transaction ID: ${transactionId}`);
+                    await recordPaymentOnBackend(transactionId, amountToPay, 'USDF'); // Notify backend
+                } else {
+                    throw new Error('Transaction failed');
+                }
+            } else {
+                console.log('Payment skipped: Invalid fee currency or amount.'); // New debug log
+            }
+        } catch (error) {
+            console.error('Payment error:', error);
+            const errorMessage = error.message || 'Unknown error occurred';
+            setError(`Payment failed: ${errorMessage}`);
+            // Check for specific error indicating vault setup is needed
+            if (errorMessage.includes('Could not borrow reference to the owner\'s USDF Vault!') ||
+                errorMessage.includes('cannot access `withdraw`: function requires `Withdraw` authorization')) {
+                setShowVaultSetupOption(true);
+            }
+        } finally {
+            // console.log('handlePaymentClick: finally block executed'); // Removed debug log
+            setIsPaymentProcessing(false);
+        }
+    };
+
     if (isLoading) {
         return <div className="league-fees-container"><p>Loading league fees...</p></div>;
     }
 
     if (error) {
-        return <div className="league-fees-container alert alert-danger"><p>Error: {error}</p></div>;
+        return (
+            <div className="league-fees-container alert alert-danger">
+                <p>Error: {error}</p>
+                {showVaultSetupOption && (
+                    <div className="mt-3">
+                        <p>It looks like your wallet might need to set up its Flow and USDF token vaults. Please click the button below to initialize them.</p>
+                        <button
+                            className="btn btn-sm"
+                            style={{ backgroundColor: '#9966CC', color: 'white', border: 'none' }}
+                            type="button"
+                            onClick={handleSetupVaults}
+                            disabled={isPaymentProcessing}
+                        >
+                            {isPaymentProcessing ? 'Setting Up Vaults...' : 'Setup Flow/USDF Vaults'}
+                        </button>
+                    </div>
+                )}
+            </div>
+        );
     }
 
     const shouldShowPayButton = currentUserFeeDetails &&
@@ -152,6 +449,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                                  (currentUserFeeDetails.status === 'partially_paid' && currentUserFeeDetails.paid_amount < leagueFeeSettings.fee_amount));
 
     const payButtonText = currentUserFeeDetails?.status === 'partially_paid' ? 'Pay Remaining Fees' : 'Pay League Fee';
+    // console.log('Rendering button - shouldShowPayButton:', shouldShowPayButton, ', payButtonText:', payButtonText, ', isPaymentProcessing:', isPaymentProcessing); // Removed debug log
 
     return (
         <div className="league-fees-container card mb-4">
@@ -165,8 +463,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                         <div>
                             <p className="mb-1">
                                 <strong>{queriedSeasonYear} fee:</strong> 
-                                {leagueFeeSettings.fee_currency === 'USD' && ' $'}{leagueFeeSettings.fee_amount}
-                                {leagueFeeSettings.fee_currency === 'TON' && ` ${leagueFeeSettings.fee_currency}`}
+                                {leagueFeeSettings.fee_amount} {leagueFeeSettings.fee_currency}
                                 {leagueFeeSettings.notes && <span className="text-muted small ms-2">({leagueFeeSettings.notes})</span>} 
                             </p>
                         </div>
@@ -195,9 +492,10 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                                 className="btn btn-sm" 
                                 style={{ backgroundColor: '#28a745', color: 'white', border: 'none' }} 
                                 type="button" 
-                                onClick={() => alert(`${payButtonText} functionality to be implemented.`)}
+                                onClick={handlePaymentClick}
+                                disabled={isPaymentProcessing}
                             >
-                                {payButtonText}
+                                {isPaymentProcessing ? 'Processing...' : payButtonText}
                             </button>
                         </div>
                     )}
@@ -211,9 +509,10 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                                  className="btn btn-sm"
                                  style={{ backgroundColor: '#28a745', color: 'white', border: 'none' }}
                                  type="button"
-                                 onClick={() => alert(`Commissioner ${payButtonText} functionality to be implemented.`)}
+                                 onClick={handlePaymentClick}
+                                 disabled={isPaymentProcessing}
                              >
-                                 {payButtonText} (My Fee)
+                                 {isPaymentProcessing ? 'Processing...' : `${payButtonText} (My Fee)`}
                              </button>
                          </div>
                     )}
@@ -253,8 +552,8 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                                         onChange={(e) => setEditFeeCurrency(e.target.value)}
                                         required
                                     >
-                                        <option value="USD">USD</option>
-                                        <option value="TON">TON</option>
+                                        <option value="FLOW">FLOW</option>
+                                        <option value="USDF">USDF</option>
                                     </select>
                                 </div>
                             </div>
@@ -312,8 +611,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                                             </span>
                                         </td>
                                         <td>
-                                            {leagueFeeSettings?.fee_currency === 'USD' && '$'}{roster.paid_amount}
-                                            {leagueFeeSettings?.fee_currency === 'TON' && ` ${leagueFeeSettings.fee_currency}`}
+                                            {roster.paid_amount} {leagueFeeSettings?.fee_currency || 'FLOW'}
                                         </td>
                                     </tr>
                                 ))}

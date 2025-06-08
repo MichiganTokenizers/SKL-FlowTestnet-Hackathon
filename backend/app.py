@@ -146,7 +146,8 @@ def init_db(force_create=False):
                             sleeper_league_id TEXT,
                             is_commissioner INTEGER DEFAULT 0,
                             fee_paid_amount REAL DEFAULT 0.0,
-                            fee_payment_status TEXT DEFAULT 'unpaid', -- e.g., 'unpaid', 'paid', 'partially_paid', 'waived'
+                            fee_payment_status TEXT DEFAULT 'unpaid', -- e.g., 'unpaid', 'paid', 'partially_paid', 'waived',
+                            updated_at DATETIME,
                             PRIMARY KEY (wallet_address, sleeper_league_id),
                             FOREIGN KEY (wallet_address) REFERENCES Users(wallet_address) ON DELETE CASCADE,
                             FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE
@@ -317,7 +318,7 @@ def init_db(force_create=False):
         _global_db_conn = None
         raise
 
-init_db() # Reverted: No longer forcing recreation
+init_db() # REVERTED: No longer forcing recreation
 print("DEBUG: init_db() call completed. Proceeding to define routes and helpers...")
 
 def get_current_season():
@@ -2174,6 +2175,98 @@ def set_league_fees(league_id):
     except Exception as e:
         app.logger.error(f"Unexpected error in POST /league/{league_id}/fees (season {target_season_year}): {str(e)}")
         if conn: conn.rollback()
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
+
+@app.route('/league/<league_id>/fees/record-payment', methods=['POST'])
+@login_required
+def record_payment_for_league(league_id):
+    """Records a successful payment for a league fee in the database."""
+    user = get_current_user()
+    payer_wallet_address = user['wallet_address'] # Authenticated user is the payer
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'success': False, 'error': 'Missing JSON payload'}), 400
+
+    # Extract data from frontend payload
+    transaction_amount = data.get('amount')
+    transaction_currency = data.get('currency')
+    transaction_id = data.get('transaction_id')
+    # league_id is already from URL path, payer_wallet_address from authenticated user
+
+    if not all([transaction_amount is not None, transaction_currency, transaction_id]):
+        return jsonify({'success': False, 'error': 'Missing amount, currency, or transaction_id in payload'}), 400
+
+    try:
+        transaction_amount = float(transaction_amount)
+        if transaction_amount <= 0:
+            return jsonify({'success': False, 'error': 'Payment amount must be positive'}), 400
+    except ValueError:
+        return jsonify({'success': False, 'error': 'Invalid payment amount format'}), 400
+
+    conn = None
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        # 1. Fetch current season year to get the relevant fee settings
+        current_season_details = get_current_season()
+        current_season_year = int(current_season_details['current_year'])
+
+        # 2. Get the required fee settings for this league and season
+        cursor.execute("""SELECT fee_amount, fee_currency FROM LeagueFees WHERE sleeper_league_id = ? AND season_year = ?""", 
+                       (league_id, current_season_year))
+        league_fee_settings = cursor.fetchone()
+
+        if not league_fee_settings or league_fee_settings['fee_amount'] is None:
+            # If fee isn't set, or fee_amount is NULL, consider it either free or an error state
+            app.logger.warning(f"Attempted to record payment for league {league_id}, season {current_season_year} but no fee amount is set.")
+            # For now, allow it to proceed and update the paid amount/status as if fee is 0
+            total_required_fee = 0.0
+        else:
+            total_required_fee = float(league_fee_settings['fee_amount'])
+            if transaction_currency != league_fee_settings['fee_currency']:
+                app.logger.warning(f"Payment currency mismatch: Transaction was {transaction_currency}, expected {league_fee_settings['fee_currency']}")
+                # For simplicity, we'll still record it, but in a real app, you might want to block this or do conversion
+
+        # 3. Get current payment status for the user in this league
+        cursor.execute("""SELECT fee_paid_amount, fee_payment_status FROM UserLeagueLinks WHERE wallet_address = ? AND sleeper_league_id = ?""",
+                       (payer_wallet_address, league_id))
+        user_league_link = cursor.fetchone()
+
+        if not user_league_link:
+            app.logger.error(f"UserLeagueLink not found for wallet {payer_wallet_address} in league {league_id}. Cannot record payment.")
+            return jsonify({'success': False, 'error': 'User is not linked to this league.'}), 404
+        
+        current_paid_amount = user_league_link['fee_paid_amount'] if user_league_link['fee_paid_amount'] is not None else 0.0
+        
+        # 4. Calculate new paid amount and status
+        new_paid_amount = current_paid_amount + transaction_amount
+        new_payment_status = 'unpaid'
+        if new_paid_amount >= total_required_fee and total_required_fee > 0:
+            new_payment_status = 'paid'
+        elif new_paid_amount > 0 and new_paid_amount < total_required_fee:
+            new_payment_status = 'partially_paid'
+        elif total_required_fee == 0 and new_paid_amount >= 0: # If fee is 0, any payment or no payment means 'paid'
+            new_payment_status = 'paid'
+
+        # 5. Update UserLeagueLinks table
+        cursor.execute("""UPDATE UserLeagueLinks SET fee_paid_amount = ?, fee_payment_status = ?, updated_at = datetime('now') WHERE wallet_address = ? AND sleeper_league_id = ?""",
+                       (new_paid_amount, new_payment_status, payer_wallet_address, league_id))
+        conn.commit()
+
+        app.logger.info(f"Payment recorded for wallet {payer_wallet_address} in league {league_id}: Amount={transaction_amount} {transaction_currency}, TxID={transaction_id}. New status: {new_payment_status}, Total Paid: {new_paid_amount}")
+        return jsonify({'success': True, 'message': 'Payment recorded successfully', 'new_payment_status': new_payment_status, 'new_paid_amount': new_paid_amount}), 200
+
+    except sqlite3.Error as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Database error in POST /league/{league_id}/fees/record-payment: {str(e)}")
+        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
+    except Exception as e:
+        if conn: conn.rollback()
+        app.logger.error(f"Unexpected error in POST /league/{league_id}/fees/record-payment: {str(e)}")
         import traceback
         app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500

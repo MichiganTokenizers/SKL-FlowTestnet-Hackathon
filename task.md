@@ -35,6 +35,7 @@
 - [ ] Build league fee structure in keeper.db
 - [ ] Add pay league fee button in league page
 - [ ] Correct commissioner status for user LordTokenizer (wallet 0xf8d6e0586b0a20c7) in league 1230890383865552896 in keeper.db (Discovered: 2025-06-03)
+- [ ] Prevent association more than once per Sleeper user name upon production
 
 - [x] Clean up navbar hamburger menu issue (Started: 2025-07-29)
 
