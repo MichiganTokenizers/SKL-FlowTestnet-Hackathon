@@ -86,7 +86,7 @@ def add_cors_headers(response):
     return response
 
 # Initialize the database
-def init_db(force_create=False):
+def init_db():
     try:
         conn = get_global_db_connection() # Use global connection
         cursor = conn.cursor()
@@ -94,18 +94,16 @@ def init_db(force_create=False):
         # Enable WAL mode is handled by get_global_db_connection() now
         # So, no specific PRAGMA call here unless to re-verify or if get_global_db_connection fails.
 
-        if force_create:
-            print("Forcing recreation of all tables...")
-            # Drop existing tables
-            tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
-                      "transactions", "traded_picks", "drafts", "penalties", # Added penalties
-                      "LeagueMetadata", "Users", "players", "leagues", "LeagueFees"] # Added leagues and LeagueFees
-            for table in tables:
-                try:
-                    cursor.execute(f"DROP TABLE IF EXISTS {table}")
-                    print(f"Dropped table {table}")
-                except Exception as e:
-                    print(f"Error dropping table {table}: {str(e)}")
+        # Drop existing tables
+        tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
+                  "transactions", "traded_picks", "drafts", "penalties", # Added penalties
+                  "LeagueMetadata", "Users", "players", "leagues", "LeagueFees"] # Added leagues and LeagueFees
+        for table in tables:
+            try:
+                cursor.execute(f"DROP TABLE IF EXISTS {table}")
+                print(f"Dropped table {table}")
+            except Exception as e:
+                print(f"Error dropping table {table}: {str(e)}")
         
         cursor.execute('''CREATE TABLE IF NOT EXISTS sessions
                           (wallet_address TEXT PRIMARY KEY, session_token TEXT)''')
@@ -151,6 +149,19 @@ def init_db(force_create=False):
                             PRIMARY KEY (wallet_address, sleeper_league_id),
                             FOREIGN KEY (wallet_address) REFERENCES Users(wallet_address) ON DELETE CASCADE,
                             FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE
+                            )''')
+
+        cursor.execute('''CREATE TABLE IF NOT EXISTS LeaguePayments (
+                            sleeper_league_id TEXT NOT NULL,
+                            season_year INTEGER NOT NULL,
+                            wallet_address TEXT NOT NULL, -- Wallet of the payer
+                            amount REAL NOT NULL,
+                            currency TEXT NOT NULL,
+                            transaction_id TEXT UNIQUE NOT NULL, -- Each payment has a unique Flow transaction ID
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- To determine most recent
+                            FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE,
+                            FOREIGN KEY (wallet_address) REFERENCES Users(wallet_address) ON DELETE CASCADE
                             )''')
 
         cursor.execute('''CREATE TABLE IF NOT EXISTS Users (
@@ -2043,14 +2054,24 @@ def get_league_fees(league_id):
                 u.avatar,
                 ull.is_commissioner,
                 ull.fee_paid_amount,
-                ull.fee_payment_status
+                ull.fee_payment_status,
+                -- Subquery to get the most recent transaction_id for this user/league/season
+                (SELECT lp.transaction_id
+                 FROM LeaguePayments lp
+                 WHERE lp.sleeper_league_id = r.sleeper_league_id
+                   AND lp.wallet_address = u.wallet_address
+                   AND lp.season_year = ? -- Filter by target_season_year
+                 ORDER BY lp.updated_at DESC, lp.created_at DESC -- Get the most recent
+                 LIMIT 1
+                ) AS last_transaction_id
             FROM rosters r
             LEFT JOIN Users u ON r.owner_id = u.sleeper_user_id
             LEFT JOIN UserLeagueLinks ull ON u.wallet_address = ull.wallet_address AND ull.sleeper_league_id = r.sleeper_league_id
             WHERE r.sleeper_league_id = ?
             ORDER BY manager_display_name, r.team_name 
         """
-        cursor.execute(query, (league_id,))
+        # Pass target_season_year to the subquery. Note: it's used twice in the query.
+        cursor.execute(query, (target_season_year, league_id,))
         roster_data = cursor.fetchall()
         
         roster_payment_details_list = []
@@ -2075,7 +2096,8 @@ def get_league_fees(league_id):
                 'wallet_address': row['wallet_address'], # Will be null if user not in our system
                 'is_commissioner': bool(row['is_commissioner']) if row['is_commissioner'] is not None else False,
                 'paid_amount': row['fee_paid_amount'] if row['fee_paid_amount'] is not None else 0.0,
-                'payment_status': row['fee_payment_status'] if row['fee_payment_status'] else 'unpaid'
+                'payment_status': row['fee_payment_status'] if row['fee_payment_status'] else 'unpaid',
+                'last_transaction_id': row['last_transaction_id']
             })
 
         return jsonify({
@@ -2255,6 +2277,13 @@ def record_payment_for_league(league_id):
         # 5. Update UserLeagueLinks table
         cursor.execute("""UPDATE UserLeagueLinks SET fee_paid_amount = ?, fee_payment_status = ?, updated_at = datetime('now') WHERE wallet_address = ? AND sleeper_league_id = ?""",
                        (new_paid_amount, new_payment_status, payer_wallet_address, league_id))
+
+        # 6. Insert new record into LeaguePayments table
+        cursor.execute("""INSERT INTO LeaguePayments (
+                            sleeper_league_id, season_year, wallet_address, amount, currency, transaction_id, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))""",
+                       (league_id, current_season_year, payer_wallet_address, transaction_amount, transaction_currency, transaction_id))
+        
         conn.commit()
 
         app.logger.info(f"Payment recorded for wallet {payer_wallet_address} in league {league_id}: Amount={transaction_amount} {transaction_currency}, TxID={transaction_id}. New status: {new_payment_status}, Total Paid: {new_paid_amount}")

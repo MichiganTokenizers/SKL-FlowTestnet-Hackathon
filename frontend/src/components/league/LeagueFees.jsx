@@ -608,6 +608,17 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                                         <td>
                                             <span className={`badge bg-${roster.payment_status === 'paid' ? 'success' : (roster.payment_status === 'partially_paid' ? 'warning' : 'danger')}`}>
                                                 {roster.payment_status ? roster.payment_status.replace('_', ' ').toUpperCase() : 'N/A'}
+                                                {roster.payment_status === 'paid' && roster.last_transaction_id && (
+                                                    <a
+                                                        href={`https://flowscan.io/tx/${roster.last_transaction_id}`}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        className="ms-2 text-white text-decoration-underline"
+                                                        title="View transaction on Flowscan"
+                                                    >
+                                                        (View Tx)
+                                                    </a>
+                                                )}
                                             </span>
                                         </td>
                                         <td>
