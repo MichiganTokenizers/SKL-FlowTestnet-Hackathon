@@ -98,12 +98,6 @@ def init_db():
         tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
                   "transactions", "traded_picks", "drafts", "penalties", # Added penalties
                   "LeagueMetadata", "Users", "players", "leagues", "LeagueFees"] # Added leagues and LeagueFees
-        for table in tables:
-            try:
-                cursor.execute(f"DROP TABLE IF EXISTS {table}")
-                print(f"Dropped table {table}")
-            except Exception as e:
-                print(f"Error dropping table {table}: {str(e)}")
         
         cursor.execute('''CREATE TABLE IF NOT EXISTS sessions
                           (wallet_address TEXT PRIMARY KEY, session_token TEXT)''')
