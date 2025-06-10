@@ -454,7 +454,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
     return (
         <div className="league-fees-container card mb-4">
             <div className="card-header d-flex justify-content-between align-items-center">
-                <h4 className="mb-0">League Fee Information</h4>
+                <h4 className="mb-0">League Fees</h4>
                 <button
                     className="btn btn-link text-decoration-none collapsed"
                     type="button"
@@ -462,6 +462,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                     data-bs-target="#collapseLeagueFees"
                     aria-expanded="false"
                     aria-controls="collapseLeagueFees"
+                    style={{ color: '#9966CC' }}
                 >
                     ▼
                 </button>
@@ -469,7 +470,6 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
             <div className="collapse" id="collapseLeagueFees">
                 <div className="card-body">
                 <div className="fee-amount-section mb-3">
-                    <h5>Required Fees</h5>
                     {leagueFeeSettings && leagueFeeSettings.fee_amount !== null ? (
                         <div>
                             <p className="mb-1">
@@ -597,7 +597,6 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                     </div>
                 )}
 
-                <h5>Payment Status</h5>
                 {rosterPaymentDetails.length > 0 ? (
                     <div className="table-responsive">
                         <table className="table table-sm table-striped table-hover">
