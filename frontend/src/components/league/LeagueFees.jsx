@@ -453,10 +453,21 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
 
     return (
         <div className="league-fees-container card mb-4">
-            <div className="card-header">
-                <h4>League Fee Information</h4>
+            <div className="card-header d-flex justify-content-between align-items-center">
+                <h4 className="mb-0">League Fee Information</h4>
+                <button
+                    className="btn btn-link text-decoration-none collapsed"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#collapseLeagueFees"
+                    aria-expanded="false"
+                    aria-controls="collapseLeagueFees"
+                >
+                    ▼
+                </button>
             </div>
-            <div className="card-body">
+            <div className="collapse" id="collapseLeagueFees">
+                <div className="card-body">
                 <div className="fee-amount-section mb-3">
                     <h5>Required Fees</h5>
                     {leagueFeeSettings && leagueFeeSettings.fee_amount !== null ? (
@@ -632,6 +643,7 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                 ) : (
                     <p>No roster payment details available for this league.</p>
                 )}
+                </div>
             </div>
         </div>
     );

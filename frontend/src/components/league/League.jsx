@@ -126,11 +126,11 @@ function League(props) { // Accept props
     }
 
     return (
-        <div className="container p-4">
-            <h1 className="display-4 fw-bold mb-4" style={{ color: 'var(--text-color)' }}>
+        <div className="container p-4" style={{ backgroundColor: 'transparent' }}>
+            <h1 className="display-4 fw-bold mb-4 text-white">
                 {leagueName} 
             </h1>
-            <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {currentUserDetails?.display_name || 'Player'}</p>
+            <p className="lead text-white">Welcome, {currentUserDetails?.display_name || 'Player'}</p>
             
             {/* League Fees Section - only if a league is selected */}
             {selectedLeagueId && <LeagueFees leagueId={selectedLeagueId} currentUser={currentUserDetails} sessionToken={sessionToken} />}
@@ -139,40 +139,40 @@ function League(props) { // Accept props
                 <div className="mt-3">
                     {standings.length > 0 ? (
                         <div>
-                            <h3 style={{ color: 'var(--text-color)' }}>League Standings</h3>
-                            <table className="table table-striped table-hover">
-                                <thead className="league-table-header">
+                            <h3 className="text-white">League Standings</h3>
+                            <table className="table table-striped table-hover" style={{ backgroundColor: 'transparent' }}>
+                                <thead className="league-table-header" style={{ backgroundColor: 'transparent' }}>
                                     <tr>
-                                        <th>Team Name</th>
-                                        <th>Manager</th>
-                                        <th>Record (W-L-T)</th>
-                                        <th>Next Matchup</th>
-                                        <th>Transaction Count</th>
+                                        <th className="border-white">Team Name</th>
+                                        <th className="border-white">Manager</th>
+                                        <th className="border-white">Record (W-L-T)</th>
+                                        <th className="border-white">Next Matchup</th>
+                                        <th className="border-white">Transaction Count</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {standings.map(roster => (
-                                        <tr key={roster.roster_id}>
-                                            <td>
+                                        <tr key={roster.roster_id} style={{ backgroundColor: 'transparent' }}>
+                                            <td className="border-white">
                                                 {roster.roster_id ? (
-                                                    <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`} style={{ color: 'var(--accent-color)' }}>
+                                                    <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`} style={{ color: 'black' }}>
                                                         {roster.team_name || 'Unnamed Team'}
                                                     </Link>
                                                 ) : (
-                                                    roster.team_name || 'Unnamed Team' // Fallback if no roster_id
+                                                    <span>{roster.team_name || 'Unnamed Team'}</span>
                                                 )}
                                             </td>
-                                            <td style={{ color: 'var(--text-color)' }}>{roster.owner_display_name || roster.owner_id}</td>
-                                            <td style={{ color: 'var(--text-color)' }}>{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
-                                            <td style={{ color: 'var(--text-color)' }}>TBD</td>
-                                            <td style={{ color: 'var(--text-color)' }}>0</td>{/* Placeholder */}
+                                            <td className="border-white">{roster.owner_display_name || roster.owner_id}</td>
+                                            <td className="border-white">{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
+                                            <td className="border-white">TBD</td>
+                                            <td className="border-white">0</td>
                                         </tr>
                                     ))}
                                 </tbody>
                             </table>
                         </div>
                     ) : (
-                         !loading && <p style={{ color: 'var(--text-color)' }}>No standings data available for this league, or an error occurred fetching them.</p>
+                         !loading && <p className="text-white">No standings data available for this league, or an error occurred fetching them.</p>
                     )}
                 </div>
             )}
