@@ -128,7 +128,7 @@ def apply_contract_penalties_and_deactivate(
 
         # Deactivate contract
         logger.debug(f"apply_contract_penalties_and_deactivate: Deactivating contract_row_id {contract_row_id}")
-        cursor.execute("UPDATE contracts SET is_active = 0, updated_at = datetime('now') WHERE id = ?", (contract_row_id,))
+        cursor.execute("UPDATE contracts SET is_active = 0, updated_at = datetime('now') WHERE rowid = ?", (contract_row_id,))
         logger.debug(f"apply_contract_penalties_and_deactivate: Contract {contract_row_id} deactivated.")
         
         logger.info(f"Successfully applied {len(penalties_to_apply)} penalties and deactivated contract_row_id {contract_row_id}.")

@@ -196,8 +196,27 @@ function AppContent() {
                         setSessionToken(newSessionToken);
                         setIsNewUser(loginData.isNewUser);
                         setLoginProcessJustCompleted(true);
-                        if (!loginData.isNewUser) {
+                        
+                        // If user has a Sleeper ID, fetch their leagues
+                        if (!loginData.isNewUser && loginData.hasSleeperId) {
+                            console.log("User has Sleeper ID, fetching leagues...");
                             await fetchUserLeagues(newSessionToken);
+                            
+                            // Trigger a full Sleeper data fetch
+                            try {
+                                const fetchResponse = await fetch(`${API_BASE_URL}/sleeper/fetchAll`, {
+                                    method: 'POST',
+                                    headers: { 'Authorization': newSessionToken }
+                                });
+                                const fetchData = await fetchResponse.json();
+                                if (fetchData.success) {
+                                    console.log('Successfully fetched all Sleeper data');
+                                } else {
+                                    console.error('Failed to fetch all Sleeper data:', fetchData.error);
+                                }
+                            } catch (error) {
+                                console.error('Error fetching all Sleeper data:', error);
+                            }
                         }
                         setIsAppReady(true);
                     } else {

@@ -431,42 +431,47 @@ class SleeperService:
                                 for dropped_player_id in dropped_player_ids:
                                     self.logger.info(f"SleeperService DEBUG: Processing dropped player {dropped_player_id} for roster {current_api_roster_id}")
                                     cursor.execute('''
-                                        SELECT id, player_id, draft_amount, duration, contract_year FROM contracts 
+                                        SELECT rowid, player_id, draft_amount, duration, contract_year FROM contracts 
                                         WHERE player_id = ? AND team_id = ? AND sleeper_league_id = ? AND is_active = 1
                                     ''', (dropped_player_id, current_api_roster_id, league_id))
                                     contract_to_penalize_row = cursor.fetchone()
                                     self.logger.info(f"SleeperService DEBUG: Dropped player {dropped_player_id} - Contract query result: {dict(contract_to_penalize_row) if contract_to_penalize_row else 'No active contract found'}")
 
                                     if contract_to_penalize_row:
-                                        contract_primary_key_id = contract_to_penalize_row['id']
+                                        contract_row_id = contract_to_penalize_row['rowid']
                                         draft_amount = contract_to_penalize_row['draft_amount']
                                         contract_duration = contract_to_penalize_row['duration']
                                         contract_start_year = contract_to_penalize_row['contract_year']
                                         year_dropped = int(season_details['current_year'])
                                         
                                         log_params = {
-                                            'contract_db_id': contract_primary_key_id, 'draft_amount': draft_amount,
-                                            'contract_duration': contract_duration, 'contract_start_year': contract_start_year,
+                                            'contract_row_id': contract_row_id,
+                                            'player_id': dropped_player_id,
+                                            'team_id': current_api_roster_id,
+                                            'sleeper_league_id': league_id,
+                                            'draft_amount': draft_amount,
+                                            'contract_duration': contract_duration,
+                                            'contract_start_year': contract_start_year,
                                             'year_dropped': year_dropped
                                         }
                                         self.logger.info(f"SleeperService DEBUG: Parameters for apply_contract_penalties_and_deactivate: {json.dumps(log_params)}")
 
-                                        if None in [contract_primary_key_id, draft_amount, contract_duration, contract_start_year, year_dropped]:
+                                        if None in [contract_row_id, draft_amount, contract_duration, contract_start_year, year_dropped]:
                                             self.logger.error(f"SleeperService: CRITICAL - Missing one or more key contract details for applying penalty... Skipping for player {dropped_player_id}.")
                                         else:
                                             current_is_offseason = season_details.get('is_offseason', True) # Default to True if not found, safer for penalties
                                             self.logger.info(f"SleeperService DEBUG: Passing is_currently_offseason_when_dropped={current_is_offseason} to penalty function for player {dropped_player_id}.")
                                             apply_contract_penalties_and_deactivate(
-                                                contract_row_id=contract_primary_key_id,
+                                                contract_row_id=contract_row_id,
                                                 draft_amount=float(draft_amount),
                                                 contract_duration=int(contract_duration),
                                                 contract_start_year=int(contract_start_year),
                                                 year_dropped=year_dropped,
-                                                is_currently_offseason_when_dropped=current_is_offseason, # Pass the flag
+                                                is_currently_offseason_when_dropped=current_is_offseason,
                                                 db_conn=self.conn,
                                                 logger=self.logger
                                             )
-                                            self.logger.info(f"SleeperService: Successfully processed penalties and deactivation for player {dropped_player_id}, contract_rowid {contract_primary_key_id}.")
+                                            self.logger.info(f"SleeperService: Successfully processed penalties and deactivation for player {dropped_player_id}, contract_rowid {contract_row_id}.")
                         # END OF NEW DROPPED PLAYER LOGIC (before upserting the roster with API data)
                         
                         # Existing roster processing logic starts here, using api_roster_item
