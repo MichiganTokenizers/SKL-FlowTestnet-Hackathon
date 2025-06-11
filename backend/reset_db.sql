@@ -58,16 +58,17 @@ CREATE TABLE IF NOT EXISTS rosters (
 );
 
 CREATE TABLE IF NOT EXISTS contracts (
-    player_id INTEGER,
-    team_id INTEGER,
+    player_id TEXT,
+    team_id TEXT,
+    sleeper_league_id TEXT,
     draft_amount REAL,
     contract_year INTEGER,
     duration INTEGER,
     is_active BOOLEAN DEFAULT 1,
-    penalty_incurred REAL,
-    penalty_year INTEGER,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME
+    updated_at DATETIME,
+    UNIQUE (player_id, team_id, contract_year, sleeper_league_id),
+    FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS transactions (

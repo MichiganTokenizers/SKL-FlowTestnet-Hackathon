@@ -514,7 +514,7 @@ def login():
         cursor = conn.cursor()
         
         # Check if user exists
-        cursor.execute('SELECT wallet_address FROM Users WHERE wallet_address = ?', (wallet_address,))
+        cursor.execute('SELECT wallet_address, sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
         user = cursor.fetchone()
         is_new_user = not user
 
@@ -541,11 +541,16 @@ def login():
             print(f"DEBUG: Flask session set for new user: {wallet_address}")
 
         else:
-            # For existing users, trigger a full data pull from Sleeper
-            print("Existing user detected, triggering full Sleeper data pull via /auth/login path")
-            full_data_response = sleeper_service.fetch_all_data(wallet_address)
-            if not full_data_response['success']:
-                print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
+            # For existing users, check if they have a Sleeper user ID
+            if user['sleeper_user_id']:
+                print(f"Existing user with Sleeper ID detected, triggering full Sleeper data pull via /auth/login path")
+                full_data_response = sleeper_service.fetch_all_data(wallet_address)
+                if not full_data_response['success']:
+                    print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
+                    # Don't return error here, just log it. The user can still log in
+            else:
+                print(f"Existing user without Sleeper ID detected: {wallet_address}")
+            
             # Create or update session
             cursor.execute('''
                 INSERT OR REPLACE INTO sessions (
@@ -562,7 +567,8 @@ def login():
         return jsonify({
             'success': True,
             'sessionToken': session_token,
-            'isNewUser': is_new_user
+            'isNewUser': is_new_user,
+            'hasSleeperId': not is_new_user and user['sleeper_user_id'] is not None
         })
 
     except Exception as e:

@@ -126,11 +126,11 @@ function League(props) { // Accept props
     }
 
     return (
-        <div className="container p-4">
-            <h1 className="display-4 fw-bold mb-4" style={{ color: 'var(--text-color)' }}>
+        <div className="container p-4" style={{ backgroundColor: 'transparent' }}>
+            <h1 className="display-4 fw-bold mb-4 text-white">
                 {leagueName} 
             </h1>
-            <p className="lead" style={{ color: 'var(--text-color)' }}>Welcome, {currentUserDetails?.display_name || 'Player'}</p>
+            <p className="lead text-white">Welcome, {currentUserDetails?.display_name || 'Player'}</p>
             
             {/* League Fees Section - only if a league is selected */}
             {selectedLeagueId && <LeagueFees leagueId={selectedLeagueId} currentUser={currentUserDetails} sessionToken={sessionToken} />}
@@ -138,49 +138,86 @@ function League(props) { // Accept props
             {selectedLeagueId && ( // Only show standings if a league is selected
                 <div className="mt-3">
                     {standings.length > 0 ? (
-                        <div>
-                            <h3 style={{ color: 'var(--text-color)' }}>League Standings</h3>
-                            <table className="table table-striped table-hover">
-                                <thead className="league-table-header">
-                                    <tr>
-                                        <th>Team Name</th>
-                                        <th>Manager</th>
-                                        <th>Record (W-L-T)</th>
-                                        <th>Next Matchup</th>
-                                        <th>Transaction Count</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {standings.map(roster => (
-                                        <tr key={roster.roster_id}>
-                                            <td>
-                                                {roster.roster_id ? (
-                                                    <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`} style={{ color: 'var(--accent-color)' }}>
-                                                        {roster.team_name || 'Unnamed Team'}
-                                                    </Link>
-                                                ) : (
-                                                    roster.team_name || 'Unnamed Team' // Fallback if no roster_id
-                                                )}
-                                            </td>
-                                            <td style={{ color: 'var(--text-color)' }}>{roster.owner_display_name || roster.owner_id}</td>
-                                            <td style={{ color: 'var(--text-color)' }}>{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
-                                            <td style={{ color: 'var(--text-color)' }}>TBD</td>
-                                            <td style={{ color: 'var(--text-color)' }}>0</td>{/* Placeholder */}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="card mb-4">
+                            <div className="card-header d-flex justify-content-between align-items-center">
+                                <h4 className="mb-0" style={{ color: 'black' }}>League Standings</h4>
+                                <button
+                                    className="btn btn-link text-decoration-none collapsed"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#collapseStandings"
+                                    aria-expanded="false"
+                                    aria-controls="collapseStandings"
+                                    style={{ color: '#9966CC' }}
+                                >
+                                    ▼
+                                </button>
+                            </div>
+                            <div className="collapse" id="collapseStandings">
+                                <div className="card-body">
+                                    <table className="table table-striped table-hover" style={{ backgroundColor: 'transparent' }}>
+                                        <thead className="league-table-header" style={{ backgroundColor: 'transparent' }}>
+                                            <tr>
+                                                <th className="border-white">Team Name</th>
+                                                <th className="border-white">Manager</th>
+                                                <th className="border-white">Record (W-L-T)</th>
+                                                <th className="border-white">Next Matchup</th>
+                                                <th className="border-white">Transaction Count</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {standings.map(roster => (
+                                                <tr key={roster.roster_id} style={{ backgroundColor: 'transparent' }}>
+                                                    <td className="border-white">
+                                                        {roster.roster_id ? (
+                                                            <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`} style={{ color: 'black' }}>
+                                                                {roster.team_name || 'Unnamed Team'}
+                                                            </Link>
+                                                        ) : (
+                                                            <span>{roster.team_name || 'Unnamed Team'}</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="border-white">{roster.owner_display_name || roster.owner_id}</td>
+                                                    <td className="border-white">{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
+                                                    <td className="border-white">TBD</td>
+                                                    <td className="border-white">0</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                         </div>
                     ) : (
-                         !loading && <p style={{ color: 'var(--text-color)' }}>No standings data available for this league, or an error occurred fetching them.</p>
+                         !loading && <p className="text-white">No standings data available for this league, or an error occurred fetching them.</p>
                     )}
                 </div>
             )}
 
-            {/* Recent Transactions Section - only if a league is selected */}
+            {/* League Transactions Section */}
             {selectedLeagueId && (
-                <div className="mt-5">
-                    {/* <RecentTransactionsTable /> */}
+                <div className="mt-3">
+                    <div className="card mb-4">
+                        <div className="card-header d-flex justify-content-between align-items-center">
+                            <h4 className="mb-0" style={{ color: 'black' }}>League Transactions</h4>
+                            <button
+                                className="btn btn-link text-decoration-none collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#collapseTransactions"
+                                aria-expanded="false"
+                                aria-controls="collapseTransactions"
+                                style={{ color: '#9966CC' }}
+                            >
+                                ▼
+                            </button>
+                        </div>
+                        <div className="collapse" id="collapseTransactions">
+                            <div className="card-body">
+                                <p className="text-muted">Transaction history will be displayed here.</p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

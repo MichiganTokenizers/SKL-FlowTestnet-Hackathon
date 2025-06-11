@@ -24,9 +24,13 @@ html{
 body{
     font-family: var(--primary-font-family);
     min-height: 100vh;
-    background-image: url(images/background.jpg);
+    /* Local stone wall background image from public directory */
+    background-image: url('/textures/226_old wall stone texture-seamless.jpg');
     background-size: cover;
-    background-position: right;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+    background-color: #6a6a6a; /* Fallback color */
     overflow-y: auto;
     overflow-x: hidden;
 }
@@ -43,6 +47,7 @@ body{
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    margin-left: 20px;
 }
 h1{
     font-size: 3rem;
@@ -133,6 +138,7 @@ a:hover{
     .wrapper{
         width: min(600px, 100%);
         border-radius: 0;
+        margin-left: 10px;
     }
 }
 
@@ -197,4 +203,28 @@ button, input, select, textarea, label, td, th, h1, h2, h3, h4, h5, h6, p, a, li
 .navbar-custom .dropdown-menu .dropdown-item {
   font-family: var(--primary-font-family); /* Ensures Comfortaa font */
   color: var(--text-color); /* Default text color for non-active/hovered items */
+}
+
+.welcome-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 2rem;
+    text-align: center;
+    color: white;
+}
+
+.welcome-page h1 {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: white;
+}
+
+.welcome-page p {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+    max-width: 600px;
+    color: white;
 }
