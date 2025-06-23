@@ -346,16 +346,29 @@ class SleeperService:
                 if not league_participants:
                     self.logger.warning(f"SleeperService.fetch_all_data: No participants found for league {league_id}.")
                 else:
-                    # self.logger.info(f"SleeperService.fetch_all_data: Found {len(league_participants)} participants for league {league_id}.")
+                    # Log participant data for debugging team names
+                    self.logger.info(f"SleeperService: Found {len(league_participants)} participants for league {league_id}")
                     for participant_data in league_participants:
                         p_user_id = participant_data.get("user_id")
                         p_display_name = participant_data.get("display_name")
                         p_avatar = participant_data.get("avatar")
                         p_username = participant_data.get("username")
+                        p_metadata = participant_data.get("metadata", {}) or {}
+                        p_team_name = p_metadata.get("team_name")
 
                         if not p_user_id:
                             self.logger.warning("SleeperService.fetch_all_data: Participant data found with no user_id. Skipping.")
                             continue
+
+                        # Log participant details for debugging
+                        participant_debug = {
+                            'user_id': p_user_id,
+                            'username': p_username,
+                            'display_name': p_display_name,
+                            'metadata': p_metadata,
+                            'team_name_from_metadata': p_team_name
+                        }
+                        self.logger.info(f"SleeperService: Participant data for {p_user_id}: {json.dumps(participant_debug, indent=2)}")
 
                         # self.logger.debug(f"SleeperService.fetch_all_data: Upserting league participant {p_user_id} ({p_display_name}) into users table.")
                         cursor.execute('''
@@ -407,6 +420,15 @@ class SleeperService:
                             continue # Skip this iteration if API roster has no ID
                         
                         current_api_roster_id = str(api_roster_id_str)
+
+                        # Log roster data for debugging team names
+                        roster_debug = {
+                            'roster_id': current_api_roster_id,
+                            'owner_id': api_roster_item.get("owner_id"),
+                            'metadata': api_roster_item.get("metadata", {}),
+                            'team_name_from_metadata': api_roster_item.get("metadata", {}).get("team_name") if api_roster_item.get("metadata") else None
+                        }
+                        self.logger.info(f"SleeperService: Roster data for {current_api_roster_id}: {json.dumps(roster_debug, indent=2)}")
 
                         # Get API player IDs for current roster
                         api_player_ids_list = api_roster_item.get('players', []) 
@@ -485,25 +507,107 @@ class SleeperService:
 
                         owner_id = api_roster_item.get("owner_id") 
                         
-                        team_name_to_store = "Unknown Team"
+                        # Enhanced team name resolution with debugging and improved priority
+                        team_name_debug_info = {
+                            'roster_id': roster_id_for_upsert,
+                            'league_id': league_id,
+                            'owner_id': owner_id,
+                            'available_sources': {}
+                        }
+                        
+                        # Source 1: Roster metadata team name (custom team name set by user)
                         roster_metadata = api_roster_item.get("metadata", {}) or {} 
                         custom_roster_team_name = roster_metadata.get("team_name")
-
+                        team_name_debug_info['available_sources']['roster_metadata'] = {
+                            'value': custom_roster_team_name,
+                            'source': 'roster.metadata.team_name'
+                        }
+                        
+                        # Source 2: User's league-specific team name (from participant metadata)
                         owner_display_name = None
                         owner_league_specific_team_name = None
-
+                        owner_username = None
+                        
                         if owner_id and owner_id in participant_map:
                             participant_details = participant_map[owner_id]
                             owner_display_name = participant_details.get("display_name")
+                            owner_username = participant_details.get("username")
                             participant_user_metadata = participant_details.get("metadata", {}) or {} 
                             owner_league_specific_team_name = participant_user_metadata.get("team_name")
+                            
+                            team_name_debug_info['available_sources']['participant_metadata'] = {
+                                'value': owner_league_specific_team_name,
+                                'source': 'participant.metadata.team_name',
+                                'participant_details': {
+                                    'display_name': owner_display_name,
+                                    'username': owner_username
+                                }
+                            }
+                        else:
+                            team_name_debug_info['available_sources']['participant_metadata'] = {
+                                'value': None,
+                                'source': 'participant.metadata.team_name',
+                                'error': f'Owner ID {owner_id} not found in participant_map'
+                            }
                         
-                        if custom_roster_team_name:
-                            team_name_to_store = custom_roster_team_name
-                        elif owner_league_specific_team_name:
-                            team_name_to_store = owner_league_specific_team_name
-                        elif owner_display_name:
-                            team_name_to_store = owner_display_name
+                        # Source 3: User's display name (fallback)
+                        team_name_debug_info['available_sources']['display_name'] = {
+                            'value': owner_display_name,
+                            'source': 'participant.display_name'
+                        }
+                        
+                        # Source 4: User's username (final fallback)
+                        team_name_debug_info['available_sources']['username'] = {
+                            'value': owner_username,
+                            'source': 'participant.username'
+                        }
+                        
+                        # Enhanced priority logic with validation
+                        team_name_to_store = "Unknown Team"
+                        selected_source = "default"
+                        
+                        # Priority 1: Custom roster team name (user explicitly set this)
+                        if custom_roster_team_name and custom_roster_team_name.strip():
+                            team_name_to_store = custom_roster_team_name.strip()
+                            selected_source = "roster_metadata"
+                            self.logger.info(f"SleeperService: Roster {roster_id_for_upsert} using custom roster team name: '{team_name_to_store}'")
+                        
+                        # Priority 2: League-specific team name (user set for this league)
+                        elif owner_league_specific_team_name and owner_league_specific_team_name.strip():
+                            team_name_to_store = owner_league_specific_team_name.strip()
+                            selected_source = "participant_metadata"
+                            self.logger.info(f"SleeperService: Roster {roster_id_for_upsert} using league-specific team name: '{team_name_to_store}'")
+                        
+                        # Priority 3: User's display name (general user preference)
+                        elif owner_display_name and owner_display_name.strip():
+                            team_name_to_store = owner_display_name.strip()
+                            selected_source = "display_name"
+                            self.logger.info(f"SleeperService: Roster {roster_id_for_upsert} using display name as team name: '{team_name_to_store}'")
+                        
+                        # Priority 4: User's username (final fallback)
+                        elif owner_username and owner_username.strip():
+                            team_name_to_store = owner_username.strip()
+                            selected_source = "username"
+                            self.logger.info(f"SleeperService: Roster {roster_id_for_upsert} using username as team name: '{team_name_to_store}'")
+                        
+                        # Priority 5: Default fallback
+                        else:
+                            team_name_to_store = f"Unknown Team (Owner: {owner_id})"
+                            selected_source = "default"
+                            self.logger.warning(f"SleeperService: Roster {roster_id_for_upsert} - No valid team name found, using default")
+                        
+                        # Add final selection to debug info
+                        team_name_debug_info['final_selection'] = {
+                            'team_name': team_name_to_store,
+                            'selected_source': selected_source
+                        }
+                        
+                        # Log comprehensive debug information
+                        self.logger.info(f"SleeperService: Team name resolution for roster {roster_id_for_upsert} (league {league_id}): {json.dumps(team_name_debug_info, indent=2)}")
+                        
+                        # Additional validation: Check for suspicious team names
+                        if team_name_to_store.lower() in ['unknown team', 'unknown', 'n/a', 'null', '']:
+                            self.logger.warning(f"SleeperService: Roster {roster_id_for_upsert} has suspicious team name: '{team_name_to_store}'. Debug info: {json.dumps(team_name_debug_info)}")
                         
                         # self.logger.debug(f"SleeperService: Determined team name for API roster {roster_id_for_upsert} (owner: {owner_id}) as '{team_name_to_store}'")
 

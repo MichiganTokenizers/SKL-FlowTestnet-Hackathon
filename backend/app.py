@@ -193,7 +193,8 @@ def init_db():
                            FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE
                            )''')
         cursor.execute('''CREATE TABLE IF NOT EXISTS contracts
-                          (player_id TEXT,
+                          (rowid INTEGER PRIMARY KEY AUTOINCREMENT,
+                           player_id TEXT,
                            team_id TEXT,
                            sleeper_league_id TEXT, -- Added
                            draft_amount REAL,
@@ -213,7 +214,7 @@ def init_db():
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME,
                            FOREIGN KEY (contract_id) REFERENCES contracts(rowid) ON DELETE CASCADE 
-                           )''') # Assuming contract_id refers to contracts.rowid
+                           )''') # Now contracts has explicit rowid, so this FK will work
         cursor.execute('''CREATE TABLE IF NOT EXISTS transactions
                           (sleeper_transaction_id TEXT UNIQUE,
                            league_id INTEGER,
