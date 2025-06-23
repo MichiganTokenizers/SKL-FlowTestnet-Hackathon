@@ -1141,28 +1141,33 @@ def complete_sleeper_association():
         print(f"DEBUG: Internal fetch_all_data result: {fetch_result}")
         
         if fetch_result.get('success'):
-            # Designate commissioner if this is the first user for any of their leagues
+            # NEW LOGIC: Set commissioner status based on Sleeper's is_owner field
             cursor.execute("SELECT sleeper_league_id FROM UserLeagueLinks WHERE wallet_address = ?", (wallet_address,))
             user_leagues = cursor.fetchall()
             for league_row in user_leagues:
                 current_league_id = league_row['sleeper_league_id']
-                # Check if any other user is already commissioner for this league
+                # Get this user's sleeper_user_id
+                cursor.execute("SELECT sleeper_user_id FROM users WHERE wallet_address = ?", (wallet_address,))
+                user_data = cursor.fetchone()
+                if not user_data or not user_data['sleeper_user_id']:
+                    print(f"DEBUG: No sleeper_user_id found for wallet {wallet_address}")
+                    continue
+                sleeper_user_id = user_data['sleeper_user_id']
+                # Get all users from Sleeper API for this league
+                league_users = sleeper_service.get_league_users(current_league_id)
+                if not league_users:
+                    print(f"DEBUG: Could not fetch users from Sleeper API for league {current_league_id}")
+                    continue
+                # Find this user in the Sleeper API response
+                sleeper_user = next((u for u in league_users if u.get('user_id') == sleeper_user_id), None)
+                is_owner = sleeper_user.get('is_owner', False) if sleeper_user else False
+                print(f"DEBUG: User {wallet_address} (sleeper_user_id: {sleeper_user_id}) is_owner in Sleeper: {is_owner}")
                 cursor.execute("""
-                    SELECT COUNT(*) FROM UserLeagueLinks 
-                    WHERE sleeper_league_id = ? AND is_commissioner = 1 AND wallet_address != ?
-                """, (current_league_id, wallet_address))
-                commissioner_count = cursor.fetchone()[0]
-                
-                if commissioner_count == 0:
-                    # No other commissioner, make this user the commissioner for this league
-                    print(f"DEBUG: Designating {wallet_address} as commissioner for league {current_league_id}")
-                    cursor.execute("""
-                        UPDATE UserLeagueLinks 
-                        SET is_commissioner = 1 
-                        WHERE wallet_address = ? AND sleeper_league_id = ?
-                    """, (wallet_address, current_league_id))
-            
-            conn.commit() # Commit changes made by fetch_all_data and commissioner designation
+                    UPDATE UserLeagueLinks 
+                    SET is_commissioner = ?, updated_at = datetime('now')
+                    WHERE wallet_address = ? AND sleeper_league_id = ?
+                """, (1 if is_owner else 0, wallet_address, current_league_id))
+            conn.commit()
             print(f"DEBUG: conn.commit() executed for wallet_address: {wallet_address} (after successful fetch_all_data and commissioner check)")
         elif fetch_result.get('error'): # Make sure to check if 'error' key exists
             # Log this error, but the association itself was successful.
