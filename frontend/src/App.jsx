@@ -371,10 +371,7 @@ function AppContent() {
                                     </div>
                                 </div>
                             ) : (
-                                <div className="text-center">
-                                    <h2 className="text-white">Welcome to Supreme Keeper League</h2>
-                                    <p className="text-white">Please connect your Flow wallet to continue</p>
-                                </div>
+                                <Home sessionToken={sessionToken} onLogout={logout} />
                             )
                         )
                     } />

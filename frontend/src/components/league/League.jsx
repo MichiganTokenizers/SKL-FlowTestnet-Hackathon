@@ -142,18 +142,18 @@ function League(props) { // Accept props
                             <div className="card-header d-flex justify-content-between align-items-center">
                                 <h4 className="mb-0" style={{ color: 'black' }}>League Standings</h4>
                                 <button
-                                    className="btn btn-link text-decoration-none collapsed"
+                                    className="btn btn-link text-decoration-none"
                                     type="button"
                                     data-bs-toggle="collapse"
                                     data-bs-target="#collapseStandings"
-                                    aria-expanded="false"
+                                    aria-expanded="true"
                                     aria-controls="collapseStandings"
                                     style={{ color: '#9966CC' }}
                                 >
                                     ▼
                                 </button>
                             </div>
-                            <div className="collapse" id="collapseStandings">
+                            <div className="collapse show" id="collapseStandings">
                                 <div className="card-body">
                                     <table className="table table-striped table-hover" style={{ backgroundColor: 'transparent' }}>
                                         <thead className="league-table-header" style={{ backgroundColor: 'transparent' }}>
@@ -201,18 +201,18 @@ function League(props) { // Accept props
                         <div className="card-header d-flex justify-content-between align-items-center">
                             <h4 className="mb-0" style={{ color: 'black' }}>League Transactions</h4>
                             <button
-                                className="btn btn-link text-decoration-none collapsed"
+                                className="btn btn-link text-decoration-none"
                                 type="button"
                                 data-bs-toggle="collapse"
                                 data-bs-target="#collapseTransactions"
-                                aria-expanded="false"
+                                aria-expanded="true"
                                 aria-controls="collapseTransactions"
                                 style={{ color: '#9966CC' }}
                             >
                                 ▼
                             </button>
                         </div>
-                        <div className="collapse" id="collapseTransactions">
+                        <div className="collapse show" id="collapseTransactions">
                             <div className="card-body">
                                 <p className="text-muted">Transaction history will be displayed here.</p>
                             </div>
