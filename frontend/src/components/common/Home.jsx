@@ -56,7 +56,11 @@ function Home({ sessionToken, onLogout }) {
                                         <strong>Contract Escalation:</strong> Each year of a contract increases in cost by 10% over the previous year (rounded up).
                                     </li>
                                     <li>
-                                        <strong>Franchise Tag:</strong> Each team may designate one player as a franchise player before the season, following platform rules for franchise tags.
+                                        <strong>Franchise Tag:</strong> Each team may designate one player as a franchise player before the season. The franchise tag contract amount is set to the <b>greater of</b>:
+                                        <ul>
+                                            <li>The average of the top 5 contracts at the same position from the previous year</li>
+                                            <li>10% greater than the player's previous year contract</li>
+                                        </ul>
                                     </li>
                                     <li>
                                         <strong>Waivers & Trades:</strong> Most roster moves (waivers, trades) are performed on Sleeper, but all contract and penalty management is handled on this platform.
@@ -148,6 +152,8 @@ function Home({ sessionToken, onLogout }) {
                     </div>
                 </div>
             )}
+            {/* REMOVE the Import Sleeper League and Logout buttons below */}
+            {/* 
             {sessionToken ? (
                 <div className="row justify-content-center">
                     <div className="col-md-8">
@@ -163,6 +169,7 @@ function Home({ sessionToken, onLogout }) {
                     <button onClick={onLogout} className="btn btn-outline-danger">Logout</button>
                 </div>
             )}
+            */}
         </div>
     );
 }

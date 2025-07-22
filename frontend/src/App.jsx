@@ -309,6 +309,10 @@ function AppContent() {
                     </button> */}
                     <div className="collapse navbar-collapse" id="navbarNav">
                         <ul className="navbar-nav me-auto">
+                            {/* Home link - always visible */}
+                            <li className="nav-item">
+                                <Link className="nav-link" to="/home">Home</Link>
+                            </li>
                             {sessionToken && !isNewUser && leagues.length > 0 && (
                                 <li className="nav-item dropdown">
                                     <a className="nav-link dropdown-toggle" href="#" id="myLeaguesDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -375,6 +379,7 @@ function AppContent() {
                             )
                         )
                     } />
+                    <Route path="/home" element={<Home sessionToken={sessionToken} onLogout={logout} />} />
                     <Route path="/league" element={
                         sessionToken && isAppReady && !isNewUser ? (
                             <League leagues={leagues} selectedLeagueId={selectedLeagueId} sessionToken={sessionToken} currentUserDetails={currentUserDetails} />
