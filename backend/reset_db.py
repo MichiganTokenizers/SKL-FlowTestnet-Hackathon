@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 # Import the init_db function from app.py
-from app import init_db
+from .app import init_db
 
 def main():
     print("Resetting database...")

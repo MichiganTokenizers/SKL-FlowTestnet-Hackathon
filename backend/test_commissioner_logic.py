@@ -6,7 +6,7 @@ Test script to verify the new commissioner logic based on Sleeper's is_owner fie
 import sqlite3
 import os
 import sys
-from sleeper_service import SleeperService
+from .sleeper_service import SleeperService
 
 def test_commissioner_logic():
     """Test the new commissioner logic."""
