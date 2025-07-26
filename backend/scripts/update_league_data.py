@@ -3,7 +3,7 @@ import os
 import json
 
 # Connect to the database
-db_path = os.path.join(os.getcwd(), 'keeper.db')
+db_path = '/var/data/keeper.db'
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 

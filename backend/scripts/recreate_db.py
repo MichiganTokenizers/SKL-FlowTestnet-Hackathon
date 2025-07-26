@@ -3,7 +3,7 @@ import sqlite3
 
 def recreate_database():
     """Delete and recreate the keeper.db database with proper schema"""
-    db_path = 'keeper.db'
+    db_path = '/var/data/keeper.db'
     
     # Delete the existing database if it exists
     if os.path.exists(db_path):

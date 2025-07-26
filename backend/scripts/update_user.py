@@ -3,7 +3,7 @@ import sqlite3
 def update_database():
     try:
         # Connect to the database
-        with sqlite3.connect('backend/keeper.db') as conn:
+        with sqlite3.connect('/var/data/keeper.db') as conn:
             cursor = conn.cursor()
             
             # Update the wallet_address for LordTokenizer

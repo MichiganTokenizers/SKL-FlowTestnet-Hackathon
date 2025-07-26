@@ -14,7 +14,7 @@ def update_season(year=None, is_offseason=None):
         year = datetime.now().year
     
     try:
-        with sqlite3.connect('keeper.db') as conn:
+        with sqlite3.connect('/var/data/keeper.db') as conn:
             cursor = conn.cursor()
             
             # Check if table exists

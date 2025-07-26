@@ -4,12 +4,12 @@ import sqlite3
 print("Starting database recreation...")
 
 # Delete existing db
-if os.path.exists('keeper.db'):
-    os.remove('keeper.db')
+if os.path.exists('/var/data/keeper.db'):
+    os.remove('/var/data/keeper.db')
     print("Deleted existing keeper.db")
 
 # Create new db
-conn = sqlite3.connect('keeper.db')
+conn = sqlite3.connect('/var/data/keeper.db')
 cursor = conn.cursor()
 
 # Create season_curr table

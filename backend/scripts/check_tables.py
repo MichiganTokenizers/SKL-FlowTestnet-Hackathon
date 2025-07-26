@@ -3,7 +3,7 @@ import sqlite3
 def main():
     try:
         # Connect to the database
-        with sqlite3.connect('keeper.db') as conn:
+        with sqlite3.connect('/var/data/keeper.db') as conn:
             cursor = conn.cursor()
             
             # Get list of all tables

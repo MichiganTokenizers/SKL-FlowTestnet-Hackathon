@@ -2,7 +2,7 @@ import sqlite3
 
 def main():
     try:
-        with sqlite3.connect('keeper.db') as conn:
+        with sqlite3.connect('/var/data/keeper.db') as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             

@@ -12,7 +12,7 @@ def test_commissioner_logic():
     """Test the new commissioner logic."""
     
     # Connect to the database
-    db_path = os.path.join(os.getcwd(), 'keeper.db')
+    db_path = '/var/data/keeper.db'
     if not os.path.exists(db_path):
         print(f"Database not found at {db_path}")
         return False

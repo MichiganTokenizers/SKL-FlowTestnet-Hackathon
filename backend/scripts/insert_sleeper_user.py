@@ -21,7 +21,7 @@ sleeper_user_data = {
 def insert_sleeper_user():
     try:
         # Connect to the database
-        with sqlite3.connect('backend/keeper.db') as conn:
+        with sqlite3.connect('/var/data/keeper.db') as conn:
             cursor = conn.cursor()
             
             # Convert metadata to JSON string

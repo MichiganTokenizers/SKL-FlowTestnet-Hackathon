@@ -2,7 +2,7 @@ import sqlite3
 
 def main():
     print("Checking tables in keeper.db...")
-    conn = sqlite3.connect('keeper.db')
+    conn = sqlite3.connect('/var/data/keeper.db')
     cursor = conn.cursor()
     
     # Get all table names

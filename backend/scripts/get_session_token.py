@@ -3,7 +3,7 @@ import sqlite3
 def get_session_token():
     try:
         # Connect to the database
-        with sqlite3.connect('backend/keeper.db') as conn:
+        with sqlite3.connect('/var/data/keeper.db') as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             

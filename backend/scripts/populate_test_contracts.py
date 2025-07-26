@@ -5,7 +5,7 @@ def get_db_connection():
     """Establishes a connection to the SQLite database."""
     try:
         # Path relative to the workspace root where the script is executed from
-        conn = sqlite3.connect('backend/keeper.db')
+        conn = sqlite3.connect('/var/data/keeper.db')
         conn.row_factory = sqlite3.Row
         # Enable foreign key constraints
         conn.execute("PRAGMA foreign_keys = ON;")

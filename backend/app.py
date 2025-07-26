@@ -3,13 +3,13 @@ import sqlite3, math
 import os
 import secrets
 import requests # Added import for requests
-from sleeper_service import SleeperService
+from .sleeper_service import SleeperService
 import json
 import time # Added for potential sleep, though might not be used in final global conn version
 from functools import wraps # Import wraps
 import logging # Add logging import
 from typing import Any
-from utils import get_escalated_contract_costs # Changed to direct import
+from .utils import get_escalated_contract_costs # Changed to direct import
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -28,7 +28,7 @@ def get_global_db_connection():
         print("DEBUG_GLOBAL_CONN: Initializing global database connection...")
         try:
             # connect_args = {'check_same_thread': False} # For older python versions
-            _global_db_conn = sqlite3.connect('keeper.db', check_same_thread=False)
+            _global_db_conn = sqlite3.connect('/var/data/keeper.db', check_same_thread=False)
             _global_db_conn.row_factory = sqlite3.Row
             # Attempt to set WAL mode on this global connection too
             cursor = _global_db_conn.cursor()
