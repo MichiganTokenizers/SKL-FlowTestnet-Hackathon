@@ -65,7 +65,10 @@ def log_cors_headers():
     if request.method == "OPTIONS":
         print("Handling OPTIONS preflight request")
         response = app.make_response('')
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
+        # Allow both development and production origins
+        origin = request.headers.get('Origin', '')
+        if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
+            response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
         return response, 200
@@ -77,14 +80,20 @@ def handle_exception(e):
     traceback.print_exc()
     response = jsonify({'success': False, 'error': f'Server error: {str(e)}'})
     response.status_code = 500
-    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
+    # Allow both development and production origins
+    origin = request.headers.get('Origin', '')
+    if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
+        response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     return response
 
 @app.after_request
 def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:5173'
+    # Allow both development and production origins
+    origin = request.headers.get('Origin', '')
+    if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
+        response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
     print(f"Response headers after modification: {response.headers}")
