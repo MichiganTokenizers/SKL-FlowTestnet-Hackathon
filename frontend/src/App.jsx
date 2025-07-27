@@ -11,9 +11,7 @@ import Home from './components/common/Home';
 import Profile from './components/profile/Profile';
 import League from './components/league/League';
 import Team from './components/team/Team';
-
-// Define the base API URL
-const API_BASE_URL = "http://localhost:5000";
+import { API_BASE_URL } from './config';
 
 // League Connect Component - Will be refactored or removed later
 // For now, let's comment it out to avoid errors with removed TON hooks
@@ -27,7 +25,7 @@ function LeagueConnect({ sessionToken, onSuccess }) {
             const login = async () => {
                 try {
                     const nonce = Math.random().toString(36).substring(2);
-                    const response = await fetch('http://localhost:5000/auth/login', {
+                    const response = await fetch(`${API_BASE_URL}/auth/login`, {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',

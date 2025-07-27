@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import * as fcl from "@onflow/fcl";
+import { API_BASE_URL, SKL_PAYMENT_WALLET_ADDRESS } from '../../config';
 // import api from '../../services/api'; // No longer using a separate API service file
 import './LeagueFees.css';
 
@@ -10,10 +11,7 @@ fcl.config({
     "discovery.wallet": "https://fcl-discovery.onflow.org/api/v1/dapps/mainnet/authn", // Explicitly set Mainnet discovery
 });
 
-const API_BASE_URL = "http://localhost:5000"; // Define API_BASE_URL here
-
 // SKL Payment wallet address - same for all leagues
-const SKL_PAYMENT_WALLET_ADDRESS = "0xa30279e4e80d4216"; // Corrected to the actual SKL wallet address
 
 const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
     // const { leagueId } = useParams(); // Remove useParams, leagueId comes from props

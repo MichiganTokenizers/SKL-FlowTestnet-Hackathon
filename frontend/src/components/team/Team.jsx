@@ -1,8 +1,7 @@
 import React from 'react';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-
-const API_BASE_URL = "http://localhost:5000";
+import { API_BASE_URL } from '../../config';
 
 function Team() {
     const { teamId, leagueId } = useParams();

@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-
-const API_BASE_URL = "https://e17b-181-214-151-64.ngrok-free.app"; // Your ngrok URL
+import { API_BASE_URL } from './config';
 
 function SleeperImport() {
     const [username, setUsername] = useState('');

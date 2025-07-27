@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';
 import './AssociateSleeper.css';
-
-const API_BASE_URL = "http://localhost:5000";
 
 const AssociateSleeper = ({ onAssociationSuccess }) => {
   const [sleeperUsername, setSleeperUsername] = useState('');

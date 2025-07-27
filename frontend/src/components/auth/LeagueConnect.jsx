@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';
 
 function LeagueConnect({ sessionToken, onSuccess }) {
     const [sleeperLeagueId, setSleeperLeagueId] = useState('');
@@ -9,7 +10,7 @@ function LeagueConnect({ sessionToken, onSuccess }) {
 
     const fetchAllSleeperData = async () => {
         try {
-            const response = await fetch('http://localhost:5000/sleeper/fetchAll', {
+            const response = await fetch(`${API_BASE_URL}/sleeper/fetchAll`, {
                 method: 'POST',
                 headers: {
                     'Authorization': sessionToken
@@ -32,7 +33,7 @@ function LeagueConnect({ sessionToken, onSuccess }) {
         setError(null);
 
         try {
-            const response = await fetch('http://localhost:5000/league/connect', {
+            const response = await fetch(`${API_BASE_URL}/league/connect`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

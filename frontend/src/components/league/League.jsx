@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; // Import Link
 import LeagueFees from './LeagueFees'; // Import the new component
+import { API_BASE_URL } from '../../config';
 // import RecentTransactionsTable from './RecentTransactionsTable'; // Import the new transactions table
 // import { Link, useNavigate } from 'react-router-dom'; // Link and useNavigate might not be needed directly if navigation is handled by App.jsx
-
-const API_BASE_URL = "http://localhost:5000";
 
 function League(props) { // Accept props
     const { leagues, selectedLeagueId, sessionToken, currentUserDetails } = props; // Destructure props, add currentUserDetails

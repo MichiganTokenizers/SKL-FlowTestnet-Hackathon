@@ -54,6 +54,11 @@ db_conn = get_global_db_connection()  # Get the global connection
 # (LeagueMetadata, UserLeagueLinks, rosters.sleeper_league_id, etc.) for data insertion and querying.
 sleeper_service = SleeperService(db_connection=db_conn) # Pass it to the service
 
+@app.route('/')
+def root():
+    """Root endpoint for health checks."""
+    return jsonify({'status': 'ok', 'message': 'Supreme Keeper League Backend is running'}), 200
+
 @app.before_request
 def log_cors_headers():
     print(f"Request method: {request.method}, URL: {request.url}")

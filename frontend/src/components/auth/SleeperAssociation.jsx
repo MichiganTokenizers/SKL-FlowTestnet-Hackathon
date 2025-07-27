@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../config';
 import './SleeperAssociation.css';
 
 // Use a constant for the API URL (this can be updated to use environment variables in your build system)
-const API_BASE_URL = 'http://localhost:5000';
-
 const SleeperAssociation = ({ sessionToken }) => {
   const [username, setUsername] = useState('');
   const [searchResults, setSearchResults] = useState(null);
