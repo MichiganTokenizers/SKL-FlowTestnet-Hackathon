@@ -44,9 +44,6 @@ function Home({ sessionToken, onLogout }) {
                             <div className="card-body" style={{ textAlign: 'left' }}>
                                 <ul>
                                     <li>
-                                        <strong>Roster Configuration:</strong> 20 roster spots with starting positions: QB, 2 RB, 3 WR, 1 RB/WR, 1 RB/TE, 1 TE, 1 RB/WR/TE, 1 QB/RB/WR/TE, 1 DEF.
-                                    </li>
-                                    <li>
                                         <strong>Contract Lengths:</strong> All drafted players must be signed to a contract of <b>1 to 4 years</b> in length after the draft.
                                     </li>
                                     <li>
@@ -64,6 +61,9 @@ function Home({ sessionToken, onLogout }) {
                                             <li>The average of the top 5 contracts at the same position from the previous year</li>
                                             <li>10% greater than the player's previous year contract</li>
                                         </ul>
+                                    </li>
+                                    <li>
+                                        <strong>Roster Configuration:</strong> 20 roster spots with starting positions: 1 QB, 2 RB, 3 WR, 1 RB/WR, 1 RB/TE, 1 TE, 1 RB/WR/TE, 1 QB/RB/WR/TE, 1 DEF.
                                     </li>
                                     <li>
                                         <strong>Waivers & Trades:</strong> Most roster moves (waivers, trades) are performed on Sleeper, but all contract and penalty management is handled on this platform.
