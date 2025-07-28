@@ -44,6 +44,9 @@ function Home({ sessionToken, onLogout }) {
                             <div className="card-body" style={{ textAlign: 'left' }}>
                                 <ul>
                                     <li>
+                                        <strong>Roster Configuration:</strong> 20 roster spots with starting positions: QB, 2 RB, 3 WR, 1 RB/WR, 1 RB/TE, 1 TE, 1 RB/WR/TE, 1 QB/RB/WR/TE, 1 DEF.
+                                    </li>
+                                    <li>
                                         <strong>Contract Lengths:</strong> All drafted players must be signed to a contract of <b>1 to 4 years</b> in length after the draft.
                                     </li>
                                     <li>
