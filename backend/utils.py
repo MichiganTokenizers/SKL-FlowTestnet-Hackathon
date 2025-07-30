@@ -110,7 +110,7 @@ def apply_contract_penalties_and_deactivate(
                     cost_for_basis = projected_cost
                     logger.debug(f"  Penalty {j+1} (hits {penalty_hit_calendar_year}): basis projected for effective year index {effective_contract_year_index_for_cost_basis}, cost={cost_for_basis}")
 
-                penalty_amount = math.ceil(cost_for_basis * 0.10) # 10% of that year's cost, rounded up
+                penalty_amount = math.ceil(cost_for_basis * 0.25) # 25% of that year's cost, rounded up
                 penalties_to_apply.append({'year': penalty_hit_calendar_year, 'amount': penalty_amount})
         
         logger.info(f"apply_contract_penalties_and_deactivate: Calculated penalties for contract_row_id {contract_row_id}: {penalties_to_apply}")
