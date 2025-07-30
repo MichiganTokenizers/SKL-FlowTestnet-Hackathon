@@ -27,7 +27,7 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
      - During the `fetch_all_data` process (triggered on login/association or manually), the system compares the latest Sleeper roster for a team against the roster previously stored in `keeper.db`.
      - If a player with an active contract in `keeper.db` is no longer on the team's Sleeper roster, they are considered "dropped" or "waived".
      - For each dropped player with an active contract:
-       - The `calculate_penalty` function is called. Penalties are 25% of the contract's value for that specific year, rounded up, for each remaining year of the contract. This applies regardless of off-season status.
+       - The `calculate_penalty` function is called. Penalties are 25% of the contract's value for that specific year, rounded down, for each remaining year of the contract. This applies regardless of off-season status.
        - For example, a 4-year $1 contract dropped before Year 1 would incur four separate penalties: $1 for Year 1, $1 for Year 2, $1 for Year 3, and $1 for Year 4. If the same contract was dropped before Year 3, it would incur two penalties: $1 for Year 3 and $1 for Year 4.
        - The corresponding contract record in the `contracts` table is updated:
          - `IsActive` is set to `0`.
