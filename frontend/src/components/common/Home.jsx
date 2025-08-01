@@ -47,7 +47,7 @@ function Home({ sessionToken, onLogout }) {
                                         <strong>Contract Lengths:</strong> All drafted players must be signed to a contract of <b>1 to 4 years</b> in length after the draft.
                                     </li>
                                     <li>
-                                                                                 <strong>Contract Penalties:</strong> If a player is dropped or exits a contract early, a penalty of <b>25% of the contract value per remaining year</b> will be assessed. The penalty for each year is rounded down to the nearest dollar.
+                                                                                 <strong>Contract Penalties:</strong> If a player is dropped or exits a contract early, a penalty of <b>25% of the contract value per remaining year</b> will be assessed. The penalty for each year is rounded normally to the nearest dollar.
                                     </li>
                                     <li>
                                         <strong>Penalty Accrual:</strong> Penalties are not paid all at once. Instead, they accrue and are charged in each associated future year of the contract.
