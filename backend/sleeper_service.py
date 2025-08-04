@@ -134,15 +134,7 @@ class SleeperService:
             self.logger.error(f"Error fetching transactions for league {league_id}: {str(e)}")
             return []
 
-    def get_traded_picks(self, league_id: str) -> List[Dict]:
-        """Get traded picks for a league."""
-        try:
-            response = requests.get(f"{self.BASE_URL}/league/{league_id}/traded_picks")
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error fetching traded picks for league {league_id}: {str(e)}")
-            return []
+
 
     def get_nfl_state(self) -> Optional[Dict]:
         """Get current NFL state."""
@@ -692,24 +684,7 @@ class SleeperService:
                                 updated_at = datetime('now')
                         ''', (tx_id, league_id, tx_type, tx_status, tx_data_json))
 
-                # Step 6: Get traded picks for this league
-                traded_picks = self.get_traded_picks(league_id)
-                if not traded_picks:
-                    self.logger.warning(f"SleeperService.fetch_all_data: No traded_picks found for league {league_id}.")
-                else:
-                    # self.logger.info(f"SleeperService.fetch_all_data: Found {len(traded_picks)} traded_picks for league {league_id}.")
-                    for pick_data in traded_picks:
-                        pick_season = pick_data.get("season")
-                        pick_round = pick_data.get("round")
-                        pick_roster_id = pick_data.get("roster_id")
-                        pick_prev_owner = pick_data.get("previous_owner_id")
-                        pick_curr_owner = pick_data.get("owner_id")
-                        
-                        # self.logger.debug(f"SleeperService.fetch_all_data: Inserting traded pick for league {league_id}, season {pick_season}, round {pick_round}.")
-                        cursor.execute('''
-                            INSERT INTO traded_picks (league_id, draft_id, round, roster_id, previous_owner_id, current_owner_id, created_at, updated_at)
-                            VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-                        ''', (league_id, str(pick_season), pick_round, pick_roster_id, pick_prev_owner, pick_curr_owner))
+
 
                 # Step 7: Get drafts for this league
                 league_drafts = self.get_league_drafts(league_id)

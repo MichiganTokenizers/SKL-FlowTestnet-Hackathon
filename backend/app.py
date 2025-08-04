@@ -110,7 +110,7 @@ def init_db():
 
         # Drop existing tables
         tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
-                  "transactions", "traded_picks", "drafts", "penalties", # Added penalties
+                  "transactions", "drafts", "penalties", # Added penalties
                   "LeagueMetadata", "Users", "players", "leagues", "LeagueFees"] # Added leagues and LeagueFees
         
         cursor.execute('''CREATE TABLE IF NOT EXISTS sessions
@@ -237,15 +237,7 @@ def init_db():
                            data TEXT,
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME)''')
-        cursor.execute('''CREATE TABLE IF NOT EXISTS traded_picks
-                          (league_id INTEGER,
-                           draft_id TEXT,
-                           round INTEGER,
-                           roster_id TEXT,
-                           previous_owner_id TEXT,
-                           current_owner_id TEXT,
-                           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                           updated_at DATETIME)''')
+
         cursor.execute('''CREATE TABLE IF NOT EXISTS drafts
                           (sleeper_draft_id TEXT UNIQUE,
                            league_id TEXT, -- Changed from INTEGER

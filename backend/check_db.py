@@ -11,7 +11,7 @@ def main():
             # Check tables exist
             tables = [
                 "users", "leagues", "rosters", "players", 
-                "transactions", "traded_picks", "drafts"
+                "transactions", "drafts"
             ]
             
             print("Database Table Counts:")
