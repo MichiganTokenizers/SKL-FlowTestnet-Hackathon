@@ -1,7 +1,7 @@
 # Supreme Keeper League - Project Plan
 
 ## Overview
-Supreme Keeper League is a fantasy football platform integrated with the TON blockchain for secure transactions and the Sleeper API for league management. The goal is to create a decentralized, transparent, and user-friendly environment for managing keeper leagues.
+Supreme Keeper League is a fantasy football platform integrated with the FLOW blockchain for secure transactions and the Sleeper API for league management. The goal is to create a decentralized, transparent, and user-friendly environment for managing keeper leagues.
 
 ## Data Pull Strategy
 - **One-Time Data Pull**: All Sleeper API data will be pulled once during user login or after a new league association. This pull will update the local database (`keeper.db`) with the latest information on users, leagues, teams, rosters, standings, and other relevant data.
@@ -18,7 +18,7 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **Bootstrap**: For styling and responsive design.
 
 #### Component Structure
-- **Authentication**: TON wallet login, Sleeper account association (linking wallet to Sleeper user ID).
+- **Authentication**: FLOW wallet login, Sleeper account association (linking wallet to Sleeper user ID).
   - `AssociateSleeper.jsx`: Component to handle user input of Sleeper username and trigger backend association.
 - **League Management**: Viewing league details, standings.
 - **Team Management**: Rosters for the most part will be managed on Sleeper app. 
@@ -61,7 +61,7 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 - **Flask**: Lightweight Python framework for creating API endpoints.
 - **SQLite**: Using `keeper.db` for local data storage after the initial Sleeper API pull.
 - **Sleeper API**: For initial data retrieval during login or league association.
-- **TON Blockchain**: For secure and transparent transactions.
+- **FLOW Blockchain**: For secure and transparent transactions.
 
 #### API Endpoints
 - See `EndPoints_review.md` for a detailed review and current status of all backend API endpoints.
@@ -105,8 +105,8 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
    - Design the UI/UX for the platform.
 2. **Core Functionality**
    - **Initial User Onboarding and Data Synchronization Flow (Implemented & Verified):**
-     - **TON Wallet Authentication:** Users authenticate via their TON wallet. 
-       - **Frontend Process:** Upon successful TON wallet connection, the frontend React application initiates a login sequence:
+     - **FLOW Wallet Authentication:** Users authenticate via their FLOW wallet. 
+       - **Frontend Process:** Upon successful FLOW wallet connection, the frontend React application initiates a login sequence:
          1. Calls the backend `/auth/login` endpoint, receiving a `sessionToken` and an `isNewUser` status.
          2. Stores the `sessionToken` in `localStorage` and updates its internal state.
          3. Fetches essential user data (leagues via `/league/local`, association status via `/auth/check_association`) and updates relevant states (`leagues`, `selectedLeagueId`, `isNewUser`).
@@ -121,16 +121,16 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 
 3. **Feature Development**
    - Build components for trade interface using local data.
-   - Implement transaction system with TON blockchain, including:
-     - Enabling users to pay league fees using their TON wallet.
+   - Implement transaction system with FLOW blockchain, including:
+     - Enabling users to pay league fees using their FLOW wallet.
      - Displaying the payment status of league fees for users.
-     - Logging league fee transactions from the TON blockchain into the local database.
+     - Logging league fee transactions from the FLOW blockchain into the local database.
      - Notifying users of unpaid league fees, with eventual removal from the league if fees remain unpaid by a deadline.
 
 
 ## Challenges and Solutions
 - **Data Synchronization**: Ensuring `keeper.db` stays updated with Sleeper data can be challenging. Solution: Implement a robust one-time pull mechanism with optional refresh capabilities.
-- **Blockchain Integration**: Handling TON transactions securely. Solution: Use TonConnect library and follow best practices for blockchain integration.
+- **Blockchain Integration**: Handling FLOW transactions securely. Solution: Use FLOWConnect library and follow best practices for blockchain integration.
 - **User Experience**: Balancing functionality with simplicity. Solution: Use Bootstrap for a clean, responsive design and iterative user feedback.
 
 ## Future Enhancements
@@ -151,11 +151,11 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
   - Archive and display past season champions, standings, trades, and contract histories.
 - **User Support and Onboarding:**
   - Comprehensive FAQ/Help section.
-  - Guidance and resources for using TON wallets.
+  - Guidance and resources for using FLOW wallets.
 - **Deeper Financial/Transaction Transparency:**
   - League treasury view (fees collected, pot total, payouts).
   - Detailed, user-accessible audit log for significant league actions.
-  - Develop smart contract(s) to automate the payout of league winnings to winners on the TON blockchain.
+  - Develop smart contract(s) to automate the payout of league winnings to winners on the FLOW blockchain.
 - Create NFTs for league trophies and accomplishments
 - **Enhanced Contract Setting Form:**
   - Add franchise tag selection option with clear visual indicators
@@ -180,5 +180,5 @@ Supreme Keeper League is a fantasy football platform integrated with the TON blo
 ## Team Roles
 - **Frontend Developer**: Focus on React.js components and UI/UX.
 - **Backend Developer**: Manage Flask API, database, and Sleeper API integration.
-- **Blockchain Specialist**: Handle TON integration and smart contracts if needed.
+- **Blockchain Specialist**: Handle FLOW integration and smart contracts if needed.
 - **QA Engineer**: Ensure the application is bug-free and performs well. 
