@@ -510,10 +510,6 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                     )}
                     {shouldShowPayButton && isCommissioner && (
                          <div className="mt-2">
-                             <p className="small text-muted fst-italic">
-                                 As commissioner, your fee status is: {currentUserFeeDetails.status}. 
-                                 You can pay your fee if applicable, or it might be considered waived.
-                             </p>
                              <button
                                  className="btn btn-sm"
                                  style={{ backgroundColor: '#28a745', color: 'white', border: 'none' }}
