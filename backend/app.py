@@ -1751,7 +1751,11 @@ def get_team_details(team_id):
                     
                     if not player_contract_info or is_default_placeholder:
                         contract_status = "Pending Contract Setting"
-                        draft_amount_for_calc = auction_acquisitions.get(p_id, 0) # Use auction amount for display
+                        # Only use auction amount if player has an active contract
+                        if player_contract_info and is_active_for_calc:
+                            draft_amount_for_calc = auction_acquisitions.get(p_id, 0)
+                        else:
+                            draft_amount_for_calc = 0  # Free agents show $0 regardless of auction history
                         years_remaining_display = "Set Duration" 
                         projected_costs = [] # Clear any prior projected costs
                         app.logger.info(f"  Player {p_id} is an auction acquisition in setting period. Status OVERRIDDEN to 'Pending Contract Setting'. Placeholder contract was: {is_default_placeholder}")
@@ -1764,6 +1768,11 @@ def get_team_details(team_id):
                         # We might need to explicitly set 'years_remaining_display' to 'Set Duration' if we want the dropdown visible.
                         # For now, let existing calculated years_remaining_display and projected_costs stand if a contract has been set.
                         # The key is the frontend check: player.contract_status === 'Pending Contract Setting' || (teamData.is_contract_setting_period_active && teamData.auction_acquisitions_for_team && teamData.auction_acquisitions_for_team[player.id] !== undefined)
+
+                # Ensure free agents always show $0 regardless of auction history
+                if not player_contract_info:
+                    draft_amount_for_calc = 0
+                    contract_status = "Free Agent"
 
                 app.logger.info(f"  FINAL for player {p_id} ({p_data.get('name', 'N/A')}):")
                 app.logger.info(f"    contract_status: '{contract_status}'")

@@ -29,6 +29,7 @@
   - [x] Team page displays "Projected Future Yearly Contract Totals" (Completed: 2025-07-28)
   - [x] Team page implements UI for setting new player contract durations during the contract setting window (Completed: 2025-07-28)
   - [x] Backend supports fetching 4-year costs and saving contract durations (Completed: 2025-07-28)
+  - [x] Fix free agent display logic - show $0 for waived auction players (Completed: 2025-01-27)
 - [ ] Clean up routes upon login with Flow, seeing an error page before correct league page loads
 - [x] Detect players who have been waived from Sleeper team but still have an active contract during season
 - [ ] Build Trade Desk (big)
