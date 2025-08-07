@@ -329,7 +329,7 @@ function Team() {
                     <div className="col-md-6">
                         <div className="card h-100">
                             <div className="card-body">
-                                <h5 className="card-title">Future Spending ($200/yr budget)</h5>
+                                <h5 className="card-title">Future Budgets ($200/yr)</h5>
                                 {(yearlyCostColumnHeaders.length > 1 && Object.keys(futureYearlyTotals).some(yr => futureYearlyTotals[yr] && (futureYearlyTotals[yr].contractTotal > 0 || futureYearlyTotals[yr].penaltyTotal > 0 || (futureYearlyTotalRanks && futureYearlyTotalRanks[yr])))) ? (
                                     <div className="table-responsive">
                                         <table className="table table-sm table-bordered text-center">
