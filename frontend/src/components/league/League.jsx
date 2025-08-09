@@ -12,12 +12,14 @@ function League(props) { // Accept props
     // const [transactions, setTransactions] = useState([]); // State for recent transactions (mocked for now) - REMOVED
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [leagueFeeSettings, setLeagueFeeSettings] = useState(null);
     // const navigate = useNavigate(); // Removed, navigation handled by App.jsx
 
     // Effect to fetch standings when selectedLeagueId or sessionToken changes from props
     useEffect(() => {
         if (selectedLeagueId && sessionToken) {
             fetchStandingsData(sessionToken, selectedLeagueId);
+            fetchLeagueFeeData(sessionToken, selectedLeagueId);
         } else if (!selectedLeagueId && leagues && leagues.length > 0) {
             // If no league is selected but leagues exist, prompt to select one (handled by UI)
             setStandings([]); // Clear standings
@@ -58,6 +60,22 @@ function League(props) { // Accept props
             setLoading(false);
         }
     };
+
+    const fetchLeagueFeeData = async (token, leagueId) => {
+        if (!leagueId || !token) return;
+        
+        try {
+            const response = await fetch(`${API_BASE_URL}/league/${leagueId}/fees`, {
+                headers: { 'Authorization': token }
+            });
+            const data = await response.json();
+            if (data.success) {
+                setLeagueFeeSettings(data.fee_settings);
+            }
+        } catch (err) {
+            console.error('Error fetching league fees:', err);
+        }
+    };
     
     // Mock transactions - this should be moved to App.jsx if it needs to persist across league selections or be global
     /* REMOVED MOCK TRANSACTIONS useEffect
@@ -69,6 +87,24 @@ function League(props) { // Accept props
         ]);
     }, []);
     */
+
+    // Calculate prize amounts based on league fee
+    const calculatePrizeAmounts = () => {
+        if (!leagueFeeSettings || !leagueFeeSettings.fee_amount) {
+            return { first: 0, second: 0, third: 0, total: 0 };
+        }
+        
+        const totalFee = leagueFeeSettings.fee_amount;
+        const teamCount = standings.length || 0; // Use actual number of teams from standings
+        const totalPrizePool = totalFee * teamCount;
+        
+        return {
+            first: totalPrizePool * 0.60,
+            second: totalPrizePool * 0.30,
+            third: totalPrizePool * 0.10,
+            total: totalPrizePool
+        };
+    };
 
     if (loading && standings.length === 0 && selectedLeagueId) { // Refined loading condition
         return (
@@ -123,6 +159,8 @@ function League(props) { // Accept props
             </div>
         );
     }
+
+    const prizeAmounts = calculatePrizeAmounts();
 
     return (
         <div className="container p-4" style={{ backgroundColor: 'transparent' }}>
@@ -214,6 +252,67 @@ function League(props) { // Accept props
                         <div className="collapse show" id="collapseTransactions">
                             <div className="card-body">
                                 <p className="text-muted">Transaction history will be displayed here.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Payouts Section */}
+            {selectedLeagueId && (
+                <div className="mt-3">
+                    <div className="card mb-4">
+                        <div className="card-header d-flex justify-content-between align-items-center">
+                            <h4 className="mb-0" style={{ color: 'black' }}>Payouts</h4>
+                            <button
+                                className="btn btn-link text-decoration-none"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#collapsePayouts"
+                                aria-expanded="true"
+                                aria-controls="collapsePayouts"
+                                style={{ color: '#9966CC' }}
+                            >
+                                ▼
+                            </button>
+                        </div>
+                        <div className="collapse show" id="collapsePayouts">
+                            <div className="card-body">
+                                {leagueFeeSettings && leagueFeeSettings.fee_amount ? (
+                                    <>
+                                        <div className="text-center mb-3">
+                                            <p className="text-muted mb-1">Based on {leagueFeeSettings.fee_amount} {leagueFeeSettings.fee_currency} per team</p>
+                                            <p className="text-muted mb-0">Total Prize Pool: {prizeAmounts.total.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
+                                        </div>
+                                        <div className="row">
+                                            <div className="col-md-4">
+                                                <div className="text-center p-3">
+                                                    <h5 className="text-success mb-2">🥇 1st Place</h5>
+                                                    <h3 className="text-success fw-bold">60%</h3>
+                                                    <p className="text-success mb-0 fw-bold">{prizeAmounts.first.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4">
+                                                <div className="text-center p-3">
+                                                    <h5 className="text-secondary mb-2">🥈 2nd Place</h5>
+                                                    <h3 className="text-secondary fw-bold">30%</h3>
+                                                    <p className="text-secondary mb-0 fw-bold">{prizeAmounts.second.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-4">
+                                                <div className="text-center p-3">
+                                                    <h5 className="text-warning mb-2">🥉 3rd Place</h5>
+                                                    <h3 className="text-warning fw-bold">10%</h3>
+                                                    <p className="text-warning mb-0 fw-bold">{prizeAmounts.third.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-center">
+                                        <p className="text-muted">League fees not yet set. Payout amounts will be calculated once fees are configured.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </div>
