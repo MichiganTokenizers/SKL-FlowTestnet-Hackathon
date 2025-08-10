@@ -21,6 +21,12 @@ Supreme Keeper League is a fantasy football platform integrated with the FLOW bl
 - **Authentication**: FLOW wallet login, Sleeper account association (linking wallet to Sleeper user ID).
   - `AssociateSleeper.jsx`: Component to handle user input of Sleeper username and trigger backend association.
 - **League Management**: Viewing league details, standings.
+  - **Payout Structure**: League payouts are distributed as follows:
+    - **1st Place**: 50% of total prize pool
+    - **2nd Place**: 30% of total prize pool
+    - **3rd Place**: 10% of total prize pool
+    - **Regular Season Best Record**: 10% of total prize pool
+    - **Total**: 100% of prize pool (calculated as league fee × number of teams)
 - **Team Management**: Rosters for the most part will be managed on Sleeper app. 
    - **Waived Player Detection and Penalty Process**:
      - Players are waived directly on the Sleeper platform.

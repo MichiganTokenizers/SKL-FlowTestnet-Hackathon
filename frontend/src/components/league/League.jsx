@@ -91,7 +91,7 @@ function League(props) { // Accept props
     // Calculate prize amounts based on league fee
     const calculatePrizeAmounts = () => {
         if (!leagueFeeSettings || !leagueFeeSettings.fee_amount) {
-            return { first: 0, second: 0, third: 0, total: 0 };
+            return { first: 0, second: 0, third: 0, bestRecord: 0, total: 0 };
         }
         
         const totalFee = leagueFeeSettings.fee_amount;
@@ -99,9 +99,10 @@ function League(props) { // Accept props
         const totalPrizePool = totalFee * teamCount;
         
         return {
-            first: totalPrizePool * 0.60,
+            first: totalPrizePool * 0.50,
             second: totalPrizePool * 0.30,
             third: totalPrizePool * 0.10,
+            bestRecord: totalPrizePool * 0.10,
             total: totalPrizePool
         };
     };
@@ -285,25 +286,32 @@ function League(props) { // Accept props
                                             <p className="text-muted mb-0">Total Prize Pool: {prizeAmounts.total.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
                                         </div>
                                         <div className="row">
-                                            <div className="col-md-4">
+                                            <div className="col-md-3">
                                                 <div className="text-center p-3">
                                                     <h5 className="text-success mb-2">🥇 1st Place</h5>
-                                                    <h3 className="text-success fw-bold">60%</h3>
+                                                    <h3 className="text-success fw-bold">50%</h3>
                                                     <p className="text-success mb-0 fw-bold">{prizeAmounts.first.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
                                                 </div>
                                             </div>
-                                            <div className="col-md-4">
+                                            <div className="col-md-3">
                                                 <div className="text-center p-3">
                                                     <h5 className="text-secondary mb-2">🥈 2nd Place</h5>
                                                     <h3 className="text-secondary fw-bold">30%</h3>
                                                     <p className="text-secondary mb-0 fw-bold">{prizeAmounts.second.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
                                                 </div>
                                             </div>
-                                            <div className="col-md-4">
+                                            <div className="col-md-3">
                                                 <div className="text-center p-3">
                                                     <h5 className="text-warning mb-2">🥉 3rd Place</h5>
                                                     <h3 className="text-warning fw-bold">10%</h3>
                                                     <p className="text-warning mb-0 fw-bold">{prizeAmounts.third.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
+                                                </div>
+                                            </div>
+                                            <div className="col-md-3">
+                                                <div className="text-center p-3">
+                                                    <h5 className="text-info mb-2">📊 Best Record</h5>
+                                                    <h3 className="text-info fw-bold">10%</h3>
+                                                    <p className="text-info mb-0 fw-bold">{prizeAmounts.bestRecord.toFixed(2)} {leagueFeeSettings.fee_currency}</p>
                                                 </div>
                                             </div>
                                         </div>
