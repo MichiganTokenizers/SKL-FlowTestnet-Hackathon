@@ -66,9 +66,6 @@ function Home({ sessionToken, onLogout }) {
                                         <strong>Roster Configuration:</strong> 20 roster spots with starting positions: 1 QB, 2 RB, 3 WR, 1 RB/WR, 1 RB/TE, 1 TE, 1 RB/WR/TE, 1 QB/RB/WR/TE, 1 DEF.
                                     </li>
                                     <li>
-                                        <strong>Waivers & Trades:</strong> Most roster moves (waivers, trades) are performed on Sleeper, but all contract and penalty management is handled on this platform.
-                                    </li>
-                                    <li>
                                         <strong>Transparency:</strong> All penalties, contracts, and league finances are tracked and viewable on the platform for full transparency.
                                     </li>
                                 </ul>
@@ -100,7 +97,7 @@ function Home({ sessionToken, onLogout }) {
                                     <li className="mb-2">
                                         <strong>Create or Join a League on Sleeper</strong><br />
                                         If you are a <b>commissioner</b>: Go to the Sleeper fantasy football platform and create a new league.<br />
-                                        <span className="text-danger">Important:</span> The league name must begin with <code>SKL</code> (for example, <code>SKL Supreme League 2024</code>). Only leagues with names starting with <code>SKL</code> will be recognized and imported into the Supreme Keeper League platform.<br />
+                                        <span className="text-danger">Important:</span> The league name must begin with <code>SKL</code> (for example, <code>SKL Jabronies</code>). Only leagues with names starting with <code>SKL</code> will be recognized and imported into the Supreme Keeper League platform.<br />
                                         If you are <b>joining</b>: Ask your commissioner for the Sleeper invite link and join the league on Sleeper.
                                     </li>
                                     <li className="mb-2">
@@ -120,11 +117,7 @@ function Home({ sessionToken, onLogout }) {
                                         After logging in with your FLOW wallet, you will be prompted to link your Sleeper account.<br />
                                         Enter your Sleeper username to complete the association.
                                     </li>
-                                    <li className="mb-2">
-                                        <strong>Import or Join Your League Data</strong><br />
-                                        Once your Sleeper account is linked, the platform will automatically pull in all relevant data from your Sleeper league(s) (users, teams, rosters, standings, etc.) into the local system.<br />
-                                        This is a one-time data pull; all future actions will use the local data for speed and reliability.
-                                    </li>
+
                                     <li className="mb-2">
                                         <strong>Invite League Members or Join Your League</strong><br />
                                         If you are a <b>commissioner</b>: Share your league’s Sleeper invite link with other managers so they can join on Sleeper and then on this platform.<br />
@@ -138,7 +131,7 @@ function Home({ sessionToken, onLogout }) {
                                     <li className="mb-2">
                                         <strong>Set Contracts and Franchise Tags</strong><br />
                                         After your league draft, use the contract management tools to assign contracts to your players.<br />
-                                        Designate a franchise player if desired, following the platform’s rules for franchise tags.
+                                        Designate a franchise player if desired.
                                     </li>
                                     <li className="mb-2">
                                         <strong>Pay League Fees (if applicable)</strong><br />
