@@ -375,7 +375,7 @@ def force_recreate_db():
         traceback.print_exc()
 
 # UNCOMMENT THE NEXT LINE TO DROP AND RECREATE DATABASE
-force_recreate_db()
+# force_recreate_db()
 
 def get_current_season():
     """Fetches the current season year and off-season status from the local season_curr table."""
