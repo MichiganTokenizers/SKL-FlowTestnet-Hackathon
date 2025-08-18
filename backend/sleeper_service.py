@@ -621,8 +621,6 @@ class SleeperService:
                         metadata_json = json.dumps(current_metadata if current_metadata is not None else {})
                         reserve_list = api_roster_item.get("reserve")
                         reserve_json = json.dumps(reserve_list if reserve_list else [])
-                        taxi_list = api_roster_item.get("taxi")
-                        taxi_json = json.dumps(taxi_list if taxi_list else [])
                         roster_settings = api_roster_item.get("settings", {})
                         wins = roster_settings.get("wins", 0)
                         losses = roster_settings.get("losses", 0)
@@ -633,16 +631,15 @@ class SleeperService:
                         # print(f"DEBUG_SS_ROSTER_UPSERT: Attempting to upsert roster_id: {roster_id_for_upsert}, league_id: {league_id}, owner_id: {owner_id}, team_name: {team_name_to_store}")
                         cursor.execute('''
                             INSERT INTO rosters (
-                                sleeper_roster_id, sleeper_league_id, owner_id, team_name, players, metadata, reserve, taxi,
+                                sleeper_roster_id, sleeper_league_id, owner_id, team_name, players, metadata, reserve,
                                 wins, losses, ties, points_for, created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
                             ON CONFLICT(sleeper_roster_id, sleeper_league_id) DO UPDATE SET
                                 owner_id = excluded.owner_id,
                                 team_name = excluded.team_name,
                                 players = excluded.players,
                                 metadata = excluded.metadata,
                                 reserve = excluded.reserve,
-                                taxi = excluded.taxi,
                                 wins = excluded.wins,
                                 losses = excluded.losses,
                                 ties = excluded.ties,
@@ -650,7 +647,7 @@ class SleeperService:
                                 updated_at = datetime('now')
                         ''', (
                             roster_id_for_upsert, league_id, owner_id, team_name_to_store, players_json_for_upsert, metadata_json, 
-                            reserve_json, taxi_json, wins, losses, ties, points_for
+                            reserve_json, wins, losses, ties, points_for
                         ))
                         # print(f"DEBUG_SS_ROSTER_UPSERT_RESULT: Roster_id: {roster_id_for_upsert}, league_id: {league_id}, cursor.rowcount: {cursor.rowcount}")
                     

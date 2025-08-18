@@ -1373,7 +1373,7 @@ def get_team_details(team_id):
         # 1. Fetch basic roster details (including owner_id and league_id)
         cursor.execute("""
             SELECT r.sleeper_roster_id, r.sleeper_league_id, r.owner_id, r.players as player_ids_json, 
-                   r.reserve as reserve_ids_json, r.taxi as taxi_ids_json, 
+                   r.reserve as reserve_ids_json, 
                    r.team_name as roster_db_team_name, -- Select the new team_name column
                    COALESCE(u.display_name, u.username) as manager_name, u.username as sleeper_username
             FROM rosters r
