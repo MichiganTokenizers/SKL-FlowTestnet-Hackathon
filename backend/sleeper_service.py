@@ -627,14 +627,19 @@ class SleeperService:
                         wins = roster_settings.get("wins", 0)
                         losses = roster_settings.get("losses", 0)
                         ties = roster_settings.get("ties", 0)
+                        
+                        # Calculate total points from fpts and fpts_decimal
+                        fpts = roster_settings.get("fpts", 0)
+                        fpts_decimal = roster_settings.get("fpts_decimal", 0)
+                        points_for = fpts + (fpts_decimal / 100.0)  # Convert decimal to actual decimal value
 
                         # self.logger.debug(f"SleeperService.fetch_all_data: Upserting roster_id {roster_id_for_upsert} (from API) for league {league_id} with team_name '{team_name_to_store}'.")
                         # print(f"DEBUG_SS_ROSTER_UPSERT: Attempting to upsert roster_id: {roster_id_for_upsert}, league_id: {league_id}, owner_id: {owner_id}, team_name: {team_name_to_store}")
                         cursor.execute('''
                             INSERT INTO rosters (
                                 sleeper_roster_id, sleeper_league_id, owner_id, team_name, players, metadata, reserve, taxi,
-                                wins, losses, ties, created_at, updated_at
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                                wins, losses, ties, points_for, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
                             ON CONFLICT(sleeper_roster_id, sleeper_league_id) DO UPDATE SET
                                 owner_id = excluded.owner_id,
                                 team_name = excluded.team_name,
@@ -645,10 +650,11 @@ class SleeperService:
                                 wins = excluded.wins,
                                 losses = excluded.losses,
                                 ties = excluded.ties,
+                                points_for = excluded.points_for,
                                 updated_at = datetime('now')
                         ''', (
                             roster_id_for_upsert, league_id, owner_id, team_name_to_store, players_json_for_upsert, metadata_json, 
-                            reserve_json, taxi_json, wins, losses, ties
+                            reserve_json, taxi_json, wins, losses, ties, points_for
                         ))
                         # print(f"DEBUG_SS_ROSTER_UPSERT_RESULT: Roster_id: {roster_id_for_upsert}, league_id: {league_id}, cursor.rowcount: {cursor.rowcount}")
                     

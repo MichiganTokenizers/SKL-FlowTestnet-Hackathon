@@ -14,6 +14,12 @@
   - [x] League Page: Remove hardcoded "Supreme Keeper League" title, use dynamic `league_name`.
   - [x] Welcome Message: Remove wallet address display.
   - [x] Tables: Remove avatar display from tables.
+- [x] Add "Total Points" column to League Standings (Started: 2025-01-27)
+  - [x] Backend: Add points_for column to rosters table schema
+  - [x] Backend: Update SleeperService to fetch and store points_for data
+  - [x] Backend: Update standings endpoint to return points_for data
+  - [x] Frontend: Add "Total Points" column to standings table
+  - [x] Create database migration script for existing databases
 
 - [x] Add "Recent Transactions" table to League page (Started: 2025-05-28) (Completed: 2025-07-30)
   - [ ] Refine `RecentTransactionsTable.jsx` - `renderTransactionDetails` function to correctly parse and display various transaction types based on `SleeperService.py` data structure (Discovered: 2025-07-30)

@@ -201,6 +201,7 @@ def init_db():
                            wins INTEGER DEFAULT 0,
                            losses INTEGER DEFAULT 0,
                            ties INTEGER DEFAULT 0,
+                           points_for REAL DEFAULT 0.0, -- Total points scored for the season
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME,
                            PRIMARY KEY (sleeper_roster_id, sleeper_league_id),
@@ -928,7 +929,8 @@ def get_league_standings_local():
                 r.players, -- JSON string of player_ids
                 r.wins,
                 r.losses,
-                r.ties
+                r.ties,
+                r.points_for
             FROM rosters r
             LEFT JOIN Users u ON r.owner_id = u.sleeper_user_id -- Join with Users table
             WHERE r.sleeper_league_id = ?
@@ -949,7 +951,8 @@ def get_league_standings_local():
                 'player_count': len(json.loads(row['players'])) if row['players'] else 0,
                 'wins': row['wins'],
                 'losses': row['losses'],
-                'ties': row['ties']
+                'ties': row['ties'],
+                'points_for': row['points_for'] or 0.0
             })
         
         # Sorting is removed as statistical ranking is no longer the primary purpose.
