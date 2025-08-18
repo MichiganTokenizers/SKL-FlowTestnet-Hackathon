@@ -197,10 +197,10 @@ def init_db():
                            players TEXT, -- JSON list of player_ids on main roster
                            metadata TEXT, -- JSON of roster metadata (e.g., custom team name from Sleeper)
                            reserve TEXT, -- JSON list of player_ids on reserve
-                           taxi TEXT, -- JSON list of player_ids on taxi squad
                            wins INTEGER DEFAULT 0,
                            losses INTEGER DEFAULT 0,
                            ties INTEGER DEFAULT 0,
+                           points_for REAL DEFAULT 0.0, -- Total points scored for the season
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME,
                            PRIMARY KEY (sleeper_roster_id, sleeper_league_id),
@@ -333,6 +333,50 @@ def init_db():
 init_db() # REVERTED: No longer forcing recreation
 print("DEBUG: init_db() call completed. Proceeding to define routes and helpers...")
 
+# TEMPORARY: Drop and recreate database - REMOVE AFTER DEPLOYMENT
+def force_recreate_db():
+    """Temporarily drop and recreate all tables. REMOVE THIS AFTER DEPLOYMENT."""
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+        
+        # Drop all tables in reverse dependency order
+        tables_to_drop = [
+            "vw_contractByYear",  # Drop view first
+            "LeaguePayments", "penalties", "transactions", "drafts", 
+            "contracts", "rosters", "players", "UserLeagueLinks", 
+            "LeagueFees", "LeagueMetadata", "Users", "sessions", "season_curr"
+        ]
+        
+        for table in tables_to_drop:
+            try:
+                cursor.execute(f"DROP TABLE IF EXISTS {table}")
+                print(f"DROPPED TABLE: {table}")
+            except Exception as e:
+                print(f"Error dropping {table}: {e}")
+        
+        # Drop view separately
+        try:
+            cursor.execute("DROP VIEW IF EXISTS vw_contractByYear")
+            print("DROPPED VIEW: vw_contractByYear")
+        except Exception as e:
+            print(f"Error dropping view: {e}")
+        
+        conn.commit()
+        print("DATABASE DROPPED SUCCESSFULLY")
+        
+        # Now reinitialize
+        init_db()
+        print("DATABASE REINITIALIZED SUCCESSFULLY")
+        
+    except Exception as e:
+        print(f"Error in force_recreate_db: {e}")
+        import traceback
+        traceback.print_exc()
+
+# UNCOMMENT THE NEXT LINE TO DROP AND RECREATE DATABASE
+force_recreate_db()
+
 def get_current_season():
     """Fetches the current season year and off-season status from the local season_curr table."""
     try:
@@ -358,10 +402,7 @@ def get_current_season():
         app.logger.error(f"get_current_season: Unexpected error: {e}. Using hardcoded defaults.")
         return {"current_year": 2025, "is_offseason": True} # General fallback
 
-# Initialize TonConnect
-# ton_connect = TonConnect( # Commented out
-#     manifest_url='https://29d4-193-43-135-7.ngrok-free.app/tonconnect-manifest.json' # Commented out
-# ) # Commented out
+
 
 def get_current_user():
     """Retrieve the current user.
@@ -416,79 +457,7 @@ def get_current_user():
     print(f"DEBUG: get_current_user - User authenticated and found in DB: {dict(user) if user else 'None'}") 
     return dict(user) if user else None
 
-# TonConnect manifest route
-# @app.route('/tonconnect-manifest.json') # Commented out
-# def tonconnect_manifest(): # Commented out
-#     return { # Commented out
-#         "url": "https://29d4-193-43-135-7.ngrok-free.app", # Commented out
-#         "name": "Supreme Keeper League", # Commented out
-#         "iconUrl": "https://29d4-193-43-135-7.ngrok-free.app/static/icon.png" # Commented out
-#     } # Commented out
 
-# TonConnect login initiation - This GET /login is different from POST /auth/login
-# @app.route('/login', methods=['GET']) # Commented out
-# def initiate_login(): # Commented out
-#     if get_current_user(): # Commented out
-#         user = get_current_user() # Commented out
-#         conn = get_global_db_connection() # Use global connection # Commented out
-#         cursor = conn.cursor() # Commented out
-#         cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (user['wallet_address'],)) # Commented out
-#         result = cursor.fetchone() # Commented out
-#         if result and result['sleeper_user_id']: # Commented out
-#             print("User already authenticated and associated with Sleeper") # Commented out
-#             # Fetch user's leagues # Commented out
-#             cursor = conn.cursor() # Commented out
-#             # The 'leagues' table was an old schema. User's leagues are now in UserLeagueLinks. # Commented out
-#             # We need to join with LeagueMetadata to get details if needed, or just the IDs. # Commented out
-#             # For now, let's fetch linked league_ids. # Commented out
-#             cursor.execute(''' # Commented out
-#                 SELECT ull.sleeper_league_id # Commented out
-#                 FROM UserLeagueLinks ull # Commented out
-#                 WHERE ull.wallet_address = ? # Commented out
-#             ''', (user['wallet_address'],)) # Commented out
-#             leagues = cursor.fetchall() # Commented out
-#             if leagues: # Commented out
-#                 first_league_id = leagues[0]['sleeper_league_id'] # Commented out
-#                 # Redirect to the standings page for the first league # Commented out
-#                 return redirect(url_for('get_league_standings_local', league_id=first_league_id)) # Commented out
-#             else: # Commented out
-#                 # No specific league, redirect to the user's general league data page # Commented out
-#                 return redirect(url_for('get_league_data_local')) # Commented out
-#         else: # Commented out
-#             print("User authenticated but not associated with Sleeper") # Commented out
-#             # Bypassing Sleeper association, redirect to the user's general league data page # Commented out
-#             return redirect(url_for('get_league_data_local')) # Commented out
-#     flash('Please connect your TON wallet from the frontend.', 'info') # Commented out
-#     return redirect("http://localhost:5173") # Commented out
-
-# TonConnect callback (optional, if used by frontend)
-# @app.route('/tonconnect-callback', methods=['GET']) # Commented out
-# def tonconnect_callback(): # Commented out
-#     try: # Commented out
-#         proof = request.args.get('proof') # Commented out
-#         address = request.args.get('address') # Commented out
-#         if ton_connect.verify_proof(proof, address): # Commented out
-#             conn = get_global_db_connection() # Use global connection # Commented out
-#             cursor = conn.cursor() # Commented out
-#             cursor.execute('SELECT wallet_address FROM Users WHERE wallet_address = ?', (address,)) # Commented out
-#             user = cursor.fetchone() # Commented out
-#             if not user: # Commented out
-#                 cursor.execute('INSERT INTO Users (wallet_address, CreatedAt) VALUES (?, datetime("now"))', (address,)) # Commented out
-#                 conn.commit() # Commented out
-#                 user_id = cursor.lastrowid # Commented out
-#             else: # Commented out
-#                 user_id = user['wallet_address'] # Commented out
-#             session['wallet_address'] = address # Commented out
-#             flash('Logged in successfully.', 'success') # Commented out
-#             return redirect(url_for('get_league_data_local')) # Commented out
-#         else: # Commented out
-#             flash('Invalid TonConnect proof.', 'error') # Commented out
-#             return redirect(url_for('initiate_login')) # Commented out
-#     except TonConnectError as e: # Commented out
-#         flash(f'TonConnect error: {str(e)}', 'error') # Commented out
-#         return redirect(url_for('initiate_login')) # Commented out
-
-# Auth login route (for frontend to verify TonConnect proof)
 @app.route('/auth/login', methods=['POST', 'OPTIONS'])
 def login():
     if request.method == 'OPTIONS':
@@ -928,7 +897,8 @@ def get_league_standings_local():
                 r.players, -- JSON string of player_ids
                 r.wins,
                 r.losses,
-                r.ties
+                r.ties,
+                r.points_for
             FROM rosters r
             LEFT JOIN Users u ON r.owner_id = u.sleeper_user_id -- Join with Users table
             WHERE r.sleeper_league_id = ?
@@ -949,7 +919,8 @@ def get_league_standings_local():
                 'player_count': len(json.loads(row['players'])) if row['players'] else 0,
                 'wins': row['wins'],
                 'losses': row['losses'],
-                'ties': row['ties']
+                'ties': row['ties'],
+                'points_for': row['points_for'] or 0.0
             })
         
         # Sorting is removed as statistical ranking is no longer the primary purpose.
