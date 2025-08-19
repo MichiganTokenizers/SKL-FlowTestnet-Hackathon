@@ -193,3 +193,50 @@ def test_get_recent_transactions_ordering_and_limit(client, mock_db_connection, 
     assert mock_db_connection.execute.call_args_list[2][0][1] == (COMMON_LEAGUE_ID,)
 
 # Add more tests as needed, e.g., for different transaction types and their 'data' parsing if enhanced later. 
+
+def test_get_current_nfl_week_success(client):
+    """Test successful retrieval of current NFL week."""
+    with patch('backend.sleeper_service.SleeperService.get_nfl_state') as mock_get_nfl_state:
+        mock_get_nfl_state.return_value = {
+            'season': '2024',
+            'week': 5,
+            'season_type': 'regular'
+        }
+        
+        response = client.get('/nfl/current-week')
+        data = json.loads(response.data)
+        
+        assert response.status_code == 200
+        assert data['success'] is True
+        assert data['season'] == '2024'
+        assert data['week'] == 5
+        assert data['season_type'] == 'regular'
+        assert data['is_offseason'] is False
+
+def test_get_current_nfl_week_offseason(client):
+    """Test NFL week endpoint during offseason."""
+    with patch('backend.sleeper_service.SleeperService.get_nfl_state') as mock_get_nfl_state:
+        mock_get_nfl_state.return_value = {
+            'season': '2024',
+            'week': None,
+            'season_type': 'off'
+        }
+        
+        response = client.get('/nfl/current-week')
+        data = json.loads(response.data)
+        
+        assert response.status_code == 200
+        assert data['success'] is True
+        assert data['is_offseason'] is True
+
+def test_get_current_nfl_week_service_error(client):
+    """Test NFL week endpoint when SleeperService fails."""
+    with patch('backend.sleeper_service.SleeperService.get_nfl_state') as mock_get_nfl_state:
+        mock_get_nfl_state.return_value = None
+        
+        response = client.get('/nfl/current-week')
+        data = json.loads(response.data)
+        
+        assert response.status_code == 500
+        assert data['success'] is False
+        assert 'Unable to fetch NFL state' in data['error'] 

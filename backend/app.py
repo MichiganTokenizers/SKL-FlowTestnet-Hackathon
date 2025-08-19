@@ -2292,6 +2292,187 @@ def record_payment_for_league(league_id):
         app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
 
+@app.route('/league/<league_id>/transactions/recent', methods=['GET'])
+@login_required
+def get_recent_transactions(league_id):
+    """Get recent transactions for a league."""
+    user = get_current_user()
+    
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+        
+        # 1. Check if user is part of this league
+        cursor.execute("""
+            SELECT 1 FROM UserLeagueLinks 
+            WHERE wallet_address = ? AND sleeper_league_id = ?
+        """, (user['wallet_address'], league_id))
+        
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'User is not part of this league'}), 403
+        
+        # 2. Get league name
+        cursor.execute("""
+            SELECT name FROM LeagueMetadata 
+            WHERE sleeper_league_id = ?
+        """, (league_id,))
+        
+        league_data = cursor.fetchone()
+        if not league_data:
+            return jsonify({'success': False, 'error': 'League not found'}), 404
+        
+        league_name = league_data['name']
+        
+        # 3. Get recent transactions (limit to 15 most recent)
+        cursor.execute("""
+            SELECT sleeper_transaction_id, type, status, data, created_at
+            FROM transactions 
+            WHERE league_id = ? 
+            ORDER BY created_at DESC 
+            LIMIT 15
+        """, (league_id,))
+        
+        transactions = []
+        for row in cursor.fetchall():
+            try:
+                # Parse the JSON data field
+                details = json.loads(row['data']) if row['data'] else {}
+            except json.JSONDecodeError:
+                details = {"error": "Could not parse transaction data"}
+            
+            transactions.append({
+                'transaction_id': row['sleeper_transaction_id'],
+                'type': row['type'],
+                'status': row['status'],
+                'details': details,
+                'created_at': row['created_at']
+            })
+        
+        return jsonify({
+            'success': True,
+            'league_id': league_id,
+            'league_name': league_name,
+            'transactions': transactions
+        }), 200
+        
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error in GET /league/{league_id}/transactions/recent: {str(e)}")
+        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
+    except Exception as e:
+        app.logger.error(f"Unexpected error in GET /league/{league_id}/transactions/recent: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
+
+@app.route('/nfl/current-week', methods=['GET'])
+def get_current_nfl_week():
+    """Get the current NFL week and season information."""
+    try:
+        # Use the SleeperService to get NFL state
+        nfl_state = sleeper_service.get_nfl_state()
+        
+        if not nfl_state:
+            return jsonify({'success': False, 'error': 'Unable to fetch NFL state'}), 500
+        
+        return jsonify({
+            'success': True,
+            'season': nfl_state.get('season'),
+            'week': nfl_state.get('week'),
+            'season_type': nfl_state.get('season_type'),
+            'is_offseason': nfl_state.get('season_type', '').lower() in ['off', 'pre']
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in GET /nfl/current-week: {str(e)}")
+        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
+
+@app.route('/league/<league_id>/transactions/week/<int:week>', methods=['GET'])
+@login_required
+def get_league_transactions_by_week(league_id, week):
+    """Get transactions for a specific week in a league."""
+    user = get_current_user()
+    
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+        
+        # 1. Check if user is part of this league
+        cursor.execute("""
+            SELECT 1 FROM UserLeagueLinks 
+            WHERE wallet_address = ? AND sleeper_league_id = ?
+        """, (user['wallet_address'], league_id))
+        
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'User is not part of this league'}), 403
+        
+        # 2. Get league name
+        cursor.execute("""
+            SELECT name FROM LeagueMetadata 
+            WHERE sleeper_league_id = ?
+        """, (league_id,))
+        
+        league_data = cursor.fetchone()
+        if not league_data:
+            return jsonify({'success': False, 'error': 'League not found'}), 404
+        
+        league_name = league_data['name']
+        
+        # 3. Get transactions for the specific week
+        # Note: We'll need to parse the data field to check if it contains week information
+        # For now, we'll return all transactions and let the frontend filter by week
+        cursor.execute("""
+            SELECT sleeper_transaction_id, type, status, data, created_at
+            FROM transactions 
+            WHERE league_id = ?
+            ORDER BY created_at DESC
+        """, (league_id,))
+        
+        transactions = []
+        for row in cursor.fetchall():
+            try:
+                details = json.loads(row['data']) if row['data'] else {}
+                
+                # Check if this transaction is for the specified week
+                # Sleeper API includes week info in transaction data
+                transaction_week = details.get('week') or details.get('leg') or None
+                
+                if transaction_week is None or int(transaction_week) == week:
+                    transactions.append({
+                        'transaction_id': row['sleeper_transaction_id'],
+                        'type': row['type'],
+                        'status': row['status'],
+                        'details': details,
+                        'created_at': row['created_at'],
+                        'week': transaction_week
+                    })
+            except json.JSONDecodeError:
+                # If we can't parse the data, include it anyway
+                transactions.append({
+                    'transaction_id': row['sleeper_transaction_id'],
+                    'type': row['type'],
+                    'status': row['status'],
+                    'details': {"error": "Could not parse transaction data"},
+                    'created_at': row['created_at'],
+                    'week': None
+                })
+        
+        return jsonify({
+            'success': True,
+            'league_id': league_id,
+            'league_name': league_name,
+            'week': week,
+            'transactions': transactions
+        }), 200
+        
+    except sqlite3.Error as e:
+        app.logger.error(f"Database error in GET /league/{league_id}/transactions/week/{week}: {str(e)}")
+        return jsonify({'success': False, 'error': f'Database error: {str(e)}'}), 500
+    except Exception as e:
+        app.logger.error(f"Unexpected error in GET /league/{league_id}/transactions/week/{week}: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
+
 print("DEBUG: All routes and helpers defined. Entering __main__ block...")
 if __name__ == '__main__':
     print("DEBUG: Inside __main__ block. About to call app.run()")
@@ -2299,6 +2480,11 @@ if __name__ == '__main__':
     # especially if any routes might be hit immediately or by background tasks.
     # However, get_global_db_connection() is designed to init on first call.
     # init_db() call above should have initialized it.
+    
+    # Suppress Flask development server warning
+    import warnings
+    warnings.filterwarnings("ignore", message="This is a development server")
+    
     app.run(debug=True, port=5000)
     print("DEBUG: app.run() has exited.")
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; // Import Link
 import LeagueFees from './LeagueFees'; // Import the new component
+import TransactionsTable from './TransactionsTable'; // Import the transactions table
 import { API_BASE_URL } from '../../config';
 // import RecentTransactionsTable from './RecentTransactionsTable'; // Import the new transactions table
 // import { Link, useNavigate } from 'react-router-dom'; // Link and useNavigate might not be needed directly if navigation is handled by App.jsx
@@ -240,21 +241,30 @@ function League(props) { // Accept props
                     <div className="card mb-4">
                         <div className="card-header d-flex justify-content-between align-items-center">
                             <h4 className="mb-0" style={{ color: 'black' }}>League Transactions</h4>
-                            <button
-                                className="btn btn-link text-decoration-none"
-                                type="button"
-                                data-bs-toggle="collapse"
-                                data-bs-target="#collapseTransactions"
-                                aria-expanded="true"
-                                aria-controls="collapseTransactions"
-                                style={{ color: '#9966CC' }}
-                            >
-                                ▼
-                            </button>
+                            <div>
+                                <button
+                                    className="btn btn-sm btn-outline-primary me-2"
+                                    onClick={() => window.location.reload()}
+                                    title="Refresh transactions"
+                                >
+                                    🔄 Refresh
+                                </button>
+                                <button
+                                    className="btn btn-link text-decoration-none"
+                                    type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#collapseTransactions"
+                                    aria-expanded="true"
+                                    aria-controls="collapseTransactions"
+                                    style={{ color: '#9966CC' }}
+                                >
+                                    ▼
+                                </button>
+                            </div>
                         </div>
                         <div className="collapse show" id="collapseTransactions">
                             <div className="card-body">
-                                <p className="text-muted">Transaction history will be displayed here.</p>
+                                <TransactionsTable leagueId={selectedLeagueId} sessionToken={sessionToken} />
                             </div>
                         </div>
                     </div>
