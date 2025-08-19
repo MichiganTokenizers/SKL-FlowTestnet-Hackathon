@@ -123,17 +123,17 @@ function TransactionsTable({ leagueId, sessionToken }) {
             const drops = details.drops || {};
             
             Object.entries(adds).forEach(([playerId, newRosterId]) => {
-                players.push(playerId);
-                newTeams.push(newRosterId);
+                players.push(details.player_names?.[playerId] || playerId);
+                newTeams.push(details.team_names?.[newRosterId] || newRosterId);
                 // Find if it was dropped from somewhere (in trade, it's from the other team)
                 let oldRosterId = Object.entries(drops).find(([p]) => p === playerId)?.[1] || 'Traded';
-                oldTeams.push(oldRosterId);
+                oldTeams.push(details.team_names?.[oldRosterId] || oldRosterId);
             });
 
             Object.entries(drops).forEach(([playerId, oldRosterId]) => {
                 if (!players.includes(playerId)) {
-                    players.push(playerId);
-                    oldTeams.push(oldRosterId);
+                    players.push(details.player_names?.[playerId] || playerId);
+                    oldTeams.push(details.team_names?.[oldRosterId] || oldRosterId);
                     newTeams.push('Traded');
                 }
             });
@@ -151,9 +151,9 @@ function TransactionsTable({ leagueId, sessionToken }) {
                 const has_contract = true;  // TODO: Use details.has_contract[playerId] if added to backend
                 
                 if (has_contract) {
-                    players.push(playerId);
-                    oldTeams.push(oldRosterId);
-                    newTeams.push('FA/Waived');
+                    players.push(details.player_names?.[playerId] || playerId);
+                    oldTeams.push(details.team_names?.[oldRosterId] || oldRosterId);
+                    newTeams.push('FA');
                 }
             });
             

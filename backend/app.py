@@ -2333,12 +2333,42 @@ def get_recent_transactions(league_id):
         """, (league_id,))
         
         transactions = []
-        for row in cursor.fetchall():
+        raw_transactions = cursor.fetchall()
+
+        # Debug logging
+        print(f"DEBUG: Found {len(raw_transactions)} raw transactions for league {league_id}")
+
+        # Fetch all player names (global)
+        cursor.execute("SELECT sleeper_player_id, name FROM players")
+        player_map = {row['sleeper_player_id']: row['name'] for row in cursor.fetchall()}
+
+        # Fetch team names for this league
+        cursor.execute("""
+            SELECT sleeper_roster_id, team_name 
+            FROM rosters 
+            WHERE sleeper_league_id = ?
+        """, (league_id,))
+        team_map = {str(row['sleeper_roster_id']): row['team_name'] for row in cursor.fetchall()}
+
+        for row in raw_transactions:
             try:
-                # Parse the JSON data field
                 details = json.loads(row['data']) if row['data'] else {}
+                print(f"DEBUG: Transaction {row['sleeper_transaction_id']}: type={row['type']}, status={row['status']}, details_keys={list(details.keys()) if details else 'None'}")
+                
+                # Resolve player names and team names
+                player_names = {}
+                for pid in set(list(details.get('adds', {}).keys()) + list(details.get('drops', {}).keys())):
+                    player_names[pid] = player_map.get(pid, pid)  # Fallback to ID if not found
+                
+                team_names = {rid: team_map.get(rid, rid) for rid in set(list(details.get('adds', {}).values()) + list(details.get('drops', {}).values()))}
+                
+                # Add to details
+                details['player_names'] = player_names
+                details['team_names'] = team_names
+                
             except json.JSONDecodeError:
                 details = {"error": "Could not parse transaction data"}
+                print(f"DEBUG: Failed to parse JSON for transaction {row['sleeper_transaction_id']}")
             
             transactions.append({
                 'transaction_id': row['sleeper_transaction_id'],
@@ -2347,7 +2377,9 @@ def get_recent_transactions(league_id):
                 'details': details,
                 'created_at': row['created_at']
             })
-        
+
+        print(f"DEBUG: Returning {len(transactions)} processed transactions")
+
         return jsonify({
             'success': True,
             'league_id': league_id,
@@ -2426,9 +2458,26 @@ def get_league_transactions_by_week(league_id, week):
             WHERE league_id = ?
             ORDER BY created_at DESC
         """, (league_id,))
-        
+
         transactions = []
-        for row in cursor.fetchall():
+        raw_transactions = cursor.fetchall()
+
+        # Debug logging
+        print(f"DEBUG: Found {len(raw_transactions)} raw transactions for league {league_id}, week {week}")
+
+        # Fetch all player names (global)
+        cursor.execute("SELECT sleeper_player_id, name FROM players")
+        player_map = {row['sleeper_player_id']: row['name'] for row in cursor.fetchall()}
+
+        # Fetch team names for this league
+        cursor.execute("""
+            SELECT sleeper_roster_id, team_name 
+            FROM rosters 
+            WHERE sleeper_league_id = ?
+        """, (league_id,))
+        team_map = {str(row['sleeper_roster_id']): row['team_name'] for row in cursor.fetchall()}
+
+        for row in raw_transactions:
             try:
                 details = json.loads(row['data']) if row['data'] else {}
                 
@@ -2436,7 +2485,20 @@ def get_league_transactions_by_week(league_id, week):
                 # Sleeper API includes week info in transaction data
                 transaction_week = details.get('week') or details.get('leg') or None
                 
+                print(f"DEBUG: Transaction {row['sleeper_transaction_id']}: type={row['type']}, week={transaction_week}, details_keys={list(details.keys()) if details else 'None'}")
+                
                 if transaction_week is None or int(transaction_week) == week:
+                    # Resolve player names and team names
+                    player_names = {}
+                    for pid in set(list(details.get('adds', {}).keys()) + list(details.get('drops', {}).keys())):
+                        player_names[pid] = player_map.get(pid, pid)
+                    
+                    team_names = {rid: team_map.get(rid, rid) for rid in set(list(details.get('adds', {}).values()) + list(details.get('drops', {}).values()))}
+                    
+                    # Add to details
+                    details['player_names'] = player_names
+                    details['team_names'] = team_names
+                    
                     transactions.append({
                         'transaction_id': row['sleeper_transaction_id'],
                         'type': row['type'],
@@ -2446,7 +2508,7 @@ def get_league_transactions_by_week(league_id, week):
                         'week': transaction_week
                     })
             except json.JSONDecodeError:
-                # If we can't parse the data, include it anyway
+                print(f"DEBUG: Failed to parse JSON for transaction {row['sleeper_transaction_id']}")
                 transactions.append({
                     'transaction_id': row['sleeper_transaction_id'],
                     'type': row['type'],
@@ -2455,7 +2517,9 @@ def get_league_transactions_by_week(league_id, week):
                     'created_at': row['created_at'],
                     'week': None
                 })
-        
+
+        print(f"DEBUG: Returning {len(transactions)} transactions for week {week}")
+
         return jsonify({
             'success': True,
             'league_id': league_id,
