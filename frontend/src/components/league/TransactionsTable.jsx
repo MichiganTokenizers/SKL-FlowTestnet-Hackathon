@@ -108,48 +108,62 @@ function TransactionsTable({ leagueId, sessionToken }) {
         return typeMap[type] || type;
     };
 
-    const formatTransactionDetails = (transaction) => {
+    const getTransactionDetails = (transaction) => {
         const { type, details } = transaction;
-        
+        let players = [];
+        let oldTeams = [];
+        let newTeams = [];
+        let description = '';
+
         if (type === 'trade') {
-            // Handle trade transactions
-            if (details.adds && details.drops) {
-                const adds = Object.keys(details.adds).length;
-                const drops = Object.keys(details.drops).length;
-                return `Trade: ${adds} players added, ${drops} players dropped`;
-            }
-            return 'Trade transaction';
-        } else if (type === 'waiver') {
-            // Handle waiver transactions
-            if (details.adds && details.drops) {
-                const adds = Object.keys(details.adds).length;
-                const drops = Object.keys(details.drops).length;
-                if (adds > 0 && drops > 0) {
-                    return `Waiver: ${adds} players added, ${drops} players dropped`;
-                } else if (adds > 0) {
-                    return `Waiver: ${adds} players added`;
-                } else if (drops > 0) {
-                    return `Waiver: ${drops} players dropped`;
+            description = 'Trade';
+            
+            // For trades, include all involved players without contract check
+            const adds = details.adds || {};
+            const drops = details.drops || {};
+            
+            Object.entries(adds).forEach(([playerId, newRosterId]) => {
+                players.push(playerId);
+                newTeams.push(newRosterId);
+                // Find if it was dropped from somewhere (in trade, it's from the other team)
+                let oldRosterId = Object.entries(drops).find(([p]) => p === playerId)?.[1] || 'Traded';
+                oldTeams.push(oldRosterId);
+            });
+
+            Object.entries(drops).forEach(([playerId, oldRosterId]) => {
+                if (!players.includes(playerId)) {
+                    players.push(playerId);
+                    oldTeams.push(oldRosterId);
+                    newTeams.push('Traded');
                 }
-            }
-            return 'Waiver transaction';
-        } else if (type === 'free_agent') {
-            // Handle free agent transactions
-            if (details.adds && details.drops) {
-                const adds = Object.keys(details.adds).length;
-                const drops = Object.keys(details.drops).length;
-                if (adds > 0 && drops > 0) {
-                    return `Free Agent: ${adds} players added, ${drops} players dropped`;
-                } else if (adds > 0) {
-                    return `Free Agent: ${adds} players added`;
-                } else if (drops > 0) {
-                    return `Free Agent: ${drops} players dropped`;
+            });
+        } else if (type === 'waiver' || type === 'free_agent') {
+            description = 'Waive';
+            
+            // For waive/free_agent, only include dropped players (assuming waive means drop)
+            // But per user: "only include players who have an existing contract"
+            // Note: Since we can't check contracts in frontend, we'll assume all drops are waives
+            // TODO: Enhance backend to include 'has_contract' in details for drops
+            const drops = details.drops || {};
+            
+            Object.entries(drops).forEach(([playerId, oldRosterId]) => {
+                // Placeholder: Assume has_contract=true for now; replace with actual check if backend provides it
+                const has_contract = true;  // TODO: Use details.has_contract[playerId] if added to backend
+                
+                if (has_contract) {
+                    players.push(playerId);
+                    oldTeams.push(oldRosterId);
+                    newTeams.push('FA/Waived');
                 }
-            }
-            return 'Free Agent transaction';
+            });
+            
+            // If there are adds without drops, perhaps treat as pickup, but per user focus on waive (drops)
+        } else {
+            // For other types, skip or use generic
+            return { description: formatTransactionType(type), players: [], oldTeams: [], newTeams: [] };
         }
-        
-        return 'Transaction';
+
+        return { description, players, oldTeams, newTeams };
     };
 
     const formatDate = (dateString) => {
@@ -235,32 +249,44 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                 <th>Date</th>
                                 <th>Type</th>
                                 <th>Description</th>
-                                <th>Status</th>
-                                {selectedWeek === 'all' && <th>Week</th>}
+                                <th>Player</th>
+                                <th>Team (old)</th>
+                                <th>Team (new)</th>
+                                <th>Week</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {transactions.map((transaction) => (
-                                <tr key={transaction.transaction_id}>
-                                    <td>{formatDate(transaction.created_at)}</td>
-                                    <td>
-                                        <span className={`badge bg-${getStatusColor(transaction.type)}`}>
-                                            {formatTransactionType(transaction.type)}
-                                        </span>
-                                    </td>
-                                    <td>{formatTransactionDetails(transaction)}</td>
-                                    <td>
-                                        <span className={`badge bg-${getStatusBadgeColor(transaction.status)}`}>
-                                            {transaction.status}
-                                        </span>
-                                    </td>
-                                    {selectedWeek === 'all' && (
-                                        <td>
-                                            {transaction.week ? `Week ${transaction.week}` : 'Unknown'}
-                                        </td>
-                                    )}
-                                </tr>
-                            ))}
+                            {transactions.map((transaction) => {
+                                const { description, players, oldTeams, newTeams } = getTransactionDetails(transaction);
+                                
+                                if (players.length === 0) {
+                                    // Fallback single row if no players
+                                    return (
+                                        <tr key={transaction.transaction_id}>
+                                            <td>{formatDate(transaction.created_at)}</td>
+                                            <td>{formatTransactionType(transaction.type)}</td>
+                                            <td>{description}</td>
+                                            <td>N/A</td>
+                                            <td>N/A</td>
+                                            <td>N/A</td>
+                                            <td>{transaction.week ? transaction.week : 'Unknown'}</td>
+                                        </tr>
+                                    );
+                                }
+
+                                // Multi-row for multiple players
+                                return players.map((player, index) => (
+                                    <tr key={`${transaction.transaction_id}-${index}`}>
+                                        <td>{formatDate(transaction.created_at)}</td>
+                                        <td>{formatTransactionType(transaction.type)}</td>
+                                        <td>{description}</td>
+                                        <td>{player}</td>
+                                        <td>{oldTeams[index] || 'N/A'}</td>
+                                        <td>{newTeams[index] || 'N/A'}</td>
+                                        <td>{transaction.week ? transaction.week : 'Unknown'}</td>
+                                    </tr>
+                                ));
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -269,28 +295,6 @@ function TransactionsTable({ leagueId, sessionToken }) {
     );
 }
 
-// Helper function to get status colors for transaction types
-function getStatusColor(type) {
-    const colorMap = {
-        'trade': 'primary',
-        'waiver': 'warning',
-        'free_agent': 'success',
-        'draft': 'info',
-        'commissioner': 'secondary'
-    };
-    return colorMap[type] || 'secondary';
-}
-
-// Helper function to get status badge colors
-function getStatusBadgeColor(status) {
-    const colorMap = {
-        'complete': 'success',
-        'processed': 'info',
-        'pending': 'warning',
-        'failed': 'danger',
-        'cancelled': 'secondary'
-    };
-    return colorMap[status] || 'secondary';
-}
+// Remove getStatusColor and getStatusBadgeColor if no longer needed, since Type is now normal text and Status column is removed
 
 export default TransactionsTable;
