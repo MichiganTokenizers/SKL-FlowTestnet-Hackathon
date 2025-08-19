@@ -198,10 +198,8 @@ function League(props) { // Accept props
                                         <thead className="league-table-header" style={{ backgroundColor: 'transparent' }}>
                                             <tr>
                                                 <th className="border-white">Team Name</th>
-                                                <th className="border-white">Manager</th>
                                                 <th className="border-white">Record (W-L-T)</th>
                                                 <th className="border-white">Total Points</th>
-                                                <th className="border-white">Next Matchup</th>
                                                 <th className="border-white">Transaction Count</th>
                                             </tr>
                                         </thead>
@@ -217,10 +215,8 @@ function League(props) { // Accept props
                                                             <span>{roster.team_name || 'Unnamed Team'}</span>
                                                         )}
                                                     </td>
-                                                    <td className="border-white">{roster.owner_display_name || roster.owner_id}</td>
                                                     <td className="border-white">{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
                                                     <td className="border-white">{roster.points_for ? roster.points_for.toFixed(2) : '0.00'}</td>
-                                                    <td className="border-white">TBD</td>
                                                     <td className="border-white">0</td>
                                                 </tr>
                                             ))}
