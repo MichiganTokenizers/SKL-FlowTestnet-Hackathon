@@ -655,12 +655,23 @@ class SleeperService:
                     # print(f"DEBUG (SleeperService): Total unique players found on API rosters in league {league_id}: {len(unique_player_ids_in_league)}")
 
                 # Step 5: Get transactions for this league
-                league_transactions = self.get_league_transactions(league_id)
+                # First, get current NFL state to determine max week
+                nfl_state = self.get_nfl_state()
+                current_week = nfl_state.get('week', 18) if nfl_state else 18  # Default to 18 if fetch fails
+
+                league_transactions = []
+                for week in range(1, current_week + 1):
+                    self.logger.info(f"Fetching transactions for league {league_id}, week {week}")
+                    week_transactions = self.get_league_transactions(league_id, week)
+                    if week_transactions:
+                        league_transactions.extend(week_transactions)
+                    else:
+                        self.logger.warning(f"No transactions found for league {league_id}, week {week}")
+
                 if not league_transactions:
-                    self.logger.warning(f"SleeperService.fetch_all_data: No transactions found for league {league_id} (current season). Error was: {getattr(league_transactions, 'error', 'Unknown, but no data')}")
-                    # print(f"Error fetching transactions for league {league_id}: {getattr(league_transactions, 'error', 'No transactions returned or error')}") # Keep print
+                    self.logger.warning(f"SleeperService.fetch_all_data: No transactions found across all weeks for league {league_id}")
                 else:
-                    # self.logger.info(f"SleeperService.fetch_all_data: Found {len(league_transactions)} transactions for league {league_id}.")
+                    self.logger.info(f"SleeperService.fetch_all_data: Found {len(league_transactions)} total transactions across all weeks for league {league_id}.")
                     for tx_data in league_transactions:
                         tx_id = tx_data.get("transaction_id")
                         tx_type = tx_data.get("type")
@@ -671,7 +682,7 @@ class SleeperService:
                             self.logger.warning("SleeperService.fetch_all_data: Transaction data found with no transaction_id. Skipping.")
                             continue
                         
-                        # self.logger.debug(f"SleeperService.fetch_all_data: Upserting transaction {tx_id} for league {league_id}.")
+                        self.logger.debug(f"SleeperService.fetch_all_data: Upserting transaction {tx_id} for league {league_id}.")
                         cursor.execute('''
                             INSERT INTO transactions (sleeper_transaction_id, league_id, type, status, data, created_at, updated_at)
                             VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
@@ -682,8 +693,6 @@ class SleeperService:
                                 data = excluded.data,
                                 updated_at = datetime('now')
                         ''', (tx_id, league_id, tx_type, tx_status, tx_data_json))
-
-
 
                 # Step 7: Get drafts for this league
                 league_drafts = self.get_league_drafts(league_id)

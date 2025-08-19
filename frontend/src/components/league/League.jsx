@@ -241,26 +241,17 @@ function League(props) { // Accept props
                     <div className="card mb-4">
                         <div className="card-header d-flex justify-content-between align-items-center">
                             <h4 className="mb-0" style={{ color: 'black' }}>League Transactions</h4>
-                            <div>
-                                <button
-                                    className="btn btn-sm btn-outline-primary me-2"
-                                    onClick={() => window.location.reload()}
-                                    title="Refresh transactions"
-                                >
-                                    🔄 Refresh
-                                </button>
-                                <button
-                                    className="btn btn-link text-decoration-none"
-                                    type="button"
-                                    data-bs-toggle="collapse"
-                                    data-bs-target="#collapseTransactions"
-                                    aria-expanded="true"
-                                    aria-controls="collapseTransactions"
-                                    style={{ color: '#9966CC' }}
-                                >
-                                    ▼
-                                </button>
-                            </div>
+                            <button
+                                className="btn btn-link text-decoration-none"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#collapseTransactions"
+                                aria-expanded="true"
+                                aria-controls="collapseTransactions"
+                                style={{ color: '#9966CC' }}
+                            >
+                                ▼
+                            </button>
                         </div>
                         <div className="collapse show" id="collapseTransactions">
                             <div className="card-body">
