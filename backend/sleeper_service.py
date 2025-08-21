@@ -3,7 +3,7 @@ import sqlite3
 import json
 from typing import Dict, List, Optional, Any
 import logging
-from .utils import apply_contract_penalties_and_deactivate # Import new function from utils
+from utils import apply_contract_penalties_and_deactivate # Import new function from utils
 
 class SleeperService:
     BASE_URL = "https://api.sleeper.app/v1"

@@ -3,20 +3,34 @@ import sqlite3, math
 import os
 import secrets
 import requests # Added import for requests
-from .sleeper_service import SleeperService
+from sleeper_service import SleeperService
 import json
 import time # Added for potential sleep, though might not be used in final global conn version
 from functools import wraps # Import wraps
 import logging # Add logging import
 from typing import Any
-from .utils import get_escalated_contract_costs # Changed to direct import
+from utils import get_escalated_contract_costs # Changed to direct import
+
+# Load environment variables
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    print("Environment variables loaded from .env file")
+except ImportError:
+    print("python-dotenv not installed. Using system environment variables only.")
 
 # Configure basic logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Create Flask app instance at the top
 app = Flask(__name__)
+
+# Production configuration
+app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+app.config['ENV'] = os.getenv('FLASK_ENV', 'production')
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6')
+
+print(f"Flask configured - Environment: {app.config['ENV']}, Debug: {app.config['DEBUG']}")
 
 # --- TEMPORARY DEBUGGING: Global DB Connection ---
 # DO NOT USE IN PRODUCTION
@@ -27,8 +41,10 @@ def get_global_db_connection():
     if _global_db_conn is None:
         print("DEBUG_GLOBAL_CONN: Initializing global database connection...")
         try:
-            # connect_args = {'check_same_thread': False} # For older python versions
-            _global_db_conn = sqlite3.connect('/var/data/keeper.db', check_same_thread=False)
+            # Use environment variable for database path
+            db_path = os.getenv('DATABASE_URL', '/var/data/keeper.db')
+            print(f"DEBUG_GLOBAL_CONN: Connecting to database at: {db_path}")
+            _global_db_conn = sqlite3.connect(db_path, check_same_thread=False)
             _global_db_conn.row_factory = sqlite3.Row
             # Attempt to set WAL mode on this global connection too
             cursor = _global_db_conn.cursor()
@@ -2545,11 +2561,40 @@ if __name__ == '__main__':
     # However, get_global_db_connection() is designed to init on first call.
     # init_db() call above should have initialized it.
     
-    # Suppress Flask development server warning
-    import warnings
-    warnings.filterwarnings("ignore", message="This is a development server")
+    if app.config['DEBUG']:
+        print("Running in DEVELOPMENT mode")
+        # Suppress Flask development server warning
+        import warnings
+        warnings.filterwarnings("ignore", message="This is a development server")
+        
+        app.run(
+            debug=True, 
+            host=os.getenv('HOST', '127.0.0.1'),
+            port=int(os.getenv('PORT', 5000))
+        )
+    else:
+        print("Running in PRODUCTION mode")
+        print("Starting production server with Waitress...")
+        
+        try:
+            import waitress
+            host = os.getenv('HOST', '0.0.0.0')
+            port = int(os.getenv('PORT', 5000))
+            
+            print(f"Starting Waitress server on {host}:{port}")
+            print("Press Ctrl+C to stop the server")
+            
+            # Start Waitress server
+            waitress.serve(app, host=host, port=port, threads=4)
+            
+        except ImportError:
+            print("Waitress not available. Install with: pip install waitress")
+            print("Or use: python app.py (for development mode)")
+        except Exception as e:
+            print(f"Error starting Waitress: {e}")
+            print("Falling back to development mode...")
+            app.run(debug=False, host=host, port=port)
     
-    app.run(debug=True, port=5000)
     print("DEBUG: app.run() has exited.")
 
 
