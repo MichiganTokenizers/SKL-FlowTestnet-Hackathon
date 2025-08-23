@@ -5,6 +5,7 @@ import { API_BASE_URL } from '../../config';
 import BudgetTradeModal from '../league/BudgetTradeModal';
 
 function Team() {
+    console.log("Team.jsx DEPLOY TEST: TRADE_BUTTON_V3_LOADED");
     const { teamId, leagueId } = useParams();
     const [teamData, setTeamData] = useState(null);
     const [teamPositionRanks, setTeamPositionRanks] = useState(null);
