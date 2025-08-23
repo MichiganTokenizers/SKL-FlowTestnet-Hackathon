@@ -186,6 +186,12 @@ function Team() {
     const canSetContracts = teamData && 
                             teamData.is_contract_setting_period_active &&
                             allPlayersSorted.some(p => p.contract_status === 'Pending Contract Setting');
+    
+    // Debug logging for trade button visibility
+    console.log("DEBUG TRADE BUTTON - teamData exists:", !!teamData);
+    console.log("DEBUG TRADE BUTTON - is_contract_setting_period_active:", teamData?.is_contract_setting_period_active);
+    console.log("DEBUG TRADE BUTTON - players with Pending Contract Setting:", allPlayersSorted.filter(p => p.contract_status === 'Pending Contract Setting').length);
+    console.log("DEBUG TRADE BUTTON - canSetContracts result:", canSetContracts);
 
     const handleSaveContractDurations = async () => {
         if (!teamData || !teamData.league_id) {
