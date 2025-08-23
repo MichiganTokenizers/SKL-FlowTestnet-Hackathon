@@ -33,6 +33,13 @@
 - [ ] Clean up routes upon login with Flow, seeing an error page before correct league page loads
 - [x] Detect players who have been waived from Sleeper team but still have an active contract during season
 - [ ] Build Trade Desk (big)
+  - [x] Database schema for trades, trade_items, trade_approvals tables
+  - [x] Backend API endpoints for trade management
+  - [x] Frontend trade approval interface in League page
+  - [x] Trade creation modal in Team page
+  - [x] Budget calculation integration with trades
+  - [x] Automatic commissioner detection from Sleeper API
+  - [x] **TEMPORARY**: Database reset endpoint for production testing
 - [ ] Build league fee structure in keeper.db
 - [ ] Add pay league fee button in league page
 - [x] Correct commissioner status for user LordTokenizer (wallet 0xf8d6e0586b0a20c7) in league 1230890383865552896 in keeper.db (Discovered: 2025-06-03) - **RESOLVED**: Commissioner status now automatically determined from Sleeper API
