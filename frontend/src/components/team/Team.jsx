@@ -434,7 +434,7 @@ function Team() {
                     <div className="card-header d-flex justify-content-between align-items-center">
                         <h5 className="mb-0">Team Roster</h5>
                         <div className="ms-3">
-                            {/* Trade button is always visible */}
+                            <p className="text-muted small mb-1">DEBUG: canSetContracts = {canSetContracts ? 'true' : 'false'}</p>
                             <button 
                                 onClick={() => setShowTradeModal(true)} 
                                 className="btn btn-success btn-sm me-2"
@@ -442,8 +442,6 @@ function Team() {
                             >
                                 Trade Future Budget
                             </button>
-                            {/* Debug info and conditional Save Contracts button */}
-                            <p className="text-muted small mb-1 d-inline-block">DEBUG: canSetContracts = {canSetContracts ? 'true' : 'false'}</p>
                             {canSetContracts && (
                                 <button 
                                     onClick={handleSaveContractDurations} 
