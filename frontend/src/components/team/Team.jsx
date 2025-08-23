@@ -433,8 +433,10 @@ function Team() {
                 <div className="card mb-4">
                     <div className="card-header d-flex justify-content-between align-items-center">
                         <h5 className="mb-0">Team Roster</h5>
-                        {canSetContracts && (
-                            <div className="ms-3">
+                        {/* DEBUG INFO - Always show this */}
+                        <div className="ms-3">
+                            <p className="text-muted small mb-1">DEBUG: canSetContracts = {canSetContracts ? 'true' : 'false'}</p>
+                            {canSetContracts && (
                                 <button 
                                     onClick={() => setShowTradeModal(true)} 
                                     className="btn btn-success btn-sm me-2"
@@ -450,8 +452,8 @@ function Team() {
                                 >
                                     {loading ? 'Saving...' : 'Save Contracts'}
                                 </button>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                     <div className="card-body p-0">
                         {error && canSetContracts && <p className="text-danger p-3 mb-0">{error}</p>}
