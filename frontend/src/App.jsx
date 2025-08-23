@@ -337,9 +337,6 @@ function AppContent() {
                                             My Team
                                         </button>
                                     </li>
-                                    <li className="nav-item">
-                                        <Link className="nav-link" to="/trade-desk">Trade Desk</Link>
-                                    </li>
                                 </>
                             )}
                         </ul>
