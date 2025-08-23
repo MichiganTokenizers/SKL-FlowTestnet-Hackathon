@@ -144,10 +144,6 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                 <Modal.Title className="fw-bold">Trade Future Budget Dollars</Modal.Title>
             </Modal.Header>
             <Modal.Body className="px-5">
-                <Alert variant="info" className="mb-4">
-                    <strong>How it works:</strong> Select a team to trade with, specify which years and amounts, 
-                    then submit for commissioner approval.
-                </Alert>
                 
                 {error && <Alert variant="danger" className="mb-4">{error}</Alert>}
                 
