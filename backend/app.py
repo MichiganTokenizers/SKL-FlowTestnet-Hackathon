@@ -70,11 +70,6 @@ db_conn = get_global_db_connection()  # Get the global connection
 # (LeagueMetadata, UserLeagueLinks, rosters.sleeper_league_id, etc.) for data insertion and querying.
 sleeper_service = SleeperService(db_connection=db_conn) # Pass it to the service
 
-# Initialize database with new schema (including trade tables)
-print("Initializing database with new schema...")
-init_db()
-print("Database initialization complete.")
-
 @app.route('/')
 def root():
     """Root endpoint for health checks."""
@@ -2945,7 +2940,10 @@ def get_team_budget_status(team_id, league_id):
         app.logger.error(f"Error getting team budget status: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-
+# Initialize database with new schema (including trade tables)
+print("Initializing database with new schema...")
+init_db()
+print("Database initialization complete.")
 
 print("DEBUG: All routes and helpers defined. Entering __main__ block...")
 if __name__ == '__main__':
