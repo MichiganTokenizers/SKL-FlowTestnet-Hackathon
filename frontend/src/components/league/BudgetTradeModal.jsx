@@ -30,17 +30,29 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
         setError(null);
         try {
             const sessionToken = localStorage.getItem('sessionToken');
+            console.log('DEBUG: Fetching teams for league:', leagueId, 'Current team ID:', teamId);
+            
             const response = await fetch(`${API_BASE_URL}/api/league/${leagueId}/teams`, {
                 headers: { 'Authorization': sessionToken }
             });
             const data = await response.json();
+            
+            console.log('DEBUG: Teams response:', data);
             
             if (data.success) {
                 // Filter out the current user's team
                 const otherTeams = data.teams.filter(team => 
                     team.roster_id !== teamId
                 );
-                setAvailableTeams(otherTeams);
+                
+                console.log('DEBUG: All teams:', data.teams);
+                console.log('DEBUG: Other teams (filtered):', otherTeams);
+                
+                if (otherTeams.length === 0) {
+                    setError('No other teams available for trading. You need at least one other team in the league to create trades.');
+                } else {
+                    setAvailableTeams(otherTeams);
+                }
             } else {
                 setError('Failed to fetch available teams');
             }
@@ -101,7 +113,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                 onTradeCreated();
                 onHide();
                 // Reset form
-                setTradeData({ recipient_team_id: '', budget_items: [] });
+                setTradeData({ recipient_team_id: '', budget_items: [{ year: '', amount: '' }] }); // Reset with initial empty item
             } else {
                 setError(result.error || 'Failed to create trade');
             }
@@ -137,96 +149,115 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                     then submit for commissioner approval.
                 </Alert>
                 
-                {error && <Alert variant="danger">{error}</Alert>}
+                {error && <Alert variant="danger" className="mb-4">{error}</Alert>}
                 
-                <Form>
-                    <Form.Group className="mb-4">
-                        <Form.Label className="fw-bold">Trade With:</Form.Label>
-                        <Form.Select
-                            value={tradeData.recipient_team_id}
-                            onChange={(e) => setTradeData(prev => ({...prev, recipient_team_id: e.target.value}))}
-                            disabled={fetchingTeams}
-                            className="form-select-lg"
-                        >
-                            <option value="">{fetchingTeams ? 'Loading teams...' : 'Select Team'}</option>
-                            {availableTeams.map(team => (
-                                <option key={team.roster_id} value={team.roster_id}>
-                                    {team.team_name} (Manager: {team.manager_name})
-                                </option>
-                            ))}
-                        </Form.Select>
-                    </Form.Group>
-                    
-                                         <Form.Group className="mb-3">
-                         <Form.Label className="fw-bold">Budget Items:</Form.Label>
-                         
-                         {/* Header Row */}
-                         <div className="row mb-3 fw-bold text-muted">
-                             <div className="col-3">
-                                 <span style={{fontSize: '0.9rem'}}>Year</span>
-                             </div>
-                             <div className="col-7">
-                                 <span style={{fontSize: '0.9rem'}}>Amount ($)</span>
-                             </div>
-                             <div className="col-2">
-                                 <span style={{fontSize: '0.9rem'}}>Action</span>
-                             </div>
-                         </div>
-                         
-                         {/* Budget Item Rows */}
-                         {tradeData.budget_items.map((item, index) => (
-                             <div key={index} className="row mb-3 align-items-center">
-                                 <div className="col-3">
-                                     <Form.Select
-                                         value={item.year}
-                                         onChange={(e) => handleBudgetItemChange(index, 'year', e.target.value)}
-                                         className="form-select-sm"
-                                     >
-                                         <option value="">Select Year</option>
-                                         {getFutureYears().map(year => (
-                                             <option key={year} value={year}>{year}</option>
-                                         ))}
-                                     </Form.Select>
-                                 </div>
-                                 <div className="col-7">
-                                     <Form.Control
-                                         type="number"
-                                         placeholder="0"
-                                         min="1"
-                                         value={item.amount}
-                                         onChange={(e) => handleBudgetItemChange(index, 'amount', parseFloat(e.target.value) || '')}
-                                         className="form-control-sm"
-                                     />
-                                 </div>
-                                 <div className="col-2">
-                                     <Button 
-                                         variant="outline-danger" 
-                                         size="sm"
-                                         onClick={() => handleRemoveBudgetItem(index)}
-                                         className="btn-sm px-2"
-                                     >
-                                         ×
-                                     </Button>
-                                 </div>
-                             </div>
-                         ))}
+                {fetchingTeams ? (
+                    <div className="text-center py-4">
+                        <div className="spinner-border text-primary" role="status">
+                            <span className="visually-hidden">Loading...</span>
+                        </div>
+                        <p className="mt-3 text-muted">Loading available teams...</p>
+                    </div>
+                ) : availableTeams.length === 0 ? (
+                    <Alert variant="warning" className="mb-4">
+                        <strong>No Trading Partners Available</strong>
+                        <br />
+                        You need at least one other team in the league to create budget trades. 
+                        <br />
+                        <small className="text-muted">
+                            This usually happens when you're the only user in the league or when other teams haven't been imported yet.
+                        </small>
+                    </Alert>
+                ) : (
+                    <Form>
+                        <Form.Group className="mb-5">
+                            <Form.Label className="fw-bold fs-5">Trade With:</Form.Label>
+                            <Form.Select
+                                value={tradeData.recipient_team_id}
+                                onChange={(e) => setTradeData(prev => ({...prev, recipient_team_id: e.target.value}))}
+                                disabled={fetchingTeams}
+                                className="form-select-lg"
+                            >
+                                <option value="">Select Team</option>
+                                {availableTeams.map(team => (
+                                    <option key={team.roster_id} value={team.roster_id}>
+                                        {team.team_name} (Manager: {team.manager_name})
+                                    </option>
+                                )))}
+                            </Form.Select>
+                        </Form.Group>
                         
-                                                 {/* Add Year Button */}
-                         <div className="mt-4 mb-2">
-                             <Button 
-                                 variant="outline-secondary" 
-                                 size="sm"
-                                 onClick={handleAddBudgetItem}
-                                 className="w-100 py-2"
-                             >
-                                 + Add Another Year
-                             </Button>
-                         </div>
-                    </Form.Group>
-                </Form>
+                        <Form.Group className="mb-4">
+                            <Form.Label className="fw-bold fs-5 mb-3">Budget Items:</Form.Label>
+                            
+                            {/* Header Row */}
+                            <div className="row mb-3 fw-bold text-muted">
+                                <div className="col-3">
+                                    <span style={{fontSize: '0.9rem'}}>Year</span>
+                                </div>
+                                <div className="col-7">
+                                    <span style={{fontSize: '0.9rem'}}>Amount ($)</span>
+                                </div>
+                                <div className="col-2 text-end">
+                                    <span style={{fontSize: '0.9rem'}}>Action</span>
+                                </div>
+                            </div>
+                            
+                            {/* Budget Item Rows */}
+                            {tradeData.budget_items.map((item, index) => (
+                                <div key={index} className="row mb-3 align-items-center">
+                                    <div className="col-3">
+                                        <Form.Select
+                                            value={item.year}
+                                            onChange={(e) => handleBudgetItemChange(index, 'year', e.target.value)}
+                                            className="form-select-sm"
+                                        >
+                                            <option value="">Select Year</option>
+                                            {getFutureYears().map(year => (
+                                                <option key={year} value={year}>{year}</option>
+                                            ))}
+                                        </Form.Select>
+                                    </div>
+                                    <div className="col-7">
+                                        <Form.Control
+                                            type="number"
+                                            placeholder="0"
+                                            min="1"
+                                            value={item.amount}
+                                            onChange={(e) => handleBudgetItemChange(index, 'amount', parseFloat(e.target.value) || '')}
+                                            className="form-control-sm"
+                                        />
+                                    </div>
+                                    <div className="col-2 d-flex justify-content-end">
+                                        <Button 
+                                            variant="outline-danger" 
+                                            size="sm"
+                                            onClick={() => handleRemoveBudgetItem(index)}
+                                            className="btn-sm px-2"
+                                        >
+                                            ×
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                            
+                            {/* Add Year Button */}
+                            <div className="mt-4 mb-2">
+                                <Button 
+                                    variant="outline-secondary" 
+                                    size="sm"
+                                    onClick={handleAddBudgetItem}
+                                    className="w-100 py-2"
+                                >
+                                    + Add Another Year
+                                </Button>
+                            </div>
+                        </Form.Group>
+                    </Form>
+                )}
                 
                 {tradeData.recipient_team_id && (
-                    <Alert variant="warning">
+                    <Alert variant="warning" className="mt-5">
                         <strong>Note:</strong> This trade will be sent to the commissioner for approval. 
                         You cannot cancel it once submitted.
                     </Alert>
