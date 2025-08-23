@@ -2617,6 +2617,19 @@ def get_league_transactions_by_week(league_id, week):
 # TRADE MANAGEMENT ENDPOINTS
 # ============================================================================
 
+def get_wallet_from_token(token):
+    """Retrieve wallet address from session token."""
+    if not token:
+        return None
+    try:
+        cursor = get_global_db_connection().cursor()
+        cursor.execute("SELECT wallet_address FROM sessions WHERE session_token = ?", (token,))
+        result = cursor.fetchone()
+        return result['wallet_address'] if result else None
+    except Exception as e:
+        app.logger.error(f"Error in get_wallet_from_token: {str(e)}")
+        return None
+
 @app.route('/api/league/<league_id>/commissioner-status', methods=['GET'])
 @login_required
 def get_commissioner_status(league_id):
