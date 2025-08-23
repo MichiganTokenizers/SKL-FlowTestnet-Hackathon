@@ -217,7 +217,7 @@ def init_db():
                            wins INTEGER DEFAULT 0,
                            losses INTEGER DEFAULT 0,
                            ties INTEGER DEFAULT 0,
-                           points_for REAL DEFAULT 0.0, -- Total points scored for the season
+                           points_for REAL DEFAULT 0.0
                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                            updated_at DATETIME,
                            PRIMARY KEY (sleeper_roster_id, sleeper_league_id),
