@@ -124,6 +124,28 @@ def init_db():
         # Enable WAL mode is handled by get_global_db_connection() now
         # So, no specific PRAGMA call here unless to re-verify or if get_global_db_connection fails.
 
+        # TEMPORARY: Drop existing tables to ensure clean schema recreation
+        tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
+                  "transactions", "drafts", "penalties", # Added penalties
+                  "LeagueMetadata", "Users", "players", "leagues", "LeagueFees", # Added leagues and LeagueFees
+                  "trades", "trade_items", "trade_approvals"] # Added trade tables
+        
+        # Actually execute the DROP statements
+        print("Dropping all existing tables...")
+        for table in tables:
+            try:
+                cursor.execute(f"DROP TABLE IF EXISTS {table}")
+                print(f"Dropped table: {table}")
+            except Exception as e:
+                print(f"Error dropping {table}: {e}")
+        
+        # Drop view separately
+        try:
+            cursor.execute("DROP VIEW IF EXISTS vw_contractByYear")
+            print("Dropped view: vw_contractByYear")
+        except Exception as e:
+            print(f"Error dropping view: {e}")
+
         # Check if tables exist and create them if they don't
         print("Checking existing tables and creating missing ones...")
         
@@ -2909,6 +2931,11 @@ def get_team_budget_status(team_id, league_id):
 
 # Database initialization skipped - tables will be created on first use if they don't exist
 print("Database initialization skipped - existing data preserved.")
+
+# Initialize database with new schema (including trade tables)
+print("Initializing database with new schema...")
+init_db()
+print("Database initialization complete.")
 
 print("DEBUG: All routes and helpers defined. Entering __main__ block...")
 if __name__ == '__main__':
