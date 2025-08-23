@@ -14,6 +14,11 @@ function League(props) { // Accept props
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [leagueFeeSettings, setLeagueFeeSettings] = useState(null);
+    
+    // Trade-related state
+    const [pendingTrades, setPendingTrades] = useState([]);
+    const [isCommissioner, setIsCommissioner] = useState(false);
+    const [tradesLoading, setTradesLoading] = useState(false);
     // const navigate = useNavigate(); // Removed, navigation handled by App.jsx
 
     // Effect to fetch standings when selectedLeagueId or sessionToken changes from props
@@ -32,6 +37,78 @@ function League(props) { // Accept props
             setLoading(false);
         }
     }, [selectedLeagueId, sessionToken, leagues]); // Added leagues as a dependency
+
+    // Trade-related useEffect
+    useEffect(() => {
+        if (selectedLeagueId && sessionToken) {
+            checkCommissionerStatus();
+            fetchPendingTrades();
+        }
+    }, [selectedLeagueId, sessionToken]);
+
+    const checkCommissionerStatus = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/league/${selectedLeagueId}/commissioner-status`, {
+                headers: { 'Authorization': sessionToken }
+            });
+            const data = await response.json();
+            setIsCommissioner(data.is_commissioner || false);
+        } catch (error) {
+            console.error('Error checking commissioner status:', error);
+        }
+    };
+
+    const fetchPendingTrades = async () => {
+        if (!selectedLeagueId) return;
+        
+        setTradesLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/trades/pending/${selectedLeagueId}`, {
+                headers: { 'Authorization': sessionToken }
+            });
+            const data = await response.json();
+            if (data.success) {
+                setPendingTrades(data.trades);
+            } else {
+                console.error('Error fetching trades:', data.error);
+            }
+        } catch (error) {
+            console.error('Error fetching pending trades:', error);
+        } finally {
+            setTradesLoading(false);
+        }
+    };
+
+    const handleTradeApproval = async (tradeId, action, notes = '') => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/trades/${tradeId}/${action}`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': sessionToken 
+                },
+                body: JSON.stringify({ notes })
+            });
+            
+            const result = await response.json();
+            
+            if (response.ok && result.success) {
+                // Show success message
+                alert(`Trade ${action}ed successfully!`);
+                // Refresh pending trades
+                fetchPendingTrades();
+                // Optionally refresh league data to show updated standings
+                if (selectedLeagueId) {
+                    fetchStandingsData(sessionToken, selectedLeagueId);
+                }
+            } else {
+                alert(result.error || `Failed to ${action} trade`);
+            }
+        } catch (error) {
+            console.error('Error updating trade:', error);
+            alert(`Error ${action}ing trade: ${error.message}`);
+        }
+    };
 
     const fetchStandingsData = async (token, leagueId) => {
         console.log('(League.jsx) Fetching standings for league ID:', leagueId);
@@ -253,6 +330,107 @@ function League(props) { // Accept props
                             <div className="card-body">
                                 <TransactionsTable leagueId={selectedLeagueId} sessionToken={sessionToken} />
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Pending Trades Section - Commissioner Only */}
+            {isCommissioner && selectedLeagueId && (
+                <div className="mt-3">
+                    <div className="card mb-4">
+                        <div className="card-header d-flex justify-content-between align-items-center">
+                            <h4 className="mb-0" style={{ color: 'black' }}>
+                                Pending Trades - Commissioner Approval Required
+                                {pendingTrades.length > 0 && (
+                                    <span className="badge bg-warning text-dark ms-2">{pendingTrades.length}</span>
+                                )}
+                            </h4>
+                            <button 
+                                className="btn btn-outline-primary btn-sm"
+                                onClick={fetchPendingTrades}
+                                disabled={tradesLoading}
+                            >
+                                {tradesLoading ? 'Refreshing...' : 'Refresh'}
+                            </button>
+                        </div>
+                        <div className="card-body">
+                            {tradesLoading ? (
+                                <p>Loading pending trades...</p>
+                            ) : pendingTrades.length === 0 ? (
+                                <p className="text-muted mb-0">No pending trades to review.</p>
+                            ) : (
+                                <div className="table-responsive">
+                                    <table className="table table-hover mb-0">
+                                        <thead className="table-light">
+                                            <tr>
+                                                <th>Teams</th>
+                                                <th>Budget Items</th>
+                                                <th>Created</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {pendingTrades.map(trade => (
+                                                <tr key={trade.trade_id}>
+                                                    <td>
+                                                        <div>
+                                                            <strong className="text-primary">{trade.initiator_team_name}</strong>
+                                                            <br />
+                                                            <small className="text-muted">
+                                                                ↔ trading with <strong className="text-success">{trade.recipient_team_name}</strong>
+                                                            </small>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <div className="d-flex flex-wrap gap-1">
+                                                            {trade.budget_items.map(item => (
+                                                                <span 
+                                                                    key={item.item_id} 
+                                                                    className="badge bg-info text-dark"
+                                                                    title={`${item.season_year} Budget`}
+                                                                >
+                                                                    {item.season_year}: ${item.budget_amount}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <small className="text-muted">
+                                                            {new Date(trade.created_at).toLocaleDateString()}
+                                                            <br />
+                                                            {new Date(trade.created_at).toLocaleTimeString()}
+                                                        </small>
+                                                    </td>
+                                                    <td>
+                                                        <div className="btn-group" role="group">
+                                                            <button 
+                                                                className="btn btn-success btn-sm"
+                                                                onClick={() => handleTradeApproval(trade.trade_id, 'approve')}
+                                                                title="Approve this trade"
+                                                            >
+                                                                ✓ Approve
+                                                            </button>
+                                                            <button 
+                                                                className="btn btn-danger btn-sm"
+                                                                onClick={() => {
+                                                                    const notes = prompt('Rejection reason (optional):');
+                                                                    if (notes !== null) { // User didn't cancel
+                                                                        handleTradeApproval(trade.trade_id, 'reject', notes);
+                                                                    }
+                                                                }}
+                                                                title="Reject this trade"
+                                                            >
+                                                                ✗ Reject
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

@@ -2,6 +2,7 @@ import React from 'react';
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../../config';
+import BudgetTradeModal from '../league/BudgetTradeModal';
 
 function Team() {
     const { teamId, leagueId } = useParams();
@@ -11,6 +12,9 @@ function Team() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [contractDurations, setContractDurations] = useState({});
+    
+    // Trade modal state
+    const [showTradeModal, setShowTradeModal] = useState(false);
 
     const fetchTeamData = async (currentTeamId, currentLeagueId, token) => {
         if (!token) {
@@ -361,7 +365,9 @@ function Team() {
                                                 <tr>
                                                     <td className="text-start fw-bold">Trades</td>
                                                     {yearlyCostColumnHeaders.slice(1).map(year => {
-                                                        const tradesTotal = 0; // Placeholder for trades data
+                                                        const tradesTotal = teamData.team_trade_amounts && teamData.team_trade_amounts[year] 
+                                                            ? teamData.team_trade_amounts[year] 
+                                                            : 0;
                                                         return <td key={`trades-${year}`}>${tradesTotal.toFixed(0)}</td>;
                                                     })}
                                                 </tr>
@@ -371,8 +377,10 @@ function Team() {
                                                         const yearData = futureYearlyTotals[year];
                                                         const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
                                                         const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
-                                                        const tradesTotal = 0; // Placeholder
-                                                        const overallTotalVal = contractTotal + penaltyTotal + tradesTotal;
+                                                        const tradesTotal = teamData.team_trade_amounts && teamData.team_trade_amounts[year] 
+                                                            ? teamData.team_trade_amounts[year] 
+                                                            : 0;
+                                                        const overallTotalVal = contractTotal + penaltyTotal - tradesTotal; // Subtract trades (negative = received, positive = sent)
                                                         return (
                                                             <td key={`total-${year}`}>
                                                                 ${overallTotalVal.toFixed(0)}
@@ -387,8 +395,10 @@ function Team() {
                                                         const rankInfo = futureYearlyTotalRanks && futureYearlyTotalRanks[year];
                                                         const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
                                                         const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
-                                                        const tradesTotal = 0; // Placeholder
-                                                        const overallTotalVal = contractTotal + penaltyTotal + tradesTotal;
+                                                        const tradesTotal = teamData.team_trade_amounts && teamData.team_trade_amounts[year] 
+                                                            ? teamData.team_trade_amounts[year] 
+                                                            : 0;
+                                                        const overallTotalVal = contractTotal + penaltyTotal - tradesTotal; // Subtract trades (negative = received, positive = sent)
                                                         const remainingBudget = 200 - overallTotalVal;
                                                         return (
                                                             <td key={`remaining-budget-${year}`}>
@@ -419,6 +429,13 @@ function Team() {
                         <h5 className="mb-0">Team Roster</h5>
                         {canSetContracts && (
                             <div className="ms-3">
+                                <button 
+                                    onClick={() => setShowTradeModal(true)} 
+                                    className="btn btn-success btn-sm me-2"
+                                    style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}
+                                >
+                                    Trade Future Budget
+                                </button>
                                 <button 
                                     onClick={handleSaveContractDurations} 
                                     className="btn btn-primary btn-sm"
@@ -524,6 +541,19 @@ function Team() {
                     </div>
                 </div>
             </div>
+            
+            {/* Budget Trade Modal */}
+            <BudgetTradeModal
+                show={showTradeModal}
+                onHide={() => setShowTradeModal(false)}
+                teamId={teamId}
+                leagueId={leagueId}
+                onTradeCreated={() => {
+                    // Optionally refresh team data to show updated budgets
+                    const sessionToken = localStorage.getItem('sessionToken');
+                    fetchTeamData(teamId, leagueId, sessionToken);
+                }}
+            />
         </div>
     );
 }

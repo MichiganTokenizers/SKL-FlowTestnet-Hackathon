@@ -347,6 +347,7 @@ class SleeperService:
                         p_username = participant_data.get("username")
                         p_metadata = participant_data.get("metadata", {}) or {}
                         p_team_name = p_metadata.get("team_name")
+                        p_is_owner = participant_data.get("is_owner", False)  # Commissioner status from Sleeper
 
                         if not p_user_id:
                             self.logger.warning("SleeperService.fetch_all_data: Participant data found with no user_id. Skipping.")
@@ -358,7 +359,8 @@ class SleeperService:
                             'username': p_username,
                             'display_name': p_display_name,
                             'metadata': p_metadata,
-                            'team_name_from_metadata': p_team_name
+                            'team_name_from_metadata': p_team_name,
+                            'is_owner': p_is_owner
                         }
                         self.logger.info(f"SleeperService: Participant data for {p_user_id}: {json.dumps(participant_debug, indent=2)}")
 
@@ -373,6 +375,26 @@ class SleeperService:
                                 updated_at = datetime('now')
                             WHERE users.wallet_address IS NULL;
                         ''', (p_user_id, p_username, p_display_name, p_avatar))
+                        
+                        # Update commissioner status in UserLeagueLinks if this user has a wallet address
+                        cursor.execute('''
+                            SELECT wallet_address FROM users WHERE sleeper_user_id = ? AND wallet_address IS NOT NULL
+                        ''', (p_user_id,))
+                        user_wallet = cursor.fetchone()
+                        
+                        if user_wallet:
+                            wallet_address = user_wallet['wallet_address']
+                            # Update or create UserLeagueLinks entry with commissioner status
+                            cursor.execute('''
+                                INSERT INTO UserLeagueLinks (wallet_address, sleeper_league_id, is_commissioner, updated_at)
+                                VALUES (?, ?, ?, datetime('now'))
+                                ON CONFLICT(wallet_address, sleeper_league_id) DO UPDATE SET
+                                    is_commissioner = excluded.is_commissioner,
+                                    updated_at = datetime('now')
+                            ''', (wallet_address, league_id, 1 if p_is_owner else 0))
+                            
+                            if p_is_owner:
+                                self.logger.info(f"SleeperService: Set {p_display_name} ({wallet_address}) as commissioner for league {league_id}")
                         
                         # if cursor.rowcount > 0:
                             # self.logger.info(f"SleeperService.fetch_all_data: User {p_user_id} ({p_display_name}) inserted/updated in users table.")

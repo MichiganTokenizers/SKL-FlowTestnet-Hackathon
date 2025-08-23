@@ -127,7 +127,8 @@ def init_db():
         # Drop existing tables
         tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
                   "transactions", "drafts", "penalties", # Added penalties
-                  "LeagueMetadata", "Users", "players", "leagues", "LeagueFees"] # Added leagues and LeagueFees
+                  "LeagueMetadata", "Users", "players", "leagues", "LeagueFees", # Added leagues and LeagueFees
+                  "trades", "trade_items", "trade_approvals"] # Added trade tables
         
         cursor.execute('''CREATE TABLE IF NOT EXISTS sessions
                           (wallet_address TEXT PRIMARY KEY, session_token TEXT)''')
@@ -268,6 +269,46 @@ def init_db():
                           (current_year TEXT,
                            IsOffSeason INTEGER,
                            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+        # Create trade-related tables
+        cursor.execute('''CREATE TABLE IF NOT EXISTS trades (
+                            trade_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            sleeper_league_id TEXT NOT NULL,
+                            initiator_team_id TEXT NOT NULL,
+                            recipient_team_id TEXT NOT NULL,
+                            trade_status TEXT DEFAULT 'pending', -- pending, approved, rejected, completed
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            updated_at DATETIME,
+                            commissioner_notes TEXT,
+                            FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE,
+                            FOREIGN KEY (initiator_team_id) REFERENCES rosters(sleeper_roster_id),
+                            FOREIGN KEY (recipient_team_id) REFERENCES rosters(sleeper_roster_id)
+                            )''')
+
+        cursor.execute('''CREATE TABLE IF NOT EXISTS trade_items (
+                            item_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            trade_id INTEGER NOT NULL,
+                            from_team_id TEXT NOT NULL,
+                            to_team_id TEXT NOT NULL,
+                            budget_amount REAL NOT NULL, -- Dollar amount being traded
+                            season_year INTEGER NOT NULL, -- Which future year (e.g., 2026, 2027, 2028, 2029)
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (trade_id) REFERENCES trades(trade_id) ON DELETE CASCADE,
+                            FOREIGN KEY (from_team_id) REFERENCES rosters(sleeper_roster_id),
+                            FOREIGN KEY (to_team_id) REFERENCES rosters(sleeper_roster_id)
+                            )''')
+
+        cursor.execute('''CREATE TABLE IF NOT EXISTS trade_approvals (
+                            approval_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            trade_id INTEGER NOT NULL,
+                            approver_type TEXT NOT NULL, -- 'commissioner'
+                            approver_id TEXT NOT NULL, -- sleeper_user_id of commissioner
+                            approval_status TEXT NOT NULL, -- 'approved', 'rejected', 'pending'
+                            approval_notes TEXT,
+                            approved_at DATETIME,
+                            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (trade_id) REFERENCES trades(trade_id) ON DELETE CASCADE
+                            )''')
 
         # Create the vw_contractByYear view
         # This view calculates the escalated cost for each year of every contract
@@ -2552,6 +2593,352 @@ def get_league_transactions_by_week(league_id, week):
         import traceback
         app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
+
+# ============================================================================
+# TRADE MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@app.route('/api/league/<league_id>/commissioner-status', methods=['GET'])
+@login_required
+def get_commissioner_status(league_id):
+    """Check if the current user is a commissioner for this league."""
+    try:
+        wallet_address = get_wallet_from_token(request.headers.get('Authorization'))
+        if not wallet_address:
+            return jsonify({'success': False, 'error': 'Invalid token'}), 401
+        
+        cursor = get_global_db_connection().cursor()
+        
+        # Check if user is commissioner based on UserLeagueLinks table
+        cursor.execute('''
+            SELECT 1 FROM UserLeagueLinks 
+            WHERE sleeper_league_id = ? AND wallet_address = ? AND is_commissioner = 1
+        ''', (league_id, wallet_address))
+        
+        is_commissioner = cursor.fetchone() is not None
+        
+        return jsonify({'success': True, 'is_commissioner': is_commissioner})
+        
+    except Exception as e:
+        app.logger.error(f"Error checking commissioner status: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/trades/budget/create', methods=['POST'])
+@login_required
+def create_budget_trade():
+    """Create a new budget trade between teams."""
+    try:
+        wallet_address = get_wallet_from_token(request.headers.get('Authorization'))
+        if not wallet_address:
+            return jsonify({'success': False, 'error': 'Invalid token'}), 401
+        
+        data = request.get_json()
+        initiator_team_id = data.get('initiator_team_id')
+        recipient_team_id = data.get('recipient_team_id')
+        league_id = data.get('league_id')
+        budget_items = data.get('budget_items', [])
+        
+        if not all([initiator_team_id, recipient_team_id, league_id, budget_items]):
+            return jsonify({'success': False, 'error': 'Missing required fields'}), 400
+        
+        if initiator_team_id == recipient_team_id:
+            return jsonify({'success': False, 'error': 'Cannot trade with yourself'}), 400
+        
+        cursor = get_global_db_connection().cursor()
+        
+        # Create trade record
+        cursor.execute('''
+            INSERT INTO trades (sleeper_league_id, initiator_team_id, recipient_team_id, 
+                              trade_status, created_at, updated_at)
+            VALUES (?, ?, ?, 'pending', datetime('now'), datetime('now'))
+        ''', (league_id, initiator_team_id, recipient_team_id))
+        
+        trade_id = cursor.lastrowid
+        
+        # Create trade items
+        for item in budget_items:
+            if not item.get('year') or not item.get('amount') or item.get('amount', 0) <= 0:
+                continue
+                
+            cursor.execute('''
+                INSERT INTO trade_items (trade_id, from_team_id, to_team_id, 
+                                      budget_amount, season_year, created_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now'))
+            ''', (trade_id, initiator_team_id, recipient_team_id, item['amount'], item['year']))
+        
+        get_global_db_connection().commit()
+        
+        return jsonify({
+            'success': True, 
+            'trade_id': trade_id,
+            'message': 'Trade created successfully and sent for commissioner approval'
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error creating budget trade: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/trades/pending/<league_id>', methods=['GET'])
+@login_required
+def get_pending_trades(league_id):
+    """Get all pending trades for a league."""
+    try:
+        cursor = get_global_db_connection().cursor()
+        
+        cursor.execute('''
+            SELECT 
+                t.trade_id,
+                t.created_at,
+                t.initiator_team_id,
+                t.recipient_team_id,
+                init_roster.team_name as initiator_team_name,
+                recip_roster.team_name as recipient_team_name,
+                ti.item_id,
+                ti.budget_amount,
+                ti.season_year
+            FROM trades t
+            JOIN rosters init_roster ON t.initiator_team_id = init_roster.sleeper_roster_id
+            JOIN rosters recip_roster ON t.recipient_team_id = recip_roster.sleeper_roster_id
+            JOIN trade_items ti ON t.trade_id = ti.trade_id
+            WHERE t.sleeper_league_id = ? AND t.trade_status = 'pending'
+            ORDER BY t.created_at DESC
+        ''', (league_id,))
+        
+        trades_data = {}
+        for row in cursor.fetchall():
+            trade_id = row['trade_id']
+            if trade_id not in trades_data:
+                trades_data[trade_id] = {
+                    'trade_id': trade_id,
+                    'created_at': row['created_at'],
+                    'initiator_team_id': row['initiator_team_id'],
+                    'recipient_team_id': row['recipient_team_id'],
+                    'initiator_team_name': row['initiator_team_name'],
+                    'recipient_team_name': row['recipient_team_name'],
+                    'budget_items': []
+                }
+            
+            trades_data[trade_id]['budget_items'].append({
+                'item_id': row['item_id'],
+                'budget_amount': row['budget_amount'],
+                'season_year': row['season_year']
+            })
+        
+        trades = list(trades_data.values())
+        return jsonify({'success': True, 'trades': trades})
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching pending trades: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/trades/<trade_id>/approve', methods=['POST'])
+@login_required
+def approve_trade(trade_id):
+    """Approve a pending trade."""
+    try:
+        wallet_address = get_wallet_from_token(request.headers.get('Authorization'))
+        if not wallet_address:
+            return jsonify({'success': False, 'error': 'Invalid token'}), 401
+        
+        cursor = get_global_db_connection().cursor()
+        
+        # Verify user is commissioner for this trade's league
+        cursor.execute('''
+            SELECT t.sleeper_league_id, t.trade_status
+            FROM trades t
+            WHERE t.trade_id = ?
+        ''', (trade_id,))
+        
+        trade_info = cursor.fetchone()
+        if not trade_info:
+            return jsonify({'success': False, 'error': 'Trade not found'}), 404
+        
+        if trade_info['trade_status'] != 'pending':
+            return jsonify({'success': False, 'error': 'Trade is not pending'}), 400
+        
+        # Check if user is commissioner for this league
+        cursor.execute('''
+            SELECT 1 FROM UserLeagueLinks 
+            WHERE sleeper_league_id = ? AND wallet_address = ? AND is_commissioner = 1
+        ''', (trade_info['sleeper_league_id'], wallet_address))
+        
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Commissioner access required'}), 403
+        
+        # Update trade status
+        cursor.execute('''
+            UPDATE trades 
+            SET trade_status = 'completed', updated_at = datetime('now')
+            WHERE trade_id = ?
+        ''', (trade_id,))
+        
+        # Create approval record
+        cursor.execute('''
+            INSERT INTO trade_approvals (trade_id, approver_type, approver_id, 
+                                      approval_status, approved_at, created_at)
+            VALUES (?, 'commissioner', ?, 'approved', datetime('now'), datetime('now'))
+        ''', (trade_id, wallet_address))
+        
+        get_global_db_connection().commit()
+        return jsonify({'success': True, 'message': 'Trade approved successfully'})
+        
+    except Exception as e:
+        app.logger.error(f"Error approving trade: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/trades/<trade_id>/reject', methods=['POST'])
+@login_required
+def reject_trade(trade_id):
+    """Reject a pending trade."""
+    try:
+        wallet_address = get_wallet_from_token(request.headers.get('Authorization'))
+        if not wallet_address:
+            return jsonify({'success': False, 'error': 'Invalid token'}), 401
+        
+        data = request.get_json()
+        notes = data.get('notes', '') if data else ''
+        
+        cursor = get_global_db_connection().cursor()
+        
+        # Verify user is commissioner for this trade's league
+        cursor.execute('''
+            SELECT t.sleeper_league_id, t.trade_status
+            FROM trades t
+            WHERE t.trade_id = ?
+        ''', (trade_id,))
+        
+        trade_info = cursor.fetchone()
+        if not trade_info:
+            return jsonify({'success': False, 'error': 'Trade not found'}), 404
+        
+        if trade_info['trade_status'] != 'pending':
+            return jsonify({'success': False, 'error': 'Trade is not pending'}), 400
+        
+        # Check if user is commissioner for this league
+        cursor.execute('''
+            SELECT 1 FROM UserLeagueLinks 
+            WHERE sleeper_league_id = ? AND wallet_address = ? AND is_commissioner = 1
+        ''', (trade_info['sleeper_league_id'], wallet_address))
+        
+        if not cursor.fetchone():
+            return jsonify({'success': False, 'error': 'Commissioner access required'}), 403
+        
+        # Update trade status
+        cursor.execute('''
+            UPDATE trades 
+            SET trade_status = 'rejected', updated_at = datetime('now')
+            WHERE trade_id = ?
+        ''', (trade_id,))
+        
+        # Create rejection record
+        cursor.execute('''
+            INSERT INTO trade_approvals (trade_id, approver_type, approver_id, 
+                                      approval_status, approval_notes, created_at)
+            VALUES (?, 'commissioner', ?, 'rejected', ?, datetime('now'))
+        ''', (trade_id, wallet_address, notes))
+        
+        get_global_db_connection().commit()
+        return jsonify({'success': True, 'message': 'Trade rejected successfully'})
+        
+    except Exception as e:
+        app.logger.error(f"Error rejecting trade: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/league/<league_id>/teams', methods=['GET'])
+@login_required
+def get_league_teams(league_id):
+    """Get all teams in a league for trade partner selection."""
+    try:
+        cursor = get_global_db_connection().cursor()
+        
+        cursor.execute('''
+            SELECT 
+                r.sleeper_roster_id,
+                r.team_name,
+                u.display_name as manager_name,
+                u.username
+            FROM rosters r
+            LEFT JOIN users u ON r.owner_id = u.sleeper_user_id
+            WHERE r.sleeper_league_id = ?
+            ORDER BY r.team_name
+        ''', (league_id,))
+        
+        teams = []
+        for row in cursor.fetchall():
+            teams.append({
+                'roster_id': row['sleeper_roster_id'],
+                'team_name': row['team_name'] or 'Unknown Team',
+                'manager_name': row['manager_name'] or row['username'] or 'Unknown Manager',
+                'username': row['username']
+            })
+        
+        return jsonify({'success': True, 'teams': teams})
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching league teams: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@app.route('/api/teams/<team_id>/budget-status/<league_id>', methods=['GET'])
+@login_required
+def get_team_budget_status(team_id, league_id):
+    """Get team's current budget status including contracts, penalties, and trades for future years."""
+    try:
+        cursor = get_global_db_connection().cursor()
+        
+        # Get current year from season_curr
+        cursor.execute('SELECT current_year FROM season_curr LIMIT 1')
+        current_year_row = cursor.fetchone()
+        if not current_year_row:
+            return jsonify({'success': False, 'error': 'Current season not found'}), 404
+        
+        current_year = int(current_year_row['current_year'])
+        
+        budget_status = {}
+        
+        # Calculate for next 4 years
+        for year in range(current_year + 1, current_year + 5):
+            # Get contract commitments for this year
+            cursor.execute('''
+                SELECT COALESCE(SUM(cost_for_season), 0) as contract_total
+                FROM vw_contractByYear
+                WHERE team_id = ? AND sleeper_league_id = ? AND year_number_in_contract = ?
+            ''', (team_id, league_id, year))
+            contract_total = cursor.fetchone()['contract_total'] or 0
+            
+            # Get penalties for this year
+            cursor.execute('''
+                SELECT COALESCE(SUM(penalty_amount), 0) as penalty_total
+                FROM penalties p
+                JOIN contracts c ON p.contract_id = c.rowid
+                WHERE c.team_id = ? AND c.sleeper_league_id = ? AND p.penalty_year = ?
+            ''', (team_id, league_id, year))
+            penalty_total = cursor.fetchone()['penalty_total'] or 0
+            
+            # Get net trade impact for this year
+            cursor.execute('''
+                SELECT 
+                    COALESCE(SUM(CASE WHEN to_team_id = ? THEN budget_amount ELSE 0 END), 0) as received,
+                    COALESCE(SUM(CASE WHEN from_team_id = ? THEN budget_amount ELSE 0 END), 0) as sent
+                FROM trade_items ti
+                JOIN trades t ON ti.trade_id = t.trade_id
+                WHERE t.sleeper_league_id = ? AND t.trade_status = 'completed' AND ti.season_year = ?
+            ''', (team_id, team_id, league_id, year))
+            trade_data = cursor.fetchone()
+            trade_impact = (trade_data['received'] or 0) - (trade_data['sent'] or 0)
+            
+            budget_status[year] = {
+                'contracts': contract_total,
+                'penalties': penalty_total,
+                'trades': trade_impact,
+                'total_committed': contract_total + penalty_total - trade_impact,
+                'remaining_budget': 200 - contract_total - penalty_total + trade_impact
+            }
+        
+        return jsonify({'success': True, 'budget_status': budget_status})
+        
+    except Exception as e:
+        app.logger.error(f"Error getting team budget status: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 print("DEBUG: All routes and helpers defined. Entering __main__ block...")
 if __name__ == '__main__':
