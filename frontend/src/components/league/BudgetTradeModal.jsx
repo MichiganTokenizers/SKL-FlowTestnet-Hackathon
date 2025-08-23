@@ -145,7 +145,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                                 onChange={(e) => setTradeData(prev => ({...prev, recipient_team_id: e.target.value}))}
                                 className="form-select-lg"
                             >
-                                <option value="">Select Team to Trade With</option>
+                                <option value="">Select team to send $ to (-$ if receiving)</option>
                                 {availableTeams.map(team => (
                                     <option key={team.roster_id} value={team.roster_id}>
                                         {team.team_name} (Manager: {team.manager_name})

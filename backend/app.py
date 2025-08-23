@@ -409,49 +409,7 @@ def init_db():
 init_db() # REVERTED: No longer forcing recreation
 print("DEBUG: init_db() call completed. Proceeding to define routes and helpers...")
 
-# TEMPORARY: Drop and recreate database - REMOVE AFTER DEPLOYMENT
-def force_recreate_db():
-    """Temporarily drop and recreate all tables. REMOVE THIS AFTER DEPLOYMENT."""
-    try:
-        conn = get_global_db_connection()
-        cursor = conn.cursor()
-        
-        # Drop all tables in reverse dependency order
-        tables_to_drop = [
-            "vw_contractByYear",  # Drop view first
-            "LeaguePayments", "penalties", "transactions", "drafts", 
-            "contracts", "rosters", "players", "UserLeagueLinks", 
-            "LeagueFees", "LeagueMetadata", "Users", "sessions", "season_curr"
-        ]
-        
-        for table in tables_to_drop:
-            try:
-                cursor.execute(f"DROP TABLE IF EXISTS {table}")
-                print(f"DROPPED TABLE: {table}")
-            except Exception as e:
-                print(f"Error dropping {table}: {e}")
-        
-        # Drop view separately
-        try:
-            cursor.execute("DROP VIEW IF EXISTS vw_contractByYear")
-            print("DROPPED VIEW: vw_contractByYear")
-        except Exception as e:
-            print(f"Error dropping view: {e}")
-        
-        conn.commit()
-        print("DATABASE DROPPED SUCCESSFULLY")
-        
-        # Now reinitialize
-        init_db()
-        print("DATABASE REINITIALIZED SUCCESSFULLY")
-        
-    except Exception as e:
-        print(f"Error in force_recreate_db: {e}")
-        import traceback
-        traceback.print_exc()
 
-# UNCOMMENT THE NEXT LINE TO DROP AND RECREATE DATABASE
-# force_recreate_db()
 
 def get_current_season():
     """Fetches the current season year and off-season status from the local season_curr table."""
