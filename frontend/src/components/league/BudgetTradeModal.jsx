@@ -167,7 +167,6 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                 ) : (
                     <Form className="w-100">
                         <Form.Group className="mb-5">
-                            <p className="fw-bold fs-5 mb-2">Trade With:</p>
                             <Form.Select
                                 value={tradeData.recipient_team_id}
                                 onChange={(e) => setTradeData(prev => ({...prev, recipient_team_id: e.target.value}))}
@@ -184,8 +183,6 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                         </Form.Group>
                         
                         <Form.Group className="mb-4">
-                            <p className="fw-bold fs-5 mb-3">Budget Items:</p>
-                            
                             {/* Header Row */}
                             <div className="row mb-3 fw-bold text-muted">
                                 <div className="col-2">
