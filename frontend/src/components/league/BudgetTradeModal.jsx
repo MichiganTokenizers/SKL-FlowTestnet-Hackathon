@@ -127,11 +127,11 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
     };
     
     return (
-        <Modal show={show} onHide={onHide} size="xl">
+        <Modal show={show} onHide={onHide} size="xl" dialogClassName="modal-xl" style={{maxWidth: '90vw'}}>
             <Modal.Header closeButton>
                 <Modal.Title className="fw-bold">Trade Future Budget Dollars</Modal.Title>
             </Modal.Header>
-            <Modal.Body className="px-4">
+            <Modal.Body className="px-5">
                 <Alert variant="info" className="mb-4">
                     <strong>How it works:</strong> Select a team to trade with, specify which years and amounts, 
                     then submit for commissioner approval.
@@ -157,59 +157,59 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                         </Form.Select>
                     </Form.Group>
                     
-                    <Form.Group className="mb-3">
-                        <Form.Label className="fw-bold">Budget Items:</Form.Label>
-                        
-                        {/* Header Row */}
-                        <div className="row mb-2 fw-bold text-muted small">
-                            <div className="col-5">
-                                <span>Year</span>
-                            </div>
-                            <div className="col-5">
-                                <span>Amount ($)</span>
-                            </div>
-                            <div className="col-2">
-                                <span>Action</span>
-                            </div>
-                        </div>
-                        
-                        {/* Budget Item Rows */}
-                        {tradeData.budget_items.map((item, index) => (
-                            <div key={index} className="row mb-3 align-items-center">
-                                <div className="col-5">
-                                    <Form.Select
-                                        value={item.year}
-                                        onChange={(e) => handleBudgetItemChange(index, 'year', e.target.value)}
-                                        className="form-select-sm"
-                                    >
-                                        <option value="">Select Year</option>
-                                        {getFutureYears().map(year => (
-                                            <option key={year} value={year}>{year}</option>
-                                        ))}
-                                    </Form.Select>
-                                </div>
-                                <div className="col-5">
-                                    <Form.Control
-                                        type="number"
-                                        placeholder="0"
-                                        min="1"
-                                        value={item.amount}
-                                        onChange={(e) => handleBudgetItemChange(index, 'amount', parseFloat(e.target.value) || '')}
-                                        className="form-control-sm"
-                                    />
-                                </div>
-                                <div className="col-2">
-                                    <Button 
-                                        variant="outline-danger" 
-                                        size="sm"
-                                        onClick={() => handleRemoveBudgetItem(index)}
-                                        className="btn-sm px-2"
-                                    >
-                                        ×
-                                    </Button>
-                                </div>
-                            </div>
-                        ))}
+                                         <Form.Group className="mb-3">
+                         <Form.Label className="fw-bold">Budget Items:</Form.Label>
+                         
+                         {/* Header Row */}
+                         <div className="row mb-2 fw-bold text-muted small">
+                             <div className="col-4">
+                                 <span style={{fontSize: '0.8rem'}}>Year</span>
+                             </div>
+                             <div className="col-6">
+                                 <span style={{fontSize: '0.8rem'}}>Amount ($)</span>
+                             </div>
+                             <div className="col-2">
+                                 <span style={{fontSize: '0.8rem'}}>Action</span>
+                             </div>
+                         </div>
+                         
+                         {/* Budget Item Rows */}
+                         {tradeData.budget_items.map((item, index) => (
+                             <div key={index} className="row mb-3 align-items-center">
+                                 <div className="col-4">
+                                     <Form.Select
+                                         value={item.year}
+                                         onChange={(e) => handleBudgetItemChange(index, 'year', e.target.value)}
+                                         className="form-select-sm"
+                                     >
+                                         <option value="">Select Year</option>
+                                         {getFutureYears().map(year => (
+                                             <option key={year} value={year}>{year}</option>
+                                         ))}
+                                     </Form.Select>
+                                 </div>
+                                 <div className="col-6">
+                                     <Form.Control
+                                         type="number"
+                                         placeholder="0"
+                                         min="1"
+                                         value={item.amount}
+                                         onChange={(e) => handleBudgetItemChange(index, 'amount', parseFloat(e.target.value) || '')}
+                                         className="form-control-sm"
+                                     />
+                                 </div>
+                                 <div className="col-2">
+                                     <Button 
+                                         variant="outline-danger" 
+                                         size="sm"
+                                         onClick={() => handleRemoveBudgetItem(index)}
+                                         className="btn-sm px-2"
+                                     >
+                                         ×
+                                     </Button>
+                                 </div>
+                             </div>
+                         ))}
                         
                         {/* Add Year Button */}
                         <div className="mt-3">
@@ -232,7 +232,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                     </Alert>
                 )}
             </Modal.Body>
-            <Modal.Footer className="px-4 py-3">
+            <Modal.Footer className="px-5 py-3">
                 <Button variant="secondary" onClick={onHide} size="lg">Cancel</Button>
                 <Button 
                     variant="primary" 
