@@ -183,7 +183,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                                     <option key={team.roster_id} value={team.roster_id}>
                                         {team.team_name} (Manager: {team.manager_name})
                                     </option>
-                                )))}
+                                ))}
                             </Form.Select>
                         </Form.Group>
                         
