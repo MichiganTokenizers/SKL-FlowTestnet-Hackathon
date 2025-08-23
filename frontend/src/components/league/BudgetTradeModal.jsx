@@ -176,7 +176,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                                 value={tradeData.recipient_team_id}
                                 onChange={(e) => setTradeData(prev => ({...prev, recipient_team_id: e.target.value}))}
                                 disabled={fetchingTeams}
-                                className="form-select-lg"
+                                className="form-control-lg w-100"
                             >
                                 <option value="">Select Team</option>
                                 {availableTeams.map(team => (
@@ -192,10 +192,10 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                             
                             {/* Header Row */}
                             <div className="row mb-3 fw-bold text-muted">
-                                <div className="col-3">
+                                <div className="col-2">
                                     <span style={{fontSize: '0.9rem'}}>Year</span>
                                 </div>
-                                <div className="col-7">
+                                <div className="col-8">
                                     <span style={{fontSize: '0.9rem'}}>Amount ($)</span>
                                 </div>
                                 <div className="col-2 text-end">
@@ -206,7 +206,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                             {/* Budget Item Rows */}
                             {tradeData.budget_items.map((item, index) => (
                                 <div key={index} className="row mb-3 align-items-center">
-                                    <div className="col-3">
+                                    <div className="col-2">
                                         <Form.Select
                                             value={item.year}
                                             onChange={(e) => handleBudgetItemChange(index, 'year', e.target.value)}
@@ -218,7 +218,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                                             ))}
                                         </Form.Select>
                                     </div>
-                                    <div className="col-7">
+                                    <div className="col-8">
                                         <Form.Control
                                             type="number"
                                             placeholder="0"
@@ -233,7 +233,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                                             variant="outline-danger" 
                                             size="sm"
                                             onClick={() => handleRemoveBudgetItem(index)}
-                                            className="btn-sm px-2"
+                                            className="btn-sm px-2 py-1"
                                         >
                                             ×
                                         </Button>
