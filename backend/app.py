@@ -2940,41 +2940,7 @@ def get_team_budget_status(team_id, league_id):
         app.logger.error(f"Error getting team budget status: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/admin/reset-database', methods=['POST'])
-def reset_database():
-    """Temporary endpoint to reset database for testing new schema."""
-    try:
-        cursor = get_global_db_connection().cursor()
-        
-        # Drop existing tables (including new trade tables)
-        tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
-                  "transactions", "drafts", "penalties", 
-                  "LeagueMetadata", "Users", "players", "leagues", "LeagueFees",
-                  "trades", "trade_items", "trade_approvals"]
-        
-        for table in tables:
-            cursor.execute(f"DROP TABLE IF EXISTS {table}")
-            app.logger.info(f"Dropped table: {table}")
-        
-        # Recreate all tables with new schema
-        init_db()
-        
-        get_global_db_connection().commit()
-        
-        app.logger.info("Database reset completed successfully")
-        return jsonify({
-            'success': True,
-            'message': 'Database reset completed. All tables recreated with new schema.'
-        }), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error resetting database: {str(e)}")
-        import traceback
-        app.logger.error(traceback.format_exc())
-        return jsonify({
-            'success': False,
-            'error': f'Database reset failed: {str(e)}'
-        }), 500
+
 
 print("DEBUG: All routes and helpers defined. Entering __main__ block...")
 if __name__ == '__main__':
