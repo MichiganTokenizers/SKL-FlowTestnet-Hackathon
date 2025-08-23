@@ -161,22 +161,22 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                          <Form.Label className="fw-bold">Budget Items:</Form.Label>
                          
                          {/* Header Row */}
-                         <div className="row mb-2 fw-bold text-muted small">
-                             <div className="col-4">
-                                 <span style={{fontSize: '0.8rem'}}>Year</span>
+                         <div className="row mb-3 fw-bold text-muted">
+                             <div className="col-3">
+                                 <span style={{fontSize: '0.9rem'}}>Year</span>
                              </div>
-                             <div className="col-6">
-                                 <span style={{fontSize: '0.8rem'}}>Amount ($)</span>
+                             <div className="col-7">
+                                 <span style={{fontSize: '0.9rem'}}>Amount ($)</span>
                              </div>
                              <div className="col-2">
-                                 <span style={{fontSize: '0.8rem'}}>Action</span>
+                                 <span style={{fontSize: '0.9rem'}}>Action</span>
                              </div>
                          </div>
                          
                          {/* Budget Item Rows */}
                          {tradeData.budget_items.map((item, index) => (
                              <div key={index} className="row mb-3 align-items-center">
-                                 <div className="col-4">
+                                 <div className="col-3">
                                      <Form.Select
                                          value={item.year}
                                          onChange={(e) => handleBudgetItemChange(index, 'year', e.target.value)}
@@ -188,7 +188,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                                          ))}
                                      </Form.Select>
                                  </div>
-                                 <div className="col-6">
+                                 <div className="col-7">
                                      <Form.Control
                                          type="number"
                                          placeholder="0"
@@ -211,17 +211,17 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                              </div>
                          ))}
                         
-                        {/* Add Year Button */}
-                        <div className="mt-3">
-                            <Button 
-                                variant="outline-secondary" 
-                                size="sm"
-                                onClick={handleAddBudgetItem}
-                                className="w-100"
-                            >
-                                + Add Another Year
-                            </Button>
-                        </div>
+                                                 {/* Add Year Button */}
+                         <div className="mt-4 mb-2">
+                             <Button 
+                                 variant="outline-secondary" 
+                                 size="sm"
+                                 onClick={handleAddBudgetItem}
+                                 className="w-100 py-2"
+                             >
+                                 + Add Another Year
+                             </Button>
+                         </div>
                     </Form.Group>
                 </Form>
                 
