@@ -77,17 +77,17 @@ def apply_contract_penalties_and_deactivate(
                 penalty_hit_calendar_year = first_actual_penalty_hit_year + j
 
                 # Determine the cost basis for this j-th penalty installment.
-                # It's based on the player's value for the (year_dropped - contract_start_year + j)-th year *of their original contract term commitment*,
-                # plus one year to look ahead to the year whose salary is being penalized.
-                # Example: Dropped in year 1 (index 0) of contract. 
-                #   j=0 (1st penalty): basis from original contract year index 0+1 = 1 (2nd year salary)
-                #   j=1 (2nd penalty): basis from original contract year index 1+1 = 2 (3rd year salary)
-                #   j=2 (3rd penalty): basis from original contract year index 2+1 = 3 (4th year salary - projected)
+                # For in-season drops: first penalty (next year) is based on current year's salary
+                # For offseason drops: first penalty (current year) is based on current year's salary
+                # Then logically progresses for the duration of the contract
                 
                 # This index points to which year OF THE ORIGINAL CONTRACT defines the salary base for this penalty installment
-                # The value `year_dropped - contract_start_year` is the 0-indexed year *into* the contract when the drop happened.
-                # We are interested in the salary of the *next* year in the contract sequence for the first penalty, then the year after, etc.
-                effective_contract_year_index_for_cost_basis = (year_dropped - contract_start_year) + j + 1
+                if is_currently_offseason_when_dropped:
+                    # Offseason drop: use regular escalation logic (current year + j + 1)
+                    effective_contract_year_index_for_cost_basis = (year_dropped - contract_start_year) + j + 1
+                else:
+                    # In-season drop: first penalty (next year) is based on current year's salary
+                    effective_contract_year_index_for_cost_basis = (year_dropped - contract_start_year) + j
 
                 cost_for_basis = 0.0
                 if effective_contract_year_index_for_cost_basis < contract_duration:

@@ -52,7 +52,10 @@
 
 ## Completed Tasks
 
-# Supreme Keeper League - Development Tasks
+- **2025-01-XX**: Fixed penalty calculation logic in `utils.py` to properly handle in-season vs offseason player waivers
+  - In-season drops: First penalty (next year) now correctly based on current year's salary
+  - Offseason drops: First penalty (current year) correctly based on current year's salary
+  - Eliminates misalignment where in-season penalties were incorrectly calculated from future contract years# Supreme Keeper League - Development Tasks
 
 ## High Priority Tasks
 
