@@ -433,17 +433,18 @@ function Team() {
                 <div className="card mb-4">
                     <div className="card-header d-flex justify-content-between align-items-center">
                         <h5 className="mb-0">Team Roster</h5>
-                        {/* DEBUG INFO - Always show this */}
                         <div className="ms-3">
-                            <p className="text-muted small mb-1">DEBUG: canSetContracts = {canSetContracts ? 'true' : 'false'}</p>
+                            {/* Trade button is always visible */}
+                            <button 
+                                onClick={() => setShowTradeModal(true)} 
+                                className="btn btn-success btn-sm me-2"
+                                style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}
+                            >
+                                Trade Future Budget
+                            </button>
+                            {/* Debug info and conditional Save Contracts button */}
+                            <p className="text-muted small mb-1 d-inline-block">DEBUG: canSetContracts = {canSetContracts ? 'true' : 'false'}</p>
                             {canSetContracts && (
-                                <button 
-                                    onClick={() => setShowTradeModal(true)} 
-                                    className="btn btn-success btn-sm me-2"
-                                    style={{ backgroundColor: '#28a745', borderColor: '#28a745' }}
-                                >
-                                    Trade Future Budget
-                                </button>
                                 <button 
                                     onClick={handleSaveContractDurations} 
                                     className="btn btn-primary btn-sm"
