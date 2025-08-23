@@ -165,7 +165,7 @@ function BudgetTradeModal({ show, onHide, teamId, leagueId, onTradeCreated }) {
                         </small>
                     </Alert>
                 ) : (
-                    <Form>
+                    <Form className="w-100">
                         <Form.Group className="mb-5">
                             <Form.Label className="fw-bold fs-5">Trade With:</Form.Label>
                             <Form.Select
