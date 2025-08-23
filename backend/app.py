@@ -70,6 +70,11 @@ db_conn = get_global_db_connection()  # Get the global connection
 # (LeagueMetadata, UserLeagueLinks, rosters.sleeper_league_id, etc.) for data insertion and querying.
 sleeper_service = SleeperService(db_connection=db_conn) # Pass it to the service
 
+# Initialize database with new schema (including trade tables)
+print("Initializing database with new schema...")
+init_db()
+print("Database initialization complete.")
+
 @app.route('/')
 def root():
     """Root endpoint for health checks."""
@@ -2846,7 +2851,7 @@ def reject_trade(trade_id):
 
 @app.route('/api/league/<league_id>/teams', methods=['GET'])
 @login_required
-def get_league_teams(league_id):
+def get_league_teams_for_trades(league_id):
     """Get all teams in a league for trade partner selection."""
     try:
         cursor = get_global_db_connection().cursor()
