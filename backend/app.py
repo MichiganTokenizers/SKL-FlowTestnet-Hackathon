@@ -130,6 +130,25 @@ def init_db():
                   "LeagueMetadata", "Users", "players", "leagues", "LeagueFees", # Added leagues and LeagueFees
                   "trades", "trade_items", "trade_approvals"] # Added trade tables
         
+        # Actually execute the DROP statements
+        print("Dropping all existing tables...")
+        for table in tables:
+            try:
+                cursor.execute(f"DROP TABLE IF EXISTS {table}")
+                print(f"Dropped table: {table}")
+            except Exception as e:
+                print(f"Error dropping {table}: {e}")
+        
+        # Drop view separately
+        try:
+            cursor.execute("DROP VIEW IF EXISTS vw_contractByYear")
+            print("Dropped view: vw_contractByYear")
+        except Exception as e:
+            print(f"Error dropping view: {e}")
+        
+        conn.commit()
+        print("All tables dropped successfully. Creating new tables...")
+        
         cursor.execute('''CREATE TABLE IF NOT EXISTS sessions
                           (wallet_address TEXT PRIMARY KEY, session_token TEXT)''')
         
