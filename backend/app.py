@@ -124,30 +124,8 @@ def init_db():
         # Enable WAL mode is handled by get_global_db_connection() now
         # So, no specific PRAGMA call here unless to re-verify or if get_global_db_connection fails.
 
-        # Drop existing tables
-        tables = ["sessions", "UserLeagueLinks", "rosters", "contracts", 
-                  "transactions", "drafts", "penalties", # Added penalties
-                  "LeagueMetadata", "Users", "players", "leagues", "LeagueFees", # Added leagues and LeagueFees
-                  "trades", "trade_items", "trade_approvals"] # Added trade tables
-        
-        # Actually execute the DROP statements
-        print("Dropping all existing tables...")
-        for table in tables:
-            try:
-                cursor.execute(f"DROP TABLE IF EXISTS {table}")
-                print(f"Dropped table: {table}")
-            except Exception as e:
-                print(f"Error dropping {table}: {e}")
-        
-        # Drop view separately
-        try:
-            cursor.execute("DROP VIEW IF EXISTS vw_contractByYear")
-            print("Dropped view: vw_contractByYear")
-        except Exception as e:
-            print(f"Error dropping view: {e}")
-        
-        conn.commit()
-        print("All tables dropped successfully. Creating new tables...")
+        # Check if tables exist and create them if they don't
+        print("Checking existing tables and creating missing ones...")
         
         cursor.execute('''CREATE TABLE IF NOT EXISTS sessions
                           (wallet_address TEXT PRIMARY KEY, session_token TEXT)''')
@@ -406,8 +384,7 @@ def init_db():
         _global_db_conn = None
         raise
 
-init_db() # REVERTED: No longer forcing recreation
-print("DEBUG: init_db() call completed. Proceeding to define routes and helpers...")
+print("DEBUG: Database initialization skipped. Proceeding to define routes and helpers...")
 
 
 
@@ -2930,10 +2907,8 @@ def get_team_budget_status(team_id, league_id):
         app.logger.error(f"Error getting team budget status: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-# Initialize database with new schema (including trade tables)
-print("Initializing database with new schema...")
-init_db()
-print("Database initialization complete.")
+# Database initialization skipped - tables will be created on first use if they don't exist
+print("Database initialization skipped - existing data preserved.")
 
 print("DEBUG: All routes and helpers defined. Entering __main__ block...")
 if __name__ == '__main__':
