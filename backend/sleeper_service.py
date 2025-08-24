@@ -205,7 +205,7 @@ class SleeperService:
             nfl_state_from_api = self.get_nfl_state()
             if nfl_state_from_api:
                 year_str = nfl_state_from_api.get('season')
-                season_type = nfl_state_from_api.get('season_type', '').lower()
+                season_start_date_str = nfl_state_from_api.get('season_start_date')  # e.g., "2025-09-04"
                 api_year = None
                 api_is_offseason = None
 
@@ -214,33 +214,32 @@ class SleeperService:
                         api_year = int(year_str)
                     except ValueError:
                         self.logger.error(f"SleeperService.fetch_all_data: NFL state API returned non-integer season: {year_str}")
-                
-                if season_type in ['off', 'pre']:
-                    api_is_offseason = True
-                elif season_type in ['regular', 'post']:
-                    api_is_offseason = False
+
+                if season_start_date_str:
+                    import datetime
+                    try:
+                        season_start_date = datetime.datetime.strptime(season_start_date_str, "%Y-%m-%d").date()
+                        today = datetime.date.today()
+                        api_is_offseason = today < season_start_date
+                    except ValueError as ve:
+                        self.logger.error(f"SleeperService.fetch_all_data: Error parsing season_start_date '{season_start_date_str}': {ve}. Defaulting to offseason.")
+                        api_is_offseason = True  # Default to offseason on parse error
                 else:
-                    self.logger.warning(f"SleeperService.fetch_all_data: NFL state API returned unexpected season_type: '{season_type}'. Defaulting to offseason.")
-                    api_is_offseason = True # Default to offseason if unclear
+                    self.logger.warning("SleeperService.fetch_all_data: No season_start_date in NFL state API response. Defaulting to offseason.")
+                    api_is_offseason = True
 
                 if api_year is not None and api_is_offseason is not None:
-                    self.logger.info(f"SleeperService.fetch_all_data: Fetched from API: Year={api_year}, IsOffseason={api_is_offseason}. Updating season_curr table.")
+                    self.logger.info(f"SleeperService.fetch_all_data: Determined from API: Year={api_year}, IsOffseason={api_is_offseason}. Updating season_curr table.")
                     try:
                         api_is_offseason_int = 1 if api_is_offseason else 0
                         cursor.execute('''
                             INSERT OR REPLACE INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
                             VALUES (1, ?, ?, datetime('now'))
                         ''', (str(api_year), api_is_offseason_int))
-                        # Commit this change immediately so _get_current_season_details picks it up if called
                         self.conn.commit() 
                         self.logger.info(f"SleeperService.fetch_all_data: Successfully updated season_curr table with API data: Year={api_year}, IsOffseason={api_is_offseason}.")
                     except sqlite3.Error as db_e:
                         self.logger.error(f"SleeperService.fetch_all_data: Failed to update season_curr table with API data: {db_e}")
-                        # If self.conn is available and a transaction was started implicitly, rollback.
-                        # However, individual execute calls are often autocommitted or committed explicitly.
-                        # For safety, if an explicit commit isn't made, a rollback here might be good.
-                        # But since we commit above, this rollback might not be necessary unless get_global_db_connection uses begin_transaction.
-                        # For now, just log the error. The main transaction will rollback at the end if this causes further issues.
                 else:
                     self.logger.error(f"SleeperService.fetch_all_data: Failed to parse year or determine offseason status from NFL state API response: {nfl_state_from_api}")
             else:
