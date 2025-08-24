@@ -32,36 +32,36 @@ app.secret_key = os.getenv('FLASK_SECRET_KEY', 'a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
 
 print(f"Flask configured - Environment: {app.config['ENV']}, Debug: {app.config['DEBUG']}")
 
-# # --- TEMPORARY DEBUGGING: Global DB Connection ---
-# # DO NOT USE IN PRODUCTION
-# _global_db_conn = None
+# --- TEMPORARY DEBUGGING: Global DB Connection ---
+# DO NOT USE IN PRODUCTION
+_global_db_conn = None
 
-# def get_global_db_connection():
-#     global _global_db_conn
-#     if _global_db_conn is None:
-#         print("DEBUG_GLOBAL_CONN: Initializing global database connection...")
-#         try:
-#             # Use environment variable for database path
-#             db_path = os.getenv('DATABASE_URL', '/var/data/keeper.db')
-#             print(f"DEBUG_GLOBAL_CONN: Connecting to database at: {db_path}")
-#             _global_db_conn = sqlite3.connect(db_path, check_same_thread=False)
-#             _global_db_conn.row_factory = sqlite3.Row
-#             # Attempt to set WAL mode on this global connection too
-#             cursor = _global_db_conn.cursor()
-#             cursor.execute("PRAGMA journal_mode=WAL;")
-#             current_journal_mode = cursor.execute("PRAGMA journal_mode;").fetchone()
-#             print(f"DEBUG_GLOBAL_CONN: Journal mode set to: {current_journal_mode[0] if current_journal_mode else 'Unknown'}")
-#             cursor.execute("PRAGMA foreign_keys = ON;") # Enforce foreign key constraints
-#             print("DEBUG_GLOBAL_CONN: Foreign keys ON.")
-#             _global_db_conn.commit() # Commit pragma changes
-#             print("DEBUG_GLOBAL_CONN: Global database connection initialized successfully.")
-#         except sqlite3.Error as e:
-#             print(f"DEBUG_GLOBAL_CONN: Failed to initialize global connection or set WAL mode: {e}")
-#             # If connection failed, _global_db_conn will remain None or be a broken object.
-#             # Handle this gracefully or let it raise further up.
-#             raise
-#     return _global_db_conn
-# # --- END TEMPORARY DEBUGGING ---
+def get_global_db_connection():
+    global _global_db_conn
+    if _global_db_conn is None:
+        print("DEBUG_GLOBAL_CONN: Initializing global database connection...")
+        try:
+            # Use environment variable for database path
+            db_path = os.getenv('DATABASE_URL', '/var/data/keeper.db')
+            print(f"DEBUG_GLOBAL_CONN: Connecting to database at: {db_path}")
+            _global_db_conn = sqlite3.connect(db_path, check_same_thread=False)
+            _global_db_conn.row_factory = sqlite3.Row
+            # Attempt to set WAL mode on this global connection too
+            cursor = _global_db_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL;")
+            current_journal_mode = cursor.execute("PRAGMA journal_mode;").fetchone()
+            print(f"DEBUG_GLOBAL_CONN: Journal mode set to: {current_journal_mode[0] if current_journal_mode else 'Unknown'}")
+            cursor.execute("PRAGMA foreign_keys = ON;") # Enforce foreign key constraints
+            print("DEBUG_GLOBAL_CONN: Foreign keys ON.")
+            _global_db_conn.commit() # Commit pragma changes
+            print("DEBUG_GLOBAL_CONN: Global database connection initialized successfully.")
+        except sqlite3.Error as e:
+            print(f"DEBUG_GLOBAL_CONN: Failed to initialize global connection or set WAL mode: {e}")
+            # If connection failed, _global_db_conn will remain None or be a broken object.
+            # Handle this gracefully or let it raise further up.
+            raise
+    return _global_db_conn
+# --- END TEMPORARY DEBUGGING ---
 
 # Initialize SleeperService
 # sleeper_service = SleeperService() # Old instantiation
