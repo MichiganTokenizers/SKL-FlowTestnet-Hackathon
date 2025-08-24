@@ -213,7 +213,6 @@ function TransactionsTable({ leagueId, sessionToken }) {
             {/* Week Filter */}
             {availableWeeks.length > 0 && (
                 <div className="mb-3">
-                    <label htmlFor="weekFilter" className="form-label">Filter by Week:</label>
                     <select 
                         id="weekFilter" 
                         className="form-select form-select-sm" 
