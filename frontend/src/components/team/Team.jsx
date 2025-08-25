@@ -81,7 +81,8 @@ function Team() {
                 cost = yearCostInfo.cost;
             }
         }
-        if (cost === null && player.contract_status === "Free Agent") {
+        // For free agents, only show cost for current year, not future years
+        if (cost === null && player.contract_status === "Free Agent" && currentProcessingYearForCostFunc === teamData.current_processing_year) {
             cost = 0;
         }
         return cost === null || cost === undefined ? -1 : Number(cost);
