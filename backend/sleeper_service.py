@@ -348,11 +348,14 @@ class SleeperService:
                         p_team_name = p_metadata.get("team_name")
                         p_is_owner = participant_data.get("is_owner", False)  # Commissioner status from Sleeper
 
+                        # ADD THIS DEBUG LOG:
+                        self.logger.info(f"SleeperService: Processing participant: {p_display_name} (ID: {p_user_id})")
+
                         if not p_user_id:
                             self.logger.warning("SleeperService.fetch_all_data: Participant data found with no user_id. Skipping.")
                             continue
 
-                        # Log participant details for debugging
+                        # Log participant details for debugging team names
                         participant_debug = {
                             'user_id': p_user_id,
                             'username': p_username,
@@ -363,7 +366,9 @@ class SleeperService:
                         }
                         self.logger.info(f"SleeperService: Participant data for {p_user_id}: {json.dumps(participant_debug, indent=2)}")
 
-                        # self.logger.debug(f"SleeperService.fetch_all_data: Upserting league participant {p_user_id} ({p_display_name}) into users table.")
+                        # ADD THIS DEBUG LOG BEFORE SQL:
+                        self.logger.info(f"SleeperService: About to upsert user {p_user_id} ({p_display_name}) into users table")
+
                         cursor.execute('''
                             INSERT INTO users (sleeper_user_id, username, display_name, avatar, created_at, updated_at)
                             VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
@@ -374,6 +379,9 @@ class SleeperService:
                                 updated_at = datetime('now')
                             WHERE users.wallet_address IS NULL;
                         ''', (p_user_id, p_username, p_display_name, p_avatar))
+                        
+                        # ADD THIS DEBUG LOG AFTER SQL:
+                        self.logger.info(f"SleeperService: SQL executed for user {p_user_id}, rows affected: {cursor.rowcount}")
                         
                         # Update commissioner status in UserLeagueLinks if this user has a wallet address
                         cursor.execute('''
