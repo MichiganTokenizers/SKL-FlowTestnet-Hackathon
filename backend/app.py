@@ -2175,11 +2175,14 @@ def set_league_fees(league_id):
 
         # Data for fees is already in 'data' variable from above
         fee_amount = data.get('fee_amount')
-        fee_currency = data.get('fee_currency', 'USD') 
+        fee_currency = data.get('fee_currency')  # Remove fallback - currency must be explicitly set
         notes = data.get('notes', '')
 
         if fee_amount is None:
             return jsonify({'success': False, 'error': 'Missing fee_amount.'}), 400
+        
+        if fee_currency is None:
+            return jsonify({'success': False, 'error': 'Missing fee_currency.'}), 400
         
         try:
             fee_amount_float = float(fee_amount)
