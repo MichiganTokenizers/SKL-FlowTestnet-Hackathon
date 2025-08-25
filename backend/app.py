@@ -163,7 +163,7 @@ def init_db():
                             sleeper_league_id TEXT NOT NULL,
                             season_year INTEGER NOT NULL,
                             fee_amount REAL,
-                            fee_currency TEXT DEFAULT 'USD', -- e.g., 'USD', 'TON'
+                            fee_currency TEXT DEFAULT 'FLOW', -- e.g., 'FLOW', 'USDF'
                             notes TEXT,
                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                             updated_at DATETIME,

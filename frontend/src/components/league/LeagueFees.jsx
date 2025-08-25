@@ -67,7 +67,12 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
 
                 if (data.fee_settings) {
                     setEditFeeAmount(data.fee_settings.fee_amount !== null ? String(data.fee_settings.fee_amount) : '');
-                    setEditFeeCurrency(data.fee_settings.fee_currency || 'FLOW');
+                    
+                    // Validate and default currency if invalid
+                    const validCurrencies = ['FLOW', 'USDF'];
+                    const fetchedCurrency = data.fee_settings.fee_currency;
+                    setEditFeeCurrency(validCurrencies.includes(fetchedCurrency) ? fetchedCurrency : 'FLOW');
+                    
                     setEditNotes(data.fee_settings.notes || '');
                 } else { 
                     setEditFeeAmount('');
