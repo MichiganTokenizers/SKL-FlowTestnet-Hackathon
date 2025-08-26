@@ -1090,37 +1090,51 @@ def complete_sleeper_association():
             print(f"DEBUG: sleeper_user_id is null or empty after extraction for {sleeper_username}")
             return jsonify({'success': False, 'error': 'Could not retrieve user_id from Sleeper for the given username'}), 500
 
-        # Step 1: Pre-emptive cleanup. Ensure the target sleeper_user_id is not associated with any OTHER wallet,
-        # or any record with a NULL wallet. This is to prevent UNIQUE constraint errors on the subsequent UPDATE.
-        print(f"DEBUG: Pre-emptive Cleanup: Deleting other user rows with sleeper_user_id {sleeper_user_id} that don't match current wallet {wallet_address} or have a NULL wallet.")
-        cursor.execute('''DELETE FROM Users
-                          WHERE sleeper_user_id = ? AND (wallet_address IS NULL OR wallet_address != ?)''',
-                       (sleeper_user_id, wallet_address))
-        delete_rowcount = cursor.rowcount
-        print(f"DEBUG: Pre-emptive cleanup delete rowcount: {delete_rowcount}")
-
-        # Step 2: Update the user record associated with the current wallet_address.
-        # This record should have been created by /auth/login with a NULL sleeper_user_id.
-        print(f"DEBUG: Attempting to UPDATE users table for wallet_address: {wallet_address} to set sleeper_id: {sleeper_user_id}")
-        cursor.execute('''
-            UPDATE Users 
-            SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-            WHERE wallet_address = ?
-        ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
+        # Step 1: Check if a user record already exists for this sleeper_user_id (regardless of wallet_address)
+        cursor.execute('SELECT wallet_address FROM Users WHERE sleeper_user_id = ?', (sleeper_user_id,))
+        existing_user = cursor.fetchone()
         
-        update_rowcount = cursor.rowcount
-        print(f"DEBUG: UPDATE users for wallet_address {wallet_address} rowcount: {update_rowcount}")
+        if existing_user:
+            existing_wallet = existing_user['wallet_address']
+            if existing_wallet and existing_wallet != wallet_address:
+                # Another wallet already owns this sleeper_user_id - this shouldn't happen in normal flow
+                print(f"ERROR: sleeper_user_id {sleeper_user_id} is already associated with wallet {existing_wallet}. Cannot associate with {wallet_address}")
+                return jsonify({'success': False, 'error': 'This Sleeper account is already associated with another wallet'}), 409
+            elif existing_wallet == wallet_address:
+                # User already has this association - just update other fields
+                print(f"DEBUG: User already associated. Updating existing record for wallet_address: {wallet_address}")
+                cursor.execute('''
+                    UPDATE Users 
+                    SET username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                    WHERE wallet_address = ? AND sleeper_user_id = ?
+                ''', (sleeper_username, display_name, avatar, wallet_address, sleeper_user_id))
+                update_rowcount = cursor.rowcount
+                print(f"DEBUG: UPDATE existing user for wallet_address {wallet_address} rowcount: {update_rowcount}")
+            else:
+                # Record exists but has NULL wallet_address (imported by SleeperService)
+                # Update it to set the wallet_address
+                print(f"DEBUG: Found existing user record with NULL wallet_address. Updating to set wallet_address: {wallet_address}")
+                cursor.execute('''
+                    UPDATE Users 
+                    SET wallet_address = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                    WHERE sleeper_user_id = ? AND wallet_address IS NULL
+                ''', (wallet_address, sleeper_username, display_name, avatar, sleeper_user_id))
+                update_rowcount = cursor.rowcount
+                print(f"DEBUG: UPDATE existing NULL wallet user for sleeper_user_id {sleeper_user_id} rowcount: {update_rowcount}")
+        else:
+            # No existing record for this sleeper_user_id - create new one
+            print(f"DEBUG: No existing user record found. Creating new user record for wallet_address: {wallet_address}")
+            cursor.execute('''
+                INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            ''', (wallet_address, sleeper_user_id, sleeper_username, display_name, avatar))
+            update_rowcount = cursor.rowcount
+            print(f"DEBUG: INSERT new user for wallet_address {wallet_address} rowcount: {update_rowcount}")
 
+        # Verify the operation was successful
         if update_rowcount == 0:
-            # This is unexpected if /auth/login created the user row with this wallet_address.
-            # It implies the row for this wallet_address was somehow deleted or altered before this update.
-            # The pre-emptive delete above should NOT have deleted this row (as it checks wallet_address != ?).
-            print(f"WARNING: User record for wallet_address: {wallet_address} was NOT updated with Sleeper details. " +
-                  "This might indicate the user record for the session was missing or already had this sleeper_user_id with a different wallet " +
-                  "that wasn't cleaned up as expected. The sleeper_user_id may now be orphaned if the cleanup above removed its only valid entry.")
-            # Depending on desired strictness, this could be a hard error.
-            # Previous logic was 'pass'. Keeping it as a warning for now, but it's a significant state to log.
-            pass
+            print(f"ERROR: Failed to create/update user record for wallet_address: {wallet_address}, sleeper_user_id: {sleeper_user_id}")
+            return jsonify({'success': False, 'error': 'Failed to create/update user record'}), 500
 
         # The original Step 2 (cleanup) is now Step 1 (pre-emptive cleanup).
 

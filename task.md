@@ -49,6 +49,9 @@
 
 ## Discovered During Work
 - Refine `RecentTransactionsTable.jsx` - `renderTransactionDetails` function to correctly parse and display various transaction types based on `SleeperService.py` data structure (From: Add "Recent Transactions" table to League page, Date: 2025-07-30)
+- **2025-08-25**: SleeperService user import issue - When a team ownership changes (user removed and replaced), the API may return roster data with `null` owner_id values, causing user import failures. RareWareNate's team was originally owned by another user who was removed, causing API data inconsistencies. **RESOLUTION**: Manual database insert required. **TODO**: Investigate why automated import fails for ownership changes and add error handling for null owner_id scenarios.
+
+- **2025-08-26**: User association endpoint bug - When users are imported by SleeperService before they have wallet addresses, the association endpoint fails to link their existing records. C0Y0T3z was imported with NULL wallet_address but could authenticate via sessions table. **RESOLUTION**: Fixed `/auth/complete_association` endpoint to handle existing user records with NULL wallet_address by updating them instead of requiring new record creation. **STATUS**: Fixed in backend/app.py
 
 ## Completed Tasks
 
