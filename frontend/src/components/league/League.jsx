@@ -335,24 +335,26 @@ function League(props) { // Accept props
                 </div>
             )}
 
-            {/* Pending Trades Section - Commissioner Only */}
-            {isCommissioner && selectedLeagueId && (
+            {/* Pending Trades Section - Visible to All Users */}
+            {selectedLeagueId && (
                 <div className="mt-3">
                     <div className="card mb-4">
                         <div className="card-header d-flex justify-content-between align-items-center">
                             <h4 className="mb-0" style={{ color: 'black' }}>
-                                Pending Trades - Commissioner Approval Required
+                                Pending Trades
                                 {pendingTrades.length > 0 && (
                                     <span className="badge bg-warning text-dark ms-2">{pendingTrades.length}</span>
                                 )}
                             </h4>
-                            <button 
-                                className="btn btn-outline-primary btn-sm"
-                                onClick={fetchPendingTrades}
-                                disabled={tradesLoading}
-                            >
-                                {tradesLoading ? 'Refreshing...' : 'Refresh'}
-                            </button>
+                            {isCommissioner && (
+                                <button 
+                                    className="btn btn-outline-primary btn-sm"
+                                    onClick={fetchPendingTrades}
+                                    disabled={tradesLoading}
+                                >
+                                    {tradesLoading ? 'Refreshing...' : 'Refresh'}
+                                </button>
+                            )}
                         </div>
                         <div className="card-body">
                             {tradesLoading ? (
@@ -367,7 +369,7 @@ function League(props) { // Accept props
                                                 <th>Teams</th>
                                                 <th>Budget Items</th>
                                                 <th>Created</th>
-                                                <th>Actions</th>
+                                                {isCommissioner && <th>Actions</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -402,29 +404,31 @@ function League(props) { // Accept props
                                                             {new Date(trade.created_at).toLocaleTimeString()}
                                                         </small>
                                                     </td>
-                                                    <td>
-                                                        <div className="btn-group" role="group">
-                                                            <button 
-                                                                className="btn btn-success btn-sm"
-                                                                onClick={() => handleTradeApproval(trade.trade_id, 'approve')}
-                                                                title="Approve this trade"
-                                                            >
-                                                                ✓ Approve
-                                                            </button>
-                                                            <button 
-                                                                className="btn btn-danger btn-sm"
-                                                                onClick={() => {
-                                                                    const notes = prompt('Rejection reason (optional):');
-                                                                    if (notes !== null) { // User didn't cancel
-                                                                        handleTradeApproval(trade.trade_id, 'reject', notes);
-                                                                    }
-                                                                }}
-                                                                title="Reject this trade"
-                                                            >
-                                                                ✗ Reject
-                                                            </button>
-                                                        </div>
-                                                    </td>
+                                                    {isCommissioner && (
+                                                        <td>
+                                                            <div className="btn-group" role="group">
+                                                                <button 
+                                                                    className="btn btn-success btn-sm"
+                                                                    onClick={() => handleTradeApproval(trade.trade_id, 'approve')}
+                                                                    title="Approve this trade"
+                                                                >
+                                                                    ✓ Approve
+                                                                </button>
+                                                                <button 
+                                                                    className="btn btn-danger btn-sm"
+                                                                    onClick={() => {
+                                                                        const notes = prompt('Rejection reason (optional):');
+                                                                        if (notes !== null) { // User didn't cancel
+                                                                            handleTradeApproval(trade.trade_id, 'reject', notes);
+                                                                        }
+                                                                    }}
+                                                                    title="Reject this trade"
+                                                                >
+                                                                    ✗ Reject
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))}
                                         </tbody>
