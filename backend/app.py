@@ -1696,7 +1696,8 @@ def get_team_details(team_id):
                                 WHERE t.sleeper_league_id = ? AND t.trade_status = 'completed' AND ti.season_year = ?
                             """, (r_id_in_league, r_id_in_league, current_league_id_for_ranks, year_to_rank))
                             result = cursor.fetchone()
-                            trade_impact = (result['received'] if result and result['received'] is not None else 0.0) - (result['sent'] if result and result['sent'] is not None else 0.0)
+                            # Positive value means money SENT (reduces remaining budget)
+                            trade_impact = (result['sent'] if result and result['sent'] is not None else 0.0) - (result['received'] if result and result['received'] is not None else 0.0)
                             
                             # Total cost includes contracts, penalties, and trade impact
                             total_cost_for_year = contract_cost_for_year + penalty_cost_for_year + trade_impact
@@ -3039,43 +3040,93 @@ def get_team_budget_status(team_id, league_id):
         
         budget_status = {}
         
-        # Calculate for next 4 years
+        # ------------------------------------------------------------
+        # Prepare league-wide data to calculate per-year rankings
+        # ------------------------------------------------------------
+        # Fetch all roster IDs in this league so that we can compare every
+        # team's remaining budget side-by-side for ranking purposes.
+        cursor.execute("SELECT sleeper_roster_id FROM rosters WHERE sleeper_league_id = ?", (league_id,))
+        all_roster_ids = [row['sleeper_roster_id'] for row in cursor.fetchall()]
+
+        # Dict to accumulate each team's remaining budget per year
+        # { year: [ { 'team_id': X, 'remaining': Y }, ... ] }
+        league_remaining_by_year = {yr: [] for yr in range(current_year + 1, current_year + 5)}
+
+        def _calc_team_year_values(r_id: str, target_year: int) -> tuple[float, float, float]:
+            """Return contract_total, penalty_total, trade_impact for one team/year."""
+            # Contract commitments for this year – need to match actual calendar year
+            cursor.execute(
+                """
+                    SELECT COALESCE(SUM(cost_for_season), 0) AS contract_total
+                    FROM vw_contractByYear
+                    WHERE team_id = ? 
+                      AND sleeper_league_id = ? 
+                      AND (contract_start_season + year_number_in_contract - 1) = ?
+                """,
+                (r_id, league_id, target_year),
+            )
+            contract_total_local = cursor.fetchone()['contract_total'] or 0.0
+
+            # Penalties
+            cursor.execute(
+                """
+                    SELECT COALESCE(SUM(penalty_amount), 0) AS penalty_total
+                    FROM penalties p
+                    JOIN contracts c ON p.contract_id = c.rowid
+                    WHERE c.team_id = ? 
+                      AND c.sleeper_league_id = ? 
+                      AND p.penalty_year = ?
+                """,
+                (r_id, league_id, target_year),
+            )
+            penalty_total_local = cursor.fetchone()['penalty_total'] or 0.0
+
+            # Trades (net impact)
+            cursor.execute(
+                """
+                    SELECT 
+                        COALESCE(SUM(CASE WHEN t.recipient_team_id = ? THEN ti.budget_amount ELSE 0 END), 0) AS received,
+                        COALESCE(SUM(CASE WHEN t.initiator_team_id = ? THEN ti.budget_amount ELSE 0 END), 0) AS sent
+                    FROM trade_items ti
+                    JOIN trades t ON ti.trade_id = t.trade_id
+                    WHERE t.sleeper_league_id = ? 
+                      AND t.trade_status = 'completed' 
+                      AND ti.season_year = ?
+                """,
+                (r_id, r_id, league_id, target_year),
+            )
+            trade_row = cursor.fetchone()
+            trade_impact_local = (trade_row['sent'] or 0.0) - (trade_row['received'] or 0.0)
+
+            return contract_total_local, penalty_total_local, trade_impact_local
+
+        # Calculate league-wide remaining budgets per year
+        for r_id in all_roster_ids:
+            for year in range(current_year + 1, current_year + 5):
+                c_tot, p_tot, t_imp = _calc_team_year_values(r_id, year)
+                remaining = 200 - c_tot - p_tot - t_imp
+                league_remaining_by_year[year].append({'team_id': r_id, 'remaining': remaining})
+
+        # Now compute the subject team's own budget_status and its rank per year
         for year in range(current_year + 1, current_year + 5):
-            # Get contract commitments for this year
-            cursor.execute('''
-                SELECT COALESCE(SUM(cost_for_season), 0) as contract_total
-                FROM vw_contractByYear
-                WHERE team_id = ? AND sleeper_league_id = ? AND year_number_in_contract = ?
-            ''', (team_id, league_id, year))
-            contract_total = cursor.fetchone()['contract_total'] or 0
-            
-            # Get penalties for this year
-            cursor.execute('''
-                SELECT COALESCE(SUM(penalty_amount), 0) as penalty_total
-                FROM penalties p
-                JOIN contracts c ON p.contract_id = c.rowid
-                WHERE c.team_id = ? AND c.sleeper_league_id = ? AND p.penalty_year = ?
-            ''', (team_id, league_id, year))
-            penalty_total = cursor.fetchone()['penalty_total'] or 0
-            
-            # Get net trade impact for this year
-            cursor.execute('''
-                SELECT 
-                    COALESCE(SUM(CASE WHEN to_team_id = ? THEN budget_amount ELSE 0 END), 0) as received,
-                    COALESCE(SUM(CASE WHEN from_team_id = ? THEN budget_amount ELSE 0 END), 0) as sent
-                FROM trade_items ti
-                JOIN trades t ON ti.trade_id = t.trade_id
-                WHERE t.sleeper_league_id = ? AND t.trade_status = 'completed' AND ti.season_year = ?
-            ''', (team_id, team_id, league_id, year))
-            trade_data = cursor.fetchone()
-            trade_impact = (trade_data['received'] or 0) - (trade_data['sent'] or 0)
-            
+            # Retrieve or compute values for the requested team (to avoid duplicate calc we could reuse above values)
+            c_tot, p_tot, t_imp = _calc_team_year_values(team_id, year)
+            remaining_budget = 200 - c_tot - p_tot - t_imp
+            total_committed = c_tot + p_tot + t_imp
+
+            # Sort league list for this year by remaining budget descending (largest = best)
+            league_sorted = sorted(league_remaining_by_year[year], key=lambda x: x['remaining'], reverse=True)
+            rank_val = next((idx + 1 for idx, entry in enumerate(league_sorted) if entry['team_id'] == team_id), None)
+            total_teams = len(league_sorted)
+
             budget_status[year] = {
-                'contracts': contract_total,
-                'penalties': penalty_total,
-                'trades': trade_impact,
-                'total_committed': contract_total + penalty_total - trade_impact,
-                'remaining_budget': 200 - contract_total - penalty_total + trade_impact
+                'contracts': c_tot,
+                'penalties': p_tot,
+                'trades': t_imp,
+                'total_committed': total_committed,
+                'remaining_budget': remaining_budget,
+                'rank': rank_val,
+                'total_teams': total_teams,
             }
         
         return jsonify({'success': True, 'budget_status': budget_status})
