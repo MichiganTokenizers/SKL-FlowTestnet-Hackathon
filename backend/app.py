@@ -532,73 +532,35 @@ def login():
                 is_new_user = True
                 user = None
 
-        if is_new_user:
-            try:
-                # Create new user with just wallet_address
-                cursor.execute('''
-                    INSERT INTO Users (
-                        wallet_address,
-                        created_at
-                    ) VALUES (?, datetime("now"))''',
-                    (wallet_address,)
-                )
-                print(f"Created new user with wallet: {wallet_address}")
-                
-                # Verify the insert worked
-                cursor.execute('SELECT wallet_address FROM Users WHERE wallet_address = ?', (wallet_address,))
-                verify_user = cursor.fetchone()
-                if not verify_user:
-                    print(f"ERROR: User insert failed for {wallet_address}")
-                    return jsonify({'success': False, 'error': 'Failed to create user'}), 500
-                
-                # Create session for the new user
-                cursor.execute('''
-                    INSERT OR REPLACE INTO sessions (
-                        wallet_address,
-                        session_token
-                    ) VALUES (?, ?)''',
-                    (wallet_address, session_token)
-                )
-                
-                conn.commit()
-                print(f"Successfully committed new user and session for {wallet_address}")
-                session['wallet_address'] = wallet_address # Set Flask session
-                print(f"DEBUG: Flask session set for new user: {wallet_address}")
-                
-            except Exception as e:
-                print(f"ERROR: Failed to create new user: {e}")
-                conn.rollback()
-                return jsonify({'success': False, 'error': f'Failed to create user: {str(e)}'}), 500
+        # Always create or update session
+        cursor.execute('''
+            INSERT OR REPLACE INTO sessions (
+                wallet_address,
+                session_token
+            ) VALUES (?, ?)''',
+            (wallet_address, session_token)
+        )
+        
+        conn.commit()
+        session['wallet_address'] = wallet_address # Set Flask session
+        print(f"DEBUG: Flask session set for wallet: {wallet_address}")
 
-        else:
-            # For existing users, check if they have a Sleeper user ID
-            if user['sleeper_user_id']:
-                print(f"Existing user with Sleeper ID detected, triggering full Sleeper data pull via /auth/login path")
-                full_data_response = sleeper_service.fetch_all_data(wallet_address)
-                if not full_data_response['success']:
-                    print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
-                    # Don't return error here, just log it. The user can still log in
-            else:
-                print(f"Existing user without Sleeper ID detected: {wallet_address}")
-            
-            # Create or update session
-            cursor.execute('''
-                INSERT OR REPLACE INTO sessions (
-                    wallet_address,
-                    session_token
-                ) VALUES (?, ?)''',
-                (wallet_address, session_token)
-            )
-            conn.commit()
-            session['wallet_address'] = wallet_address # Set Flask session
-            print(f"DEBUG: Flask session set for existing user: {wallet_address}")
-            print("Successfully created/updated session in DB and Flask session")
+        # Determine if has Sleeper ID
+        has_sleeper_id = user is not None and user['sleeper_user_id'] is not None
+
+        # If has Sleeper ID, trigger data fetch
+        if has_sleeper_id:
+            print(f"Existing user with Sleeper ID detected, triggering full Sleeper data pull via /auth/login path")
+            full_data_response = sleeper_service.fetch_all_data(wallet_address)
+            if not full_data_response['success']:
+                print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
+                # Don't return error here, just log it. The user can still log in
 
         return jsonify({
             'success': True,
             'sessionToken': session_token,
             'isNewUser': is_new_user,
-            'hasSleeperId': not is_new_user and user and user['sleeper_user_id'] is not None
+            'hasSleeperId': has_sleeper_id
         })
 
     except Exception as e:
@@ -1116,6 +1078,26 @@ def complete_sleeper_association():
         
         print(f"DEBUG: Received data - username: {sleeper_username}, user_id: {sleeper_user_id}, display_name: {display_name}, avatar: {avatar}")
         
+        # If we don't have sleeper_user_id, get it from the username
+        if not sleeper_user_id and sleeper_username:
+            sleeper_user_data = self.get_user(sleeper_username)
+            print(f"DEBUG: sleeper_user_data from service: {sleeper_user_data}")
+            if not sleeper_user_data:
+                print(f"DEBUG: Sleeper username '{sleeper_username}' not found by service")
+                return jsonify({'success': False, 'error': f'Sleeper username "{sleeper_username}" not found'}), 404
+            
+            sleeper_user_id = sleeper_user_data.get('user_id')
+            if not display_name:
+                display_name = sleeper_user_data.get('display_name', sleeper_username)
+            if not avatar:
+                avatar = sleeper_user_data.get('avatar')
+        
+        if not sleeper_user_id:
+            print(f"DEBUG: sleeper_user_id is null or empty after extraction")
+            return jsonify({'success': False, 'error': 'Could not retrieve user_id from Sleeper for the given username'}), 500
+        
+        print(f"DEBUG: Final extracted values - sleeper_user_id: {sleeper_user_id}, display_name: {display_name}, avatar: {avatar}")
+
         # Enhanced association logic with conflict checking and merging
         # Step 1: Check if this sleeper_user_id is already in the database
         cursor.execute('SELECT wallet_address FROM Users WHERE sleeper_user_id = ?', (sleeper_user_id,))
@@ -1168,7 +1150,7 @@ def complete_sleeper_association():
                 ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
                 print(f"DEBUG: Update wallet record rowcount: {cursor.rowcount}")
             else:
-                # Create new user record
+                # Create new user record with both wallet and sleeper data
                 print(f"DEBUG: Creating new user record for wallet {wallet_address} and sleeper_user_id {sleeper_user_id}")
                 cursor.execute('''
                     INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
