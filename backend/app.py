@@ -1179,6 +1179,18 @@ def complete_sleeper_association():
         conn.commit()
         print(f"DEBUG: Commit completed after association update/insert")
         
+        # Re-query to verify after commit
+        cursor.execute("SELECT sleeper_user_id FROM Users WHERE wallet_address = ?", (wallet_address,))
+        verify_user_after_commit = cursor.fetchone()
+        print(f"DEBUG: Verification after commit: {dict(verify_user_after_commit) if verify_user_after_commit else 'No record found'}")
+        
+        if not verify_user_after_commit or not verify_user_after_commit['sleeper_user_id']:
+            print(f"ERROR: sleeper_user_id not set after commit for {wallet_address}")
+            return jsonify({'success': False, 'error': 'Failed to set Sleeper user ID after commit'}), 500
+        
+        import time
+        time.sleep(1)  # Brief delay to ensure WAL commit
+        
         # Final verification BEFORE fetch_all_data
         cursor.execute("SELECT * FROM Users WHERE wallet_address = ?", (wallet_address,))
         final_user = cursor.fetchone()

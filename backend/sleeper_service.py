@@ -342,6 +342,7 @@ class SleeperService:
                     INSERT OR IGNORE INTO UserLeagueLinks (wallet_address, sleeper_league_id)
                     VALUES (?, ?)
                 ''', (wallet_address, league_id))
+                self.logger.info(f"SleeperService.fetch_all_data: Inserted UserLeagueLinks for wallet {wallet_address}, league {league_id}.")
 
                 # Step 3: Get users (participants) for this league *before* rosters
                 league_participants = self.get_league_users(league_id)
