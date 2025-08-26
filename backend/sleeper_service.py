@@ -407,18 +407,16 @@ class SleeperService:
                         user_wallet = cursor.fetchone()
                         
                         if user_wallet:
-                            wallet_address = user_wallet['wallet_address']
-                            # Update or create UserLeagueLinks entry with commissioner status
+                            participant_wallet_address = user_wallet['wallet_address']
+                            # Only update the is_commissioner field if UserLeagueLinks already exists
                             cursor.execute('''
-                                INSERT INTO UserLeagueLinks (wallet_address, sleeper_league_id, is_commissioner, updated_at)
-                                VALUES (?, ?, ?, datetime('now'))
-                                ON CONFLICT(wallet_address, sleeper_league_id) DO UPDATE SET
-                                    is_commissioner = excluded.is_commissioner,
-                                    updated_at = datetime('now')
-                            ''', (wallet_address, league_id, 1 if p_is_owner else 0))
+                                UPDATE UserLeagueLinks 
+                                SET is_commissioner = ?, updated_at = datetime('now')
+                                WHERE wallet_address = ? AND sleeper_league_id = ?
+                            ''', (1 if p_is_owner else 0, participant_wallet_address, league_id))
                             
                             if p_is_owner:
-                                self.logger.info(f"SleeperService: Set {p_display_name} ({wallet_address}) as commissioner for league {league_id}")
+                                self.logger.info(f"SleeperService: Set {p_display_name} ({participant_wallet_address}) as commissioner for league {league_id}")
                         
                         # if cursor.rowcount > 0:
                             # self.logger.info(f"SleeperService.fetch_all_data: User {p_user_id} ({p_display_name}) inserted/updated in Users table.")
