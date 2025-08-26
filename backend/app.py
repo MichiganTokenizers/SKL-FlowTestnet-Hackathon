@@ -1135,6 +1135,7 @@ def complete_sleeper_association():
                     WHERE sleeper_user_id = ? AND wallet_address IS NULL
                 ''', (wallet_address, sleeper_username, display_name, avatar, sleeper_user_id))
                 
+                print(f"DEBUG: Merge UPDATE rowcount: {cursor.rowcount}")
                 if cursor.rowcount == 0:
                     print(f"DEBUG: Failed to merge stub record for sleeper_user_id {sleeper_user_id}")
                     return jsonify({'success': False, 'error': 'Failed to associate: merge operation failed'}), 500
@@ -1148,6 +1149,7 @@ def complete_sleeper_association():
                     SET username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
                     WHERE wallet_address = ?
                 ''', (sleeper_username, display_name, avatar, wallet_address))
+                print(f"DEBUG: Update details rowcount: {cursor.rowcount}")
         else:
             # No existing record for this sleeper_user_id - check for existing by wallet_address
             cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
@@ -1164,6 +1166,7 @@ def complete_sleeper_association():
                     SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
                     WHERE wallet_address = ?
                 ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
+                print(f"DEBUG: Update wallet record rowcount: {cursor.rowcount}")
             else:
                 # Create new user record
                 print(f"DEBUG: Creating new user record for wallet {wallet_address} and sleeper_user_id {sleeper_user_id}")
@@ -1171,13 +1174,19 @@ def complete_sleeper_association():
                     INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
                     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
                 ''', (wallet_address, sleeper_user_id, sleeper_username, display_name, avatar))
+                print(f"DEBUG: Insert new user rowcount: {cursor.rowcount}")
         
         conn.commit()
+        print(f"DEBUG: Commit completed after association update/insert")
         
-        # Final verification
+        # Final verification BEFORE fetch_all_data
         cursor.execute("SELECT * FROM Users WHERE wallet_address = ?", (wallet_address,))
         final_user = cursor.fetchone()
-        print(f"DEBUG: Final DB state for {wallet_address}: {dict(final_user) if final_user else 'No user found'}")
+        print(f"DEBUG: DB state BEFORE fetch_all_data for {wallet_address}: {dict(final_user) if final_user else 'No user found'}")
+        
+        if not final_user or not final_user['sleeper_user_id']:
+            print(f"ERROR: sleeper_user_id still not set after association for {wallet_address}")
+            return jsonify({'success': False, 'error': 'Failed to set Sleeper user ID'}), 500
         
         # Trigger fetch_all_data
         print(f"DEBUG: Triggering fetch_all_data for wallet {wallet_address}")
@@ -1211,7 +1220,7 @@ def complete_sleeper_association():
                             SET is_commissioner = ?, updated_at = datetime('now')
                             WHERE wallet_address = ? AND sleeper_league_id = ?
                         """, (1 if is_owner else 0, wallet_address, current_league_id))
-                        print(f"DEBUG: Updated commissioner status for league {current_league_id}")
+                        print(f"DEBUG: Updated commissioner status for league {current_league_id} with rowcount: {cursor.rowcount}")
                     else:
                         print(f"DEBUG: No league users found for league {current_league_id}")
                 else:
@@ -1221,6 +1230,11 @@ def complete_sleeper_association():
         
         conn.commit()
         print(f"DEBUG: Final commit completed for association")
+        
+        # Final verification AFTER everything
+        cursor.execute("SELECT * FROM Users WHERE wallet_address = ?", (wallet_address,))
+        final_user_after = cursor.fetchone()
+        print(f"DEBUG: DB state AFTER fetch_all_data for {wallet_address}: {dict(final_user_after) if final_user_after else 'No user found'}")
         
         return jsonify({'success': True, 'message': 'Sleeper account associated successfully'}), 200
 

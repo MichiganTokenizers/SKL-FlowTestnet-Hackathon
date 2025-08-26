@@ -190,7 +190,7 @@ class SleeperService:
             # --- End of player update call ---
             
             # Get the sleeper_user_id for this wallet address
-            cursor.execute('SELECT sleeper_user_id FROM users WHERE wallet_address = ?', (wallet_address,))
+            cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
             user_data_row = cursor.fetchone()
             
             if not user_data_row or not user_data_row['sleeper_user_id']:
@@ -331,10 +331,10 @@ class SleeperService:
                     continue  # Skip if no rosters
 
                 # Check if this user owns any roster in this league
-                is_user_in_league = any(roster.get('owner_id') == self.sleeper_user_id for roster in league_rosters)
+                is_user_in_league = any(roster.get('owner_id') == sleeper_user_id for roster in league_rosters)
 
                 if not is_user_in_league:
-                    self.logger.info(f"SleeperService.fetch_all_data: User {self.sleeper_user_id} is not an owner in league {league_id}. Skipping UserLeagueLinks insertion.")
+                    self.logger.info(f"SleeperService.fetch_all_data: User {sleeper_user_id} is not an owner in league {league_id}. Skipping UserLeagueLinks insertion.")
                     continue  # Skip linking if not an owner
 
                 # Now insert the link
@@ -380,17 +380,17 @@ class SleeperService:
                         self.logger.info(f"SleeperService: Participant data for {p_user_id}: {json.dumps(participant_debug, indent=2)}")
 
                         # ADD THIS DEBUG LOG BEFORE SQL:
-                        self.logger.info(f"SleeperService: About to upsert user {p_user_id} ({p_display_name}) into users table")
+                        self.logger.info(f"SleeperService: About to upsert user {p_user_id} ({p_display_name}) into Users table")
 
                         cursor.execute('''
-                            INSERT INTO users (sleeper_user_id, username, display_name, avatar, created_at, updated_at)
+                            INSERT INTO Users (sleeper_user_id, username, display_name, avatar, created_at, updated_at)
                             VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
                             ON CONFLICT(sleeper_user_id) DO UPDATE SET
                                 username = excluded.username,
                                 display_name = excluded.display_name,
                                 avatar = excluded.avatar,
                                 updated_at = datetime('now')
-                            WHERE users.wallet_address IS NULL;
+                            WHERE Users.wallet_address IS NULL;
                         ''', (p_user_id, p_username, p_display_name, p_avatar))
                         
                         # ADD THIS DEBUG LOG AFTER SQL:
@@ -398,7 +398,7 @@ class SleeperService:
                         
                         # Update commissioner status in UserLeagueLinks if this user has a wallet address
                         cursor.execute('''
-                            SELECT wallet_address FROM users WHERE sleeper_user_id = ? AND wallet_address IS NOT NULL
+                            SELECT wallet_address FROM Users WHERE sleeper_user_id = ? AND wallet_address IS NOT NULL
                         ''', (p_user_id,))
                         user_wallet = cursor.fetchone()
                         
@@ -417,7 +417,7 @@ class SleeperService:
                                 self.logger.info(f"SleeperService: Set {p_display_name} ({wallet_address}) as commissioner for league {league_id}")
                         
                         # if cursor.rowcount > 0:
-                            # self.logger.info(f"SleeperService.fetch_all_data: User {p_user_id} ({p_display_name}) inserted/updated in users table.")
+                            # self.logger.info(f"SleeperService.fetch_all_data: User {p_user_id} ({p_display_name}) inserted/updated in Users table.")
                         # else:
                             # self.logger.info(f"SleeperService.fetch_all_data: User {p_user_id} ({p_display_name}) already exists with a wallet_address or no update needed. No change made to their user record by league sync.")
 
@@ -532,7 +532,6 @@ class SleeperService:
                         
                         # Existing roster processing logic starts here, using api_roster_item
                         # The variable 'roster_id_str' from api_roster_item.get("roster_id") is already defined as api_roster_id
-                        # The original code used 'roster_id = str(roster_id_str)'
                         # We used current_api_roster_id for penalty part, which is str(api_roster_id_str)
                         
                         # Re-affirm roster_id for upsert from the API item (which is api_roster_item)
