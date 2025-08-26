@@ -324,19 +324,6 @@ class SleeperService:
                     None, None, None 
                 ))
                 
-                # Fetch rosters for this league (needed for owner verification)
-                league_rosters = self.get_league_rosters(league_id)
-                if not league_rosters:
-                    self.logger.warning(f"SleeperService.fetch_all_data: No rosters found for league {league_id}.")
-                    # Continue anyway, since we can still link the user to the league
-                    # continue  # Removed skip
-
-                # Removed ownership check - link user to all their leagues
-                # is_user_in_league = any(roster.get('owner_id') == sleeper_user_id for roster in league_rosters)
-                # if not is_user_in_league:
-                #     self.logger.info(f"SleeperService.fetch_all_data: User {sleeper_user_id} is not an owner in league {league_id}. Skipping UserLeagueLinks insertion.")
-                #     continue
-
                 # Insert the link for this league
                 cursor.execute('''
                     INSERT OR IGNORE INTO UserLeagueLinks (wallet_address, sleeper_league_id)
@@ -346,6 +333,19 @@ class SleeperService:
                     self.logger.info(f"SleeperService.fetch_all_data: Successfully inserted new UserLeagueLinks for wallet {wallet_address}, league {league_id}.")
                 else:
                     self.logger.info(f"SleeperService.fetch_all_data: UserLeagueLinks already exists for wallet {wallet_address}, league {league_id}. No change.")
+                
+                self.conn.commit()  # Commit immediately after link insertion
+                
+                # Verify insertion
+                cursor.execute('''
+                    SELECT 1 FROM UserLeagueLinks 
+                    WHERE wallet_address = ? AND sleeper_league_id = ?
+                ''', (wallet_address, league_id))
+                verify_link = cursor.fetchone()
+                if verify_link:
+                    self.logger.info(f"SleeperService.fetch_all_data: Verified UserLeagueLinks exists for wallet {wallet_address}, league {league_id} after commit.")
+                else:
+                    self.logger.error(f"SleeperService.fetch_all_data: UserLeagueLinks NOT found after insert/commit for wallet {wallet_address}, league {league_id}!")
 
                 # Step 3: Get users (participants) for this league *before* rosters
                 league_participants = self.get_league_users(league_id)
