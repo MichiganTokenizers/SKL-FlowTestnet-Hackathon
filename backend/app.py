@@ -1091,165 +1091,59 @@ def complete_sleeper_association():
             print(f"DEBUG: sleeper_user_id is null or empty after extraction for {sleeper_username}")
             return jsonify({'success': False, 'error': 'Could not retrieve user_id from Sleeper for the given username'}), 500
 
-        # Step 1: Check if a user record already exists for this sleeper_user_id (regardless of wallet_address)
-        cursor.execute('SELECT wallet_address FROM Users WHERE sleeper_user_id = ?', (sleeper_user_id,))
-        existing_user = cursor.fetchone()
-        
-        # Step 2: Check if a user record already exists for this wallet_address
+        # Simplified association logic
+        # First, check if user exists by wallet_address
         cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
-        existing_wallet_user = cursor.fetchone()
-        
-        if existing_user and existing_wallet_user:
-            # Both records exist - we need to merge them
-            existing_wallet = existing_user['wallet_address']
-            existing_sleeper_id = existing_wallet_user['sleeper_user_id']
-            
-            if existing_wallet and existing_wallet != wallet_address:
-                # Another wallet already owns this sleeper_user_id - this shouldn't happen in normal flow
-                print(f"ERROR: sleeper_user_id {sleeper_user_id} is already associated with wallet {existing_wallet}. Cannot associate with {wallet_address}")
-                return jsonify({'success': False, 'error': 'This Sleeper account is already associated with another wallet'}), 409
-            elif existing_sleeper_id and existing_sleeper_id != sleeper_user_id:
-                # Another sleeper_user_id already owns this wallet - this shouldn't happen in normal flow
-                print(f"ERROR: wallet_address {wallet_address} is already associated with sleeper_user_id {existing_sleeper_id}. Cannot associate with {sleeper_user_id}")
-                return jsonify({'success': False, 'error': 'This wallet is already associated with another Sleeper account'}), 409
-            else:
-                # Merge the records: update the wallet record with sleeper info and delete the sleeper record
-                print(f"DEBUG: Merging two existing records. Updating wallet record and deleting sleeper record.")
-                
-                # Update the wallet record with sleeper information
-                cursor.execute('''
-                    UPDATE Users 
-                    SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                    WHERE wallet_address = ?
-                ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
-                update_rowcount = cursor.rowcount
-                print(f"DEBUG: UPDATE wallet record for wallet_address {wallet_address} rowcount: {update_rowcount}")
-                
-                # Delete the sleeper record (it's now redundant)
-                if existing_user['wallet_address'] is None:
-                    cursor.execute('DELETE FROM Users WHERE sleeper_user_id = ? AND wallet_address IS NULL', (sleeper_user_id,))
-                    delete_rowcount = cursor.rowcount
-                    print(f"DEBUG: DELETE redundant sleeper record rowcount: {delete_rowcount}")
-                
-        elif existing_user:
-            # Only sleeper record exists - update it to set the wallet_address
-            existing_wallet = existing_user['wallet_address']
-            if existing_wallet and existing_wallet != wallet_address:
-                # Another wallet already owns this sleeper_user_id
-                print(f"ERROR: sleeper_user_id {sleeper_user_id} is already associated with wallet {existing_wallet}. Cannot associate with {wallet_address}")
-                return jsonify({'success': False, 'error': 'This Sleeper account is already associated with another wallet'}), 409
-            else:
-                print(f"DEBUG: Found existing user record with NULL wallet_address. Updating to set wallet_address: {wallet_address}")
-                cursor.execute('''
-                    UPDATE Users 
-                    SET wallet_address = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                    WHERE sleeper_user_id = ? AND wallet_address IS NULL
-                ''', (wallet_address, sleeper_username, display_name, avatar, sleeper_user_id))
-                update_rowcount = cursor.rowcount
-                print(f"DEBUG: UPDATE existing NULL wallet user for sleeper_user_id {sleeper_user_id} rowcount: {update_rowcount}")
-                
-        elif existing_wallet_user:
-            # Only wallet record exists - update it to set the sleeper_user_id
-            existing_sleeper_id = existing_wallet_user['sleeper_user_id']
-            if existing_sleeper_id and existing_sleeper_id != sleeper_user_id:
-                # Another sleeper_user_id already owns this wallet
-                print(f"ERROR: wallet_address {wallet_address} is already associated with sleeper_user_id {existing_sleeper_id}. Cannot associate with {sleeper_user_id}")
-                return jsonify({'success': False, 'error': 'This wallet is already associated with another Sleeper account'}), 409
-            else:
-                print(f"DEBUG: Found existing user record with NULL sleeper_user_id. Updating to set sleeper_user_id: {sleeper_user_id}")
-                cursor.execute('''
-                    UPDATE Users 
-                    SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                    WHERE wallet_address = ?
-                ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
-                update_rowcount = cursor.rowcount
-                print(f"DEBUG: UPDATE existing NULL sleeper user for wallet_address {wallet_address} rowcount: {update_rowcount}")
+        existing_user = cursor.fetchone()
+
+        if existing_user:
+            if existing_user['sleeper_user_id']:
+                print(f"DEBUG: Wallet {wallet_address} already associated with sleeper_user_id {existing_user['sleeper_user_id']}")
+                return jsonify({'success': False, 'error': 'Wallet already associated with a Sleeper account'}), 409
+            # Update existing user with sleeper info
+            cursor.execute('''
+                UPDATE Users 
+                SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                WHERE wallet_address = ?
+            ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
         else:
-            # No existing records - create new one
-            print(f"DEBUG: No existing user records found. Creating new user record for wallet_address: {wallet_address}")
+            # Create new user
             cursor.execute('''
                 INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
             ''', (wallet_address, sleeper_user_id, sleeper_username, display_name, avatar))
-            update_rowcount = cursor.rowcount
-            print(f"DEBUG: INSERT new user for wallet_address {wallet_address} rowcount: {update_rowcount}")
 
-        # Verify the operation was successful
-        if update_rowcount == 0:
-            print(f"ERROR: Failed to create/update user record for wallet_address: {wallet_address}, sleeper_user_id: {sleeper_user_id}")
-            return jsonify({'success': False, 'error': 'Failed to create/update user record'}), 500
-
-        # The original Step 2 (cleanup) is now Step 1 (pre-emptive cleanup).
-
-        for attempt in range(3):  # Retry up to 3 times
-            try:
-                conn.commit()
-                print(f"DEBUG: conn.commit() succeeded on attempt {attempt + 1} for {wallet_address}")
-                break
-            except sqlite3.Error as commit_e:
-                if "locked" in str(commit_e).lower():
-                    print(f"DEBUG: DB locked on attempt {attempt + 1}. Retrying in 1s...")
-                    time.sleep(1)
-                else:
-                    print(f"ERROR: Commit failed: {commit_e}")
-                    conn.rollback()
-                    return jsonify({'success': False, 'error': f'Failed to commit: {str(commit_e)}'}), 500
-        else:
-            print("ERROR: Commit failed after 3 attempts")
-            conn.rollback()
-            return jsonify({'success': False, 'error': 'Commit failed after retries'}), 500
+        conn.commit()
 
         # Final verification
         cursor.execute("SELECT * FROM Users WHERE wallet_address = ?", (wallet_address,))
         final_user = cursor.fetchone()
         print(f"DEBUG: Final DB state for {wallet_address}: {dict(final_user) if final_user else 'No user found'}")
 
-        # Optionally, trigger fetch_all_data here, or let the frontend do it via onAssociationSuccess callback
-        # For simplicity and immediate feedback, triggering here can be good.
-        print(f"DEBUG: Calling internal sleeper_service.fetch_all_data for {wallet_address}")
+        # Trigger fetch_all_data
         fetch_result = sleeper_service.fetch_all_data(wallet_address)
-        print(f"DEBUG: Internal fetch_all_data result: {fetch_result}")
-        
+
         if fetch_result.get('success'):
-            # NEW LOGIC: Set commissioner status based on Sleeper's is_owner field
+            # Set commissioner status
             cursor.execute("SELECT sleeper_league_id FROM UserLeagueLinks WHERE wallet_address = ?", (wallet_address,))
             user_leagues = cursor.fetchall()
             for league_row in user_leagues:
                 current_league_id = league_row['sleeper_league_id']
-                # Get this user's sleeper_user_id
                 cursor.execute("SELECT sleeper_user_id FROM users WHERE wallet_address = ?", (wallet_address,))
                 user_data = cursor.fetchone()
-                if not user_data or not user_data['sleeper_user_id']:
-                    print(f"DEBUG: No sleeper_user_id found for wallet {wallet_address}")
-                    continue
-                sleeper_user_id = user_data['sleeper_user_id']
-                # Get all users from Sleeper API for this league
-                league_users = sleeper_service.get_league_users(current_league_id)
-                if not league_users:
-                    print(f"DEBUG: Could not fetch users from Sleeper API for league {current_league_id}")
-                    continue
-                # Find this user in the Sleeper API response
-                sleeper_user = next((u for u in league_users if u.get('user_id') == sleeper_user_id), None)
-                is_owner = sleeper_user.get('is_owner', False) if sleeper_user else False
-                print(f"DEBUG: User {wallet_address} (sleeper_user_id: {sleeper_user_id}) is_owner in Sleeper: {is_owner}")
-                cursor.execute("""
-                    UPDATE UserLeagueLinks 
-                    SET is_commissioner = ?, updated_at = datetime('now')
-                    WHERE wallet_address = ? AND sleeper_league_id = ?
-                """, (1 if is_owner else 0, wallet_address, current_league_id))
-            conn.commit()
-            print(f"DEBUG: conn.commit() executed for wallet_address: {wallet_address} (after successful fetch_all_data and commissioner check)")
-        elif fetch_result.get('error'): # Make sure to check if 'error' key exists
-            # Log this error, but the association itself was successful.
-            # The client will attempt another fetch via onAssociationSuccess anyway.
-            print(f"Warning: Post-association data fetch failed for {wallet_address}: {fetch_result.get('error')}")
-            # Consider if a rollback is needed if fetch_all_data could leave partial data on error.
-            # For now, the user association is committed, but data fetch might be incomplete.
-        else:
-            # Handle cases where 'success' is not true and 'error' is not present, if any.
-            print(f"Warning: Post-association data fetch returned an unexpected result for {wallet_address}: {fetch_result}")
+                if user_data and user_data['sleeper_user_id']:
+                    sleeper_user_id = user_data['sleeper_user_id']
+                    league_users = sleeper_service.get_league_users(current_league_id)
+                    if league_users:
+                        sleeper_user = next((u for u in league_users if u.get('user_id') == sleeper_user_id), None)
+                        is_owner = sleeper_user.get('is_owner', False) if sleeper_user else False
+                        cursor.execute("""
+                            UPDATE UserLeagueLinks 
+                            SET is_commissioner = ?, updated_at = datetime('now')
+                            WHERE wallet_address = ? AND sleeper_league_id = ?
+                        """, (1 if is_owner else 0, wallet_address, current_league_id))
+        conn.commit()
 
-        print(f"DEBUG: /auth/complete_association successful for {wallet_address}")
         return jsonify({'success': True, 'message': 'Sleeper account associated successfully'}), 200
 
     except sqlite3.Error as sqle:
@@ -2453,10 +2347,13 @@ def get_recent_transactions(league_id):
                 
                 # Resolve player names and team names
                 player_names = {}
-                for pid in set(list(details.get('adds', {}).keys()) + list(details.get('drops', {}).keys())):
+                adds = details.get('adds') or {}
+                drops = details.get('drops') or {}
+                player_ids = list(adds.keys()) + list(drops.keys())
+                for pid in set(player_ids):
                     player_names[pid] = player_map.get(pid, pid)  # Fallback to ID if not found
                 
-                team_names = {rid: team_map.get(rid, rid) for rid in set(list(details.get('adds', {}).values()) + list(details.get('drops', {}).values()))}
+                team_names = {rid: team_map.get(rid, rid) for rid in set(list(adds.values()) + list(drops.values()))}
                 
                 # Add to details
                 details['player_names'] = player_names
@@ -2586,10 +2483,13 @@ def get_league_transactions_by_week(league_id, week):
                 if transaction_week is None or int(transaction_week) == week:
                     # Resolve player names and team names
                     player_names = {}
-                    for pid in set(list(details.get('adds', {}).keys()) + list(details.get('drops', {}).keys())):
+                    adds = details.get('adds') or {}
+                    drops = details.get('drops') or {}
+                    player_ids = list(adds.keys()) + list(drops.keys())
+                    for pid in set(player_ids):
                         player_names[pid] = player_map.get(pid, pid)
                     
-                    team_names = {rid: team_map.get(rid, rid) for rid in set(list(details.get('adds', {}).values()) + list(details.get('drops', {}).values()))}
+                    team_names = {rid: team_map.get(rid, rid) for rid in set(list(adds.values()) + list(drops.values()))}
                     
                     # Add to details
                     details['player_names'] = player_names
