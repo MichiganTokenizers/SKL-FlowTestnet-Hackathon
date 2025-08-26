@@ -2778,8 +2778,8 @@ def get_pending_trades(league_id):
                 ti.season_year,
                 ti.sleeper_league_id
             FROM trades t
-            JOIN rosters init_roster ON t.initiator_team_id = init_roster.sleeper_roster_id
-            JOIN rosters recip_roster ON t.recipient_team_id = recip_roster.sleeper_roster_id
+            JOIN rosters init_roster ON t.initiator_team_id = init_roster.sleeper_roster_id AND init_roster.sleeper_league_id = t.sleeper_league_id
+            JOIN rosters recip_roster ON t.recipient_team_id = recip_roster.sleeper_roster_id AND recip_roster.sleeper_league_id = t.sleeper_league_id
             JOIN trade_items ti ON t.trade_id = ti.trade_id
             WHERE t.sleeper_league_id = ? AND t.trade_status = 'pending'
             ORDER BY t.created_at DESC
