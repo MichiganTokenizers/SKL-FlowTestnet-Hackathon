@@ -511,32 +511,64 @@ def login():
         conn = get_global_db_connection() # Use global connection
         cursor = conn.cursor()
         
-        # Check if user exists
+        # Check if user exists by wallet_address (ensuring 1:1 relationship)
         cursor.execute('SELECT wallet_address, sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
-        user = cursor.fetchone()
-        is_new_user = not user
+        user_by_wallet = cursor.fetchone()
+        
+        # Check if this wallet_address is already associated with a different user
+        # This prevents multiple wallet addresses from being associated with the same Sleeper user
+        if user_by_wallet and user_by_wallet['sleeper_user_id']:
+            print(f"Existing user with wallet {wallet_address} and Sleeper ID {user_by_wallet['sleeper_user_id']}")
+            is_new_user = False
+            user = user_by_wallet
+        else:
+            # Check if this wallet_address exists but has no Sleeper ID (needs association)
+            if user_by_wallet:
+                print(f"Existing user with wallet {wallet_address} but no Sleeper ID - needs association")
+                is_new_user = False
+                user = user_by_wallet
+            else:
+                print(f"New wallet address: {wallet_address}")
+                is_new_user = True
+                user = None
 
         if is_new_user:
-            # Create new user
-            cursor.execute('''
-                INSERT INTO Users (
-                    wallet_address,
-                    created_at
-                ) VALUES (?, datetime("now"))''',
-                (wallet_address,)
-            )
-            print("Created new user")
-            # Also create a session for the new user
-            cursor.execute('''
-                INSERT OR REPLACE INTO sessions (
-                    wallet_address,
-                    session_token
-                ) VALUES (?, ?)''',
-                (wallet_address, session_token)
-            )
-            conn.commit()
-            session['wallet_address'] = wallet_address # Set Flask session
-            print(f"DEBUG: Flask session set for new user: {wallet_address}")
+            try:
+                # Create new user with just wallet_address
+                cursor.execute('''
+                    INSERT INTO Users (
+                        wallet_address,
+                        created_at
+                    ) VALUES (?, datetime("now"))''',
+                    (wallet_address,)
+                )
+                print(f"Created new user with wallet: {wallet_address}")
+                
+                # Verify the insert worked
+                cursor.execute('SELECT wallet_address FROM Users WHERE wallet_address = ?', (wallet_address,))
+                verify_user = cursor.fetchone()
+                if not verify_user:
+                    print(f"ERROR: User insert failed for {wallet_address}")
+                    return jsonify({'success': False, 'error': 'Failed to create user'}), 500
+                
+                # Create session for the new user
+                cursor.execute('''
+                    INSERT OR REPLACE INTO sessions (
+                        wallet_address,
+                        session_token
+                    ) VALUES (?, ?)''',
+                    (wallet_address, session_token)
+                )
+                
+                conn.commit()
+                print(f"Successfully committed new user and session for {wallet_address}")
+                session['wallet_address'] = wallet_address # Set Flask session
+                print(f"DEBUG: Flask session set for new user: {wallet_address}")
+                
+            except Exception as e:
+                print(f"ERROR: Failed to create new user: {e}")
+                conn.rollback()
+                return jsonify({'success': False, 'error': f'Failed to create user: {str(e)}'}), 500
 
         else:
             # For existing users, check if they have a Sleeper user ID
@@ -566,7 +598,7 @@ def login():
             'success': True,
             'sessionToken': session_token,
             'isNewUser': is_new_user,
-            'hasSleeperId': not is_new_user and user['sleeper_user_id'] is not None
+            'hasSleeperId': not is_new_user and user and user['sleeper_user_id'] is not None
         })
 
     except Exception as e:
@@ -1068,82 +1100,134 @@ def complete_sleeper_association():
         print(f"DEBUG: wallet_address: {wallet_address}")
 
         data = request.get_json()
-        if not data or 'sleeperUsername' not in data:
-            print("DEBUG: Missing sleeperUsername in /auth/complete_association")
-            return jsonify({'success': False, 'error': 'Missing sleeperUsername in request body'}), 400
+        if not data:
+            print("DEBUG: No data received in /auth/complete_association")
+            return jsonify({'success': False, 'error': 'No data received'}), 400
         
-        sleeper_username = data['sleeperUsername']
-        print(f"DEBUG: sleeper_username: {sleeper_username}")
-
-        # Get Sleeper user details from Sleeper API
-        sleeper_user_data = sleeper_service.get_user(sleeper_username)
-        print(f"DEBUG: sleeper_user_data from service: {sleeper_user_data}")
-        if not sleeper_user_data:
-            print(f"DEBUG: Sleeper username '{sleeper_username}' not found by service")
-            return jsonify({'success': False, 'error': f'Sleeper username "{sleeper_username}" not found'}), 404
-
-        sleeper_user_id = sleeper_user_data.get('user_id')
-        display_name = sleeper_user_data.get('display_name', sleeper_username) # Fallback to username if display_name is null
-        avatar = sleeper_user_data.get('avatar')
-        print(f"DEBUG: Extracted sleeper_user_id: {sleeper_user_id}, display_name: {display_name}, avatar: {avatar}")
-
-        if not sleeper_user_id: # This also catches empty strings
-            print(f"DEBUG: sleeper_user_id is null or empty after extraction for {sleeper_username}")
+        # Handle both old format (sleeperUsername) and new format (sleeper_username)
+        sleeper_username = data.get('sleeperUsername') or data.get('sleeper_username')
+        sleeper_user_id = data.get('sleeper_user_id')
+        display_name = data.get('sleeper_display_name') or data.get('display_name')
+        avatar = data.get('sleeper_avatar') or data.get('avatar')
+        
+        if not sleeper_username and not sleeper_user_id:
+            print("DEBUG: Missing sleeperUsername or sleeper_user_id in /auth/complete_association")
+            return jsonify({'success': False, 'error': 'Missing sleeperUsername or sleeper_user_id in request body'}), 400
+        
+        print(f"DEBUG: Received data - username: {sleeper_username}, user_id: {sleeper_user_id}, display_name: {display_name}, avatar: {avatar}")
+        
+        # If we don't have sleeper_user_id, get it from the username
+        if not sleeper_user_id and sleeper_username:
+            sleeper_user_data = sleeper_service.get_user(sleeper_username)
+            print(f"DEBUG: sleeper_user_data from service: {sleeper_user_data}")
+            if not sleeper_user_data:
+                print(f"DEBUG: Sleeper username '{sleeper_username}' not found by service")
+                return jsonify({'success': False, 'error': f'Sleeper username "{sleeper_username}" not found'}), 404
+            
+            sleeper_user_id = sleeper_user_data.get('user_id')
+            if not display_name:
+                display_name = sleeper_user_data.get('display_name', sleeper_username)
+            if not avatar:
+                avatar = sleeper_user_data.get('avatar')
+        
+        if not sleeper_user_id:
+            print(f"DEBUG: sleeper_user_id is null or empty after extraction")
             return jsonify({'success': False, 'error': 'Could not retrieve user_id from Sleeper for the given username'}), 500
+        
+        print(f"DEBUG: Final extracted values - sleeper_user_id: {sleeper_user_id}, display_name: {display_name}, avatar: {avatar}")
 
-        # Simplified association logic
-        # First, check if user exists by wallet_address
-        cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
-        existing_user = cursor.fetchone()
-
-        if existing_user:
-            if existing_user['sleeper_user_id']:
-                print(f"DEBUG: Wallet {wallet_address} already associated with sleeper_user_id {existing_user['sleeper_user_id']}")
-                return jsonify({'success': False, 'error': 'Wallet already associated with a Sleeper account'}), 409
-            # Update existing user with sleeper info
+        # Simplified association logic with merging
+        # First, check if there's an existing stub record for this sleeper_user_id with NULL wallet_address
+        cursor.execute('SELECT wallet_address FROM Users WHERE sleeper_user_id = ? AND wallet_address IS NULL', (sleeper_user_id,))
+        stub_record = cursor.fetchone()
+        
+        if stub_record:
+            # Merge: Update the existing stub record with wallet_address
+            print(f"DEBUG: Found existing stub record for sleeper_user_id {sleeper_user_id}. Merging with wallet {wallet_address}")
             cursor.execute('''
                 UPDATE Users 
-                SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                WHERE wallet_address = ?
-            ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
+                SET wallet_address = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                WHERE sleeper_user_id = ? AND wallet_address IS NULL
+            ''', (wallet_address, sleeper_username, display_name, avatar, sleeper_user_id))
+            
+            if cursor.rowcount == 0:
+                print(f"DEBUG: Failed to merge stub record for sleeper_user_id {sleeper_user_id}")
+                return jsonify({'success': False, 'error': 'Failed to associate: merge operation failed'}), 500
+            
+            print(f"DEBUG: Successfully merged stub record for sleeper_user_id {sleeper_user_id} with wallet {wallet_address}")
+        
         else:
-            # Create new user
-            cursor.execute('''
-                INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-            ''', (wallet_address, sleeper_user_id, sleeper_username, display_name, avatar))
-
+            # No stub - check for existing by wallet_address (original logic)
+            cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
+            existing_user = cursor.fetchone()
+            
+            if existing_user:
+                if existing_user['sleeper_user_id']:
+                    print(f"DEBUG: Wallet {wallet_address} already associated with sleeper_user_id {existing_user['sleeper_user_id']}")
+                    return jsonify({'success': False, 'error': 'Wallet already associated with a Sleeper account'}), 409
+                # Update existing user with sleeper info
+                cursor.execute('''
+                    UPDATE Users 
+                    SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                    WHERE wallet_address = ?
+                ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
+            else:
+                # Create new user
+                cursor.execute('''
+                    INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+                ''', (wallet_address, sleeper_user_id, sleeper_username, display_name, avatar))
+        
         conn.commit()
-
+        
         # Final verification
         cursor.execute("SELECT * FROM Users WHERE wallet_address = ?", (wallet_address,))
         final_user = cursor.fetchone()
         print(f"DEBUG: Final DB state for {wallet_address}: {dict(final_user) if final_user else 'No user found'}")
-
+        
         # Trigger fetch_all_data
+        print(f"DEBUG: Triggering fetch_all_data for wallet {wallet_address}")
         fetch_result = sleeper_service.fetch_all_data(wallet_address)
-
+        print(f"DEBUG: fetch_all_data result: {fetch_result}")
+        
         if fetch_result.get('success'):
-            # Set commissioner status
+            # Set commissioner status for all leagues this user is part of
             cursor.execute("SELECT sleeper_league_id FROM UserLeagueLinks WHERE wallet_address = ?", (wallet_address,))
             user_leagues = cursor.fetchall()
+            print(f"DEBUG: Found {len(user_leagues)} leagues for user {wallet_address}")
+            
             for league_row in user_leagues:
                 current_league_id = league_row['sleeper_league_id']
-                cursor.execute("SELECT sleeper_user_id FROM users WHERE wallet_address = ?", (wallet_address,))
+                print(f"DEBUG: Processing league {current_league_id} for commissioner status")
+                
+                cursor.execute("SELECT sleeper_user_id FROM Users WHERE wallet_address = ?", (wallet_address,))
                 user_data = cursor.fetchone()
                 if user_data and user_data['sleeper_user_id']:
                     sleeper_user_id = user_data['sleeper_user_id']
+                    print(f"DEBUG: Checking commissioner status for sleeper_user_id {sleeper_user_id} in league {current_league_id}")
+                    
                     league_users = sleeper_service.get_league_users(current_league_id)
                     if league_users:
                         sleeper_user = next((u for u in league_users if u.get('user_id') == sleeper_user_id), None)
                         is_owner = sleeper_user.get('is_owner', False) if sleeper_user else False
+                        print(f"DEBUG: User {sleeper_user_id} is_owner: {is_owner} in league {current_league_id}")
+                        
                         cursor.execute("""
                             UPDATE UserLeagueLinks 
                             SET is_commissioner = ?, updated_at = datetime('now')
                             WHERE wallet_address = ? AND sleeper_league_id = ?
                         """, (1 if is_owner else 0, wallet_address, current_league_id))
+                        print(f"DEBUG: Updated commissioner status for league {current_league_id}")
+                    else:
+                        print(f"DEBUG: No league users found for league {current_league_id}")
+                else:
+                    print(f"DEBUG: No sleeper_user_id found for wallet {wallet_address}")
+        else:
+            print(f"DEBUG: fetch_all_data failed, skipping commissioner status updates")
+        
         conn.commit()
-
+        print(f"DEBUG: Final commit completed for association")
+        
         return jsonify({'success': True, 'message': 'Sleeper account associated successfully'}), 200
 
     except sqlite3.Error as sqle:

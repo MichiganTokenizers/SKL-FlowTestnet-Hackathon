@@ -324,7 +324,20 @@ class SleeperService:
                     None, None, None 
                 ))
                 
-                # self.logger.debug(f"SleeperService.fetch_all_data: Linking wallet {wallet_address} to league {league_id} in UserLeagueLinks.")
+                # Fetch rosters for this league (needed for owner verification)
+                league_rosters = self.get_league_rosters(league_id)
+                if not league_rosters:
+                    self.logger.warning(f"SleeperService.fetch_all_data: No rosters found for league {league_id}.")
+                    continue  # Skip if no rosters
+
+                # Check if this user owns any roster in this league
+                is_user_in_league = any(roster.get('owner_id') == self.sleeper_user_id for roster in league_rosters)
+
+                if not is_user_in_league:
+                    self.logger.info(f"SleeperService.fetch_all_data: User {self.sleeper_user_id} is not an owner in league {league_id}. Skipping UserLeagueLinks insertion.")
+                    continue  # Skip linking if not an owner
+
+                # Now insert the link
                 cursor.execute('''
                     INSERT OR IGNORE INTO UserLeagueLinks (wallet_address, sleeper_league_id)
                     VALUES (?, ?)
