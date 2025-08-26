@@ -248,17 +248,7 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                 const { description, players, oldTeams, newTeams } = getTransactionDetails(transaction);
                                 
                                 if (players.length === 0) {
-                                    // Fallback single row if no players
-                                    return (
-                                        <tr key={transaction.transaction_id}>
-                                            <td>{formatDate(transaction.created_at)}</td>
-                                            <td>{description}</td>
-                                            <td>N/A</td>
-                                            <td>N/A</td>
-                                            <td>N/A</td>
-                                            <td>{transaction.week ? transaction.week : 'Unknown'}</td>
-                                        </tr>
-                                    );
+                                    return null;  // Skip transactions with no players
                                 }
 
                                 // Multi-row for multiple players
