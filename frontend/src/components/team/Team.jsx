@@ -373,8 +373,8 @@ function Team() {
                                                 <tr>
                                                     <td className="text-start fw-bold">Trades</td>
                                                     {yearlyCostColumnHeaders.slice(1).map(year => {
-                                                        const tradesTotal = teamData.team_trade_amounts && teamData.team_trade_amounts[year] 
-                                                            ? teamData.team_trade_amounts[year] 
+                                                        const tradesTotal = teamData.team_yearly_trade_amounts && teamData.team_yearly_trade_amounts[year] 
+                                                            ? teamData.team_yearly_trade_amounts[year] 
                                                             : 0;
                                                         return <td key={`trades-${year}`}>${tradesTotal.toFixed(0)}</td>;
                                                     })}
@@ -385,8 +385,8 @@ function Team() {
                                                         const yearData = futureYearlyTotals[year];
                                                         const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
                                                         const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
-                                                        const tradesTotal = teamData.team_trade_amounts && teamData.team_trade_amounts[year] 
-                                                            ? teamData.team_trade_amounts[year] 
+                                                        const tradesTotal = teamData.team_yearly_trade_amounts && teamData.team_yearly_trade_amounts[year] 
+                                                            ? teamData.team_yearly_trade_amounts[year] 
                                                             : 0;
                                                         const overallTotalVal = contractTotal + penaltyTotal - tradesTotal; // Subtract trades (negative = received, positive = sent)
                                                         return (
@@ -403,8 +403,8 @@ function Team() {
                                                         const rankInfo = futureYearlyTotalRanks && futureYearlyTotalRanks[year];
                                                         const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
                                                         const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
-                                                        const tradesTotal = teamData.team_trade_amounts && teamData.team_trade_amounts[year] 
-                                                            ? teamData.team_trade_amounts[year] 
+                                                        const tradesTotal = teamData.team_yearly_trade_amounts && teamData.team_yearly_trade_amounts[year] 
+                                                            ? teamData.team_yearly_trade_amounts[year] 
                                                             : 0;
                                                         const overallTotalVal = contractTotal + penaltyTotal - tradesTotal; // Subtract trades (negative = received, positive = sent)
                                                         const remainingBudget = 200 - overallTotalVal;
