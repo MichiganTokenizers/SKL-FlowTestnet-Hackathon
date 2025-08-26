@@ -492,15 +492,26 @@ def get_current_user():
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM Users WHERE wallet_address = ?", (wallet_address,))
     user = cursor.fetchone()
+    
+    if user:
+        print(f"DEBUG: get_current_user - User authenticated and found in DB: {dict(user) if user else 'None'}") 
+        return dict(user)
+    else:
+        # Valid session/header but no Users row yet (pre-association) - return partial user
+        partial_user = {
+            'wallet_address': wallet_address,
+            'sleeper_user_id': None,
+            'username': None,
+            'display_name': None,
+            'avatar': None,
+            'metadata': None,
+            'created_at': None,
+            'updated_at': None
+        }
+        print(f"DEBUG: get_current_user - No Users row yet for {wallet_address}. Returning partial user: {partial_user}")
+        return partial_user
 
-    if not user:
-        print(f"DEBUG: get_current_user - User not found in DB for wallet_address: {wallet_address}. This is unusual if wallet_address was validated. Clearing Flask session if it was the source.") 
-        if session.get('wallet_address') == wallet_address: # Only pop if this wallet_address came from Flask session
-            session.pop('wallet_address', None) 
-        return None
-        
-    print(f"DEBUG: get_current_user - User authenticated and found in DB: {dict(user) if user else 'None'}") 
-    return dict(user) if user else None
+    return None
 
 
 @app.route('/auth/login', methods=['POST', 'OPTIONS'])
@@ -578,6 +589,14 @@ def login():
             if not full_data_response['success']:
                 print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
                 # Don't return error here, just log it. The user can still log in
+
+        if is_new_user:
+            cursor.execute('''
+                INSERT INTO Users (wallet_address, created_at, updated_at)
+                VALUES (?, datetime('now'), datetime('now'))
+            ''', (wallet_address,))
+            conn.commit()
+            print(f"Created new Users record for wallet: {wallet_address}")
 
         return jsonify({
             'success': True,
