@@ -328,21 +328,24 @@ class SleeperService:
                 league_rosters = self.get_league_rosters(league_id)
                 if not league_rosters:
                     self.logger.warning(f"SleeperService.fetch_all_data: No rosters found for league {league_id}.")
-                    continue  # Skip if no rosters
+                    # Continue anyway, since we can still link the user to the league
+                    # continue  # Removed skip
 
-                # Check if this user owns any roster in this league
-                is_user_in_league = any(roster.get('owner_id') == sleeper_user_id for roster in league_rosters)
+                # Removed ownership check - link user to all their leagues
+                # is_user_in_league = any(roster.get('owner_id') == sleeper_user_id for roster in league_rosters)
+                # if not is_user_in_league:
+                #     self.logger.info(f"SleeperService.fetch_all_data: User {sleeper_user_id} is not an owner in league {league_id}. Skipping UserLeagueLinks insertion.")
+                #     continue
 
-                if not is_user_in_league:
-                    self.logger.info(f"SleeperService.fetch_all_data: User {sleeper_user_id} is not an owner in league {league_id}. Skipping UserLeagueLinks insertion.")
-                    continue  # Skip linking if not an owner
-
-                # Now insert the link
+                # Insert the link for this league
                 cursor.execute('''
                     INSERT OR IGNORE INTO UserLeagueLinks (wallet_address, sleeper_league_id)
                     VALUES (?, ?)
                 ''', (wallet_address, league_id))
-                self.logger.info(f"SleeperService.fetch_all_data: Inserted UserLeagueLinks for wallet {wallet_address}, league {league_id}.")
+                if cursor.rowcount > 0:
+                    self.logger.info(f"SleeperService.fetch_all_data: Successfully inserted new UserLeagueLinks for wallet {wallet_address}, league {league_id}.")
+                else:
+                    self.logger.info(f"SleeperService.fetch_all_data: UserLeagueLinks already exists for wallet {wallet_address}, league {league_id}. No change.")
 
                 # Step 3: Get users (participants) for this league *before* rosters
                 league_participants = self.get_league_users(league_id)
@@ -391,7 +394,7 @@ class SleeperService:
                                 display_name = excluded.display_name,
                                 avatar = excluded.avatar,
                                 updated_at = datetime('now')
-                            WHERE Users.wallet_address IS NULL;
+                            -- Removed: WHERE Users.wallet_address IS NULL;  -- Now allows refreshing details for associated users
                         ''', (p_user_id, p_username, p_display_name, p_avatar))
                         
                         # ADD THIS DEBUG LOG AFTER SQL:
