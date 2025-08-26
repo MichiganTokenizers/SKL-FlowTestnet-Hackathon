@@ -1152,19 +1152,51 @@ def complete_sleeper_association():
                 return jsonify({'success': False, 'error': 'This Sleeper account is already associated with another wallet'}), 409
             elif not existing_wallet:
                 # Merge: Set wallet_address on the stub record
-                print(f"DEBUG: Found stub record for sleeper_user_id {sleeper_user_id}. Merging with wallet {wallet_address}")
-                cursor.execute('''
-                    UPDATE Users 
-                    SET wallet_address = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                    WHERE sleeper_user_id = ? AND wallet_address IS NULL
-                ''', (wallet_address, sleeper_username, display_name, avatar, sleeper_user_id))
-                
-                print(f"DEBUG: Merge UPDATE rowcount: {cursor.rowcount}")
+                print(f"DEBUG: Found stub record for sleeper_user_id {sleeper_user_id}. Attempting merge with wallet {wallet_address}")
+
+                # First, verify that the wallet_address isn't already present on another row to avoid
+                # violating the UNIQUE constraint on wallet_address (PRIMARY KEY).
+                cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
+                duplicate_wallet_row = cursor.fetchone()
+
+                if duplicate_wallet_row:
+                    # A record already exists for this wallet. We will consolidate data into that record
+                    # (it should be the wallet-only stub) and then delete the sleeper stub to prevent duplicates.
+                    existing_sleeper_for_wallet = duplicate_wallet_row['sleeper_user_id']
+
+                    if existing_sleeper_for_wallet and existing_sleeper_for_wallet != sleeper_user_id:
+                        # This would indicate the wallet is already linked to a *different* sleeper id – conflict.
+                        print(f"DEBUG: Wallet {wallet_address} already linked to sleeper_user_id {existing_sleeper_for_wallet} which differs from {sleeper_user_id}")
+                        return jsonify({'success': False, 'error': 'Wallet already associated with a different Sleeper account'}), 409
+
+                    # Update the wallet row with the sleeper data
+                    print(f"DEBUG: Updating wallet stub row for {wallet_address} with sleeper data {sleeper_user_id}")
+                    cursor.execute('''
+                        UPDATE Users
+                        SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                        WHERE wallet_address = ?
+                    ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
+
+                    # Delete the duplicate sleeper stub row (wallet_address IS NULL)
+                    print(f"DEBUG: Deleting duplicate sleeper stub row for sleeper_user_id {sleeper_user_id}")
+                    cursor.execute('DELETE FROM Users WHERE sleeper_user_id = ? AND wallet_address IS NULL', (sleeper_user_id,))
+
+                else:
+                    # Safe to simply update the stub row with the wallet address.
+                    cursor.execute('''
+                        UPDATE Users 
+                        SET wallet_address = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                        WHERE sleeper_user_id = ? AND wallet_address IS NULL
+                    ''', (wallet_address, sleeper_username, display_name, avatar, sleeper_user_id))
+
+                print(f"DEBUG: Merge/Consolidation operations affected wallet-row update with rowcount: {cursor.rowcount}")
+
+                # Ensure at least one row was updated overall.
                 if cursor.rowcount == 0:
-                    print(f"DEBUG: Failed to merge stub record for sleeper_user_id {sleeper_user_id}")
-                    return jsonify({'success': False, 'error': 'Failed to associate: merge operation failed'}), 500
-                
-                print(f"DEBUG: Successfully merged stub record for sleeper_user_id {sleeper_user_id} with wallet {wallet_address}")
+                    print(f"DEBUG: No rows updated during merge for sleeper_user_id {sleeper_user_id}")
+                    return jsonify({'success': False, 'error': 'Failed to associate: merge operation affected no rows'}), 500
+
+                print(f"DEBUG: Successfully merged records for sleeper_user_id {sleeper_user_id} and wallet {wallet_address}")
             else:
                 # Same wallet, already associated - perhaps update details
                 print(f"DEBUG: sleeper_user_id {sleeper_user_id} already associated with this wallet {wallet_address}. Updating details.")
