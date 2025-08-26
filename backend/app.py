@@ -1937,6 +1937,41 @@ def get_team_details(team_id):
             # Initialize to empty if error, so frontend doesn't break
             team_yearly_penalty_totals = {}
 
+        # Calculate team_yearly_trade_amounts from completed budget trades
+        team_yearly_trade_amounts = {}
+        try:
+            # Get all completed trades where this team is either initiator or recipient
+            # For initiator: positive amounts (sending money out)
+            # For recipient: negative amounts (receiving money in)
+            cursor.execute("""
+                SELECT 
+                    ti.season_year,
+                    ti.budget_amount,
+                    CASE 
+                        WHEN t.initiator_team_id = ? THEN ti.budget_amount  -- Sending money out (positive)
+                        WHEN t.recipient_team_id = ? THEN -ti.budget_amount  -- Receiving money in (negative)
+                        ELSE 0
+                    END as net_amount
+                FROM trade_items ti
+                JOIN trades t ON ti.trade_id = t.trade_id
+                WHERE t.trade_status = 'completed' 
+                AND t.sleeper_league_id = ?
+                AND (t.initiator_team_id = ? OR t.recipient_team_id = ?)
+                AND ti.season_year >= ?
+            """, (team_id, team_id, roster_info['sleeper_league_id'], team_id, team_id, current_processing_year))
+            
+            trade_rows = cursor.fetchall()
+            for row in trade_rows:
+                year = str(row['season_year'])
+                net_amount = row['net_amount']
+                if year not in team_yearly_trade_amounts:
+                    team_yearly_trade_amounts[year] = 0
+                team_yearly_trade_amounts[year] += net_amount
+
+        except Exception as e:
+            app.logger.error(f"Error calculating team_yearly_trade_amounts for team {team_id}, league {roster_info['sleeper_league_id']}: {e}")
+            # Initialize to empty if error, so frontend doesn't break
+            team_yearly_trade_amounts = {}
 
         return jsonify({
             'success': True,
@@ -1954,8 +1989,8 @@ def get_team_details(team_id):
             'team_yearly_totals': team_yearly_totals,
             'team_yearly_penalty_totals': team_yearly_penalty_totals, # Added this line
             'team_position_spending_ranks': team_position_spending_ranks,
-            'future_yearly_total_ranks': future_yearly_total_ranks
-
+            'future_yearly_total_ranks': future_yearly_total_ranks,
+            'team_yearly_trade_amounts': team_yearly_trade_amounts
         })
 
     except Exception as e:
@@ -2738,8 +2773,10 @@ def create_budget_trade():
         # Create trade items
         for item in budget_items:
             if not item.get('year') or not item.get('amount') or item.get('amount', 0) <= 0:
+                app.logger.warning(f"Skipping invalid trade item: {item}")
                 continue
                 
+            app.logger.info(f"Creating trade item: year={item['year']}, amount={item['amount']}, from_team={initiator_team_id}, to_team={recipient_team_id}")
             cursor.execute('''
                 INSERT INTO trade_items (trade_id, from_team_id, to_team_id, 
                                       budget_amount, season_year, created_at, sleeper_league_id)
