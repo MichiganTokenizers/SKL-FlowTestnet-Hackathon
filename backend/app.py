@@ -1666,7 +1666,7 @@ def get_team_details(team_id):
 
                     for r_id_in_league in all_roster_ids_in_league:
                         for year_to_rank in seasons_to_rank:
-                            # Sum costs for this team for this specific future year from vw_contractByYear
+                            # Sum contract costs for this team for this specific future year from vw_contractByYear
                             cursor.execute("""
                                 SELECT SUM(v.cost_for_season) as total_future_cost
                                 FROM vw_contractByYear v
@@ -1674,7 +1674,32 @@ def get_team_details(team_id):
                                 WHERE v.team_id = ? AND v.sleeper_league_id = ? AND v.contract_start_season + v.year_number_in_contract -1 = ? AND c.is_active = 1
                             """, (r_id_in_league, current_league_id_for_ranks, year_to_rank))
                             result = cursor.fetchone()
-                            total_cost_for_year = result['total_future_cost'] if result and result['total_future_cost'] is not None else 0.0
+                            contract_cost_for_year = result['total_future_cost'] if result and result['total_future_cost'] is not None else 0.0
+                            
+                            # Sum penalty amounts for this team for this specific future year
+                            cursor.execute("""
+                                SELECT COALESCE(SUM(p.penalty_amount), 0) as total_penalty
+                                FROM penalties p
+                                JOIN contracts c ON p.contract_id = c.rowid
+                                WHERE c.team_id = ? AND c.sleeper_league_id = ? AND p.penalty_year = ?
+                            """, (r_id_in_league, current_league_id_for_ranks, year_to_rank))
+                            result = cursor.fetchone()
+                            penalty_cost_for_year = result['total_penalty'] if result and result['total_penalty'] is not None else 0.0
+                            
+                            # Sum trade amounts for this team for this specific future year
+                            cursor.execute("""
+                                SELECT 
+                                    COALESCE(SUM(CASE WHEN t.initiator_team_id = ? THEN ti.budget_amount ELSE 0 END), 0) as sent,
+                                    COALESCE(SUM(CASE WHEN t.recipient_team_id = ? THEN ti.budget_amount ELSE 0 END), 0) as received
+                                FROM trade_items ti
+                                JOIN trades t ON ti.trade_id = t.trade_id
+                                WHERE t.sleeper_league_id = ? AND t.trade_status = 'completed' AND ti.season_year = ?
+                            """, (r_id_in_league, r_id_in_league, current_league_id_for_ranks, year_to_rank))
+                            result = cursor.fetchone()
+                            trade_impact = (result['received'] if result and result['received'] is not None else 0.0) - (result['sent'] if result and result['sent'] is not None else 0.0)
+                            
+                            # Total cost includes contracts, penalties, and trade impact
+                            total_cost_for_year = contract_cost_for_year + penalty_cost_for_year + trade_impact
                             league_spending_by_future_year[year_to_rank].append({'team_id': r_id_in_league, 'total_cost': total_cost_for_year})
                     
                     # Rank teams for each future year based on their total spending
