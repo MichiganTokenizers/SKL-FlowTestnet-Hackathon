@@ -1094,25 +1094,50 @@ def complete_sleeper_association():
         cursor.execute('SELECT wallet_address FROM Users WHERE sleeper_user_id = ?', (sleeper_user_id,))
         existing_user = cursor.fetchone()
         
-        if existing_user:
+        # Step 2: Check if a user record already exists for this wallet_address
+        cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
+        existing_wallet_user = cursor.fetchone()
+        
+        if existing_user and existing_wallet_user:
+            # Both records exist - we need to merge them
             existing_wallet = existing_user['wallet_address']
+            existing_sleeper_id = existing_wallet_user['sleeper_user_id']
+            
             if existing_wallet and existing_wallet != wallet_address:
                 # Another wallet already owns this sleeper_user_id - this shouldn't happen in normal flow
                 print(f"ERROR: sleeper_user_id {sleeper_user_id} is already associated with wallet {existing_wallet}. Cannot associate with {wallet_address}")
                 return jsonify({'success': False, 'error': 'This Sleeper account is already associated with another wallet'}), 409
-            elif existing_wallet == wallet_address:
-                # User already has this association - just update other fields
-                print(f"DEBUG: User already associated. Updating existing record for wallet_address: {wallet_address}")
+            elif existing_sleeper_id and existing_sleeper_id != sleeper_user_id:
+                # Another sleeper_user_id already owns this wallet - this shouldn't happen in normal flow
+                print(f"ERROR: wallet_address {wallet_address} is already associated with sleeper_user_id {existing_sleeper_id}. Cannot associate with {sleeper_user_id}")
+                return jsonify({'success': False, 'error': 'This wallet is already associated with another Sleeper account'}), 409
+            else:
+                # Merge the records: update the wallet record with sleeper info and delete the sleeper record
+                print(f"DEBUG: Merging two existing records. Updating wallet record and deleting sleeper record.")
+                
+                # Update the wallet record with sleeper information
                 cursor.execute('''
                     UPDATE Users 
-                    SET username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                    WHERE wallet_address = ? AND sleeper_user_id = ?
-                ''', (sleeper_username, display_name, avatar, wallet_address, sleeper_user_id))
+                    SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                    WHERE wallet_address = ?
+                ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
                 update_rowcount = cursor.rowcount
-                print(f"DEBUG: UPDATE existing user for wallet_address {wallet_address} rowcount: {update_rowcount}")
+                print(f"DEBUG: UPDATE wallet record for wallet_address {wallet_address} rowcount: {update_rowcount}")
+                
+                # Delete the sleeper record (it's now redundant)
+                if existing_user['wallet_address'] is None:
+                    cursor.execute('DELETE FROM Users WHERE sleeper_user_id = ? AND wallet_address IS NULL', (sleeper_user_id,))
+                    delete_rowcount = cursor.rowcount
+                    print(f"DEBUG: DELETE redundant sleeper record rowcount: {delete_rowcount}")
+                
+        elif existing_user:
+            # Only sleeper record exists - update it to set the wallet_address
+            existing_wallet = existing_user['wallet_address']
+            if existing_wallet and existing_wallet != wallet_address:
+                # Another wallet already owns this sleeper_user_id
+                print(f"ERROR: sleeper_user_id {sleeper_user_id} is already associated with wallet {existing_wallet}. Cannot associate with {wallet_address}")
+                return jsonify({'success': False, 'error': 'This Sleeper account is already associated with another wallet'}), 409
             else:
-                # Record exists but has NULL wallet_address (imported by SleeperService)
-                # Update it to set the wallet_address
                 print(f"DEBUG: Found existing user record with NULL wallet_address. Updating to set wallet_address: {wallet_address}")
                 cursor.execute('''
                     UPDATE Users 
@@ -1121,9 +1146,26 @@ def complete_sleeper_association():
                 ''', (wallet_address, sleeper_username, display_name, avatar, sleeper_user_id))
                 update_rowcount = cursor.rowcount
                 print(f"DEBUG: UPDATE existing NULL wallet user for sleeper_user_id {sleeper_user_id} rowcount: {update_rowcount}")
+                
+        elif existing_wallet_user:
+            # Only wallet record exists - update it to set the sleeper_user_id
+            existing_sleeper_id = existing_wallet_user['sleeper_user_id']
+            if existing_sleeper_id and existing_sleeper_id != sleeper_user_id:
+                # Another sleeper_user_id already owns this wallet
+                print(f"ERROR: wallet_address {wallet_address} is already associated with sleeper_user_id {existing_sleeper_id}. Cannot associate with {sleeper_user_id}")
+                return jsonify({'success': False, 'error': 'This wallet is already associated with another Sleeper account'}), 409
+            else:
+                print(f"DEBUG: Found existing user record with NULL sleeper_user_id. Updating to set sleeper_user_id: {sleeper_user_id}")
+                cursor.execute('''
+                    UPDATE Users 
+                    SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                    WHERE wallet_address = ?
+                ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
+                update_rowcount = cursor.rowcount
+                print(f"DEBUG: UPDATE existing NULL sleeper user for wallet_address {wallet_address} rowcount: {update_rowcount}")
         else:
-            # No existing record for this sleeper_user_id - create new one
-            print(f"DEBUG: No existing user record found. Creating new user record for wallet_address: {wallet_address}")
+            # No existing records - create new one
+            print(f"DEBUG: No existing user records found. Creating new user record for wallet_address: {wallet_address}")
             cursor.execute('''
                 INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
                 VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))

@@ -53,6 +53,8 @@
 
 - **2025-08-26**: User association endpoint bug - When users are imported by SleeperService before they have wallet addresses, the association endpoint fails to link their existing records. C0Y0T3z was imported with NULL wallet_address but could authenticate via sessions table. **RESOLUTION**: Fixed `/auth/complete_association` endpoint to handle existing user records with NULL wallet_address by updating them instead of requiring new record creation. **STATUS**: Fixed in backend/app.py
 
+- **2025-08-26**: User association endpoint UNIQUE constraint error - When both a wallet record and sleeper record exist separately, attempting to update one causes UNIQUE constraint violations. **RESOLUTION**: Enhanced association endpoint to detect and merge duplicate records, updating the wallet record with sleeper info and deleting the redundant sleeper record. **STATUS**: Fixed in backend/app.py
+
 ## Completed Tasks
 
 - **2025-01-XX**: Fixed penalty calculation logic in `utils.py` to properly handle in-season vs offseason player waivers
