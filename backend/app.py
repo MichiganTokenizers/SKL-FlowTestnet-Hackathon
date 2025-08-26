@@ -1700,11 +1700,12 @@ def get_team_details(team_id):
                             
                             # Total cost includes contracts, penalties, and trade impact
                             total_cost_for_year = contract_cost_for_year + penalty_cost_for_year + trade_impact
-                            league_spending_by_future_year[year_to_rank].append({'team_id': r_id_in_league, 'total_cost': total_cost_for_year})
+                            remaining_budget = 200 - total_cost_for_year
+                            league_spending_by_future_year[year_to_rank].append({'team_id': r_id_in_league, 'total_cost': total_cost_for_year, 'remaining_budget': remaining_budget})
                     
-                    # Rank teams for each future year based on their total spending (lower spending = better rank)
+                    # Rank teams for each future year based on remaining budget (higher remaining budget = better rank)
                     for year_val, spending_data_for_year in league_spending_by_future_year.items():
-                        sorted_teams_for_year = sorted(spending_data_for_year, key=lambda x: x['total_cost'], reverse=False)
+                        sorted_teams_for_year = sorted(spending_data_for_year, key=lambda x: x['remaining_budget'], reverse=True)
                         
                         rank_for_viewed_team_future = -1
                         # Find the rank of the team whose page is being viewed (team_id)
