@@ -320,7 +320,7 @@ def init_db():
                             trade_id INTEGER NOT NULL,
                             from_team_id TEXT NOT NULL,
                             to_team_id TEXT NOT NULL,
-                            budget_amount REAL NOT NULL, -- Dollar amount being traded
+                            budget_amount INTEGER NOT NULL, -- Dollar amount being traded
                             season_year INTEGER NOT NULL, -- Which future year (e.g., 2026, 2027, 2028, 2029)
                             sleeper_league_id TEXT NOT NULL,
                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -2779,8 +2779,8 @@ def create_budget_trade():
             app.logger.info(f"Creating trade item: year={item['year']}, amount={item['amount']}, from_team={initiator_team_id}, to_team={recipient_team_id}")
             cursor.execute('''
                 INSERT INTO trade_items (trade_id, from_team_id, to_team_id, 
-                                      budget_amount, season_year, created_at, sleeper_league_id)
-                VALUES (?, ?, ?, ?, ?, datetime('now'), ?)
+                                      budget_amount, season_year, sleeper_league_id)
+                VALUES (?, ?, ?, ?, ?, ?)
             ''', (trade_id, initiator_team_id, recipient_team_id, item['amount'], item['year'], league_id))
         
         get_global_db_connection().commit()
