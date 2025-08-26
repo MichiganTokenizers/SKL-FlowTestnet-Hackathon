@@ -97,17 +97,6 @@ function TransactionsTable({ leagueId, sessionToken }) {
         }
     };
 
-    const formatTransactionType = (type) => {
-        const typeMap = {
-            'trade': 'Trade',
-            'waiver': 'Waiver',
-            'free_agent': 'Free Agent',
-            'draft': 'Draft',
-            'commissioner': 'Commissioner'
-        };
-        return typeMap[type] || type;
-    };
-
     const getTransactionDetails = (transaction) => {
         const { type, details } = transaction;
         let players = [];
@@ -160,7 +149,8 @@ function TransactionsTable({ leagueId, sessionToken }) {
             // If there are adds without drops, perhaps treat as pickup, but per user focus on waive (drops)
         } else {
             // For other types, skip or use generic
-            return { description: formatTransactionType(type), players: [], oldTeams: [], newTeams: [] };
+            description = type.charAt(0).toUpperCase() + type.slice(1);
+            return { description, players: [], oldTeams: [], newTeams: [] };
         }
 
         return { description, players, oldTeams, newTeams };
@@ -246,7 +236,6 @@ function TransactionsTable({ leagueId, sessionToken }) {
                         <thead>
                             <tr>
                                 <th>Date</th>
-                                <th>Type</th>
                                 <th>Description</th>
                                 <th>Player</th>
                                 <th>Team (old)</th>
@@ -263,7 +252,6 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                     return (
                                         <tr key={transaction.transaction_id}>
                                             <td>{formatDate(transaction.created_at)}</td>
-                                            <td>{formatTransactionType(transaction.type)}</td>
                                             <td>{description}</td>
                                             <td>N/A</td>
                                             <td>N/A</td>
@@ -277,7 +265,6 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                 return players.map((player, index) => (
                                     <tr key={`${transaction.transaction_id}-${index}`}>
                                         <td>{formatDate(transaction.created_at)}</td>
-                                        <td>{formatTransactionType(transaction.type)}</td>
                                         <td>{description}</td>
                                         <td>{player}</td>
                                         <td>{oldTeams[index] || 'N/A'}</td>
