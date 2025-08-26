@@ -1169,25 +1169,15 @@ def complete_sleeper_association():
                         print(f"DEBUG: Wallet {wallet_address} already linked to sleeper_user_id {existing_sleeper_for_wallet} which differs from {sleeper_user_id}")
                         return jsonify({'success': False, 'error': 'Wallet already associated with a different Sleeper account'}), 409
 
-                    # Update the wallet row with the sleeper data
-                    print(f"DEBUG: Updating wallet stub row for {wallet_address} with sleeper data {sleeper_user_id}")
-                    cursor.execute('''
-                        UPDATE Users
-                        SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                        WHERE wallet_address = ?
-                    ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
 
-                    # Delete the duplicate sleeper stub row (wallet_address IS NULL)
-                    print(f"DEBUG: Deleting duplicate sleeper stub row for sleeper_user_id {sleeper_user_id}")
-                    cursor.execute('DELETE FROM Users WHERE sleeper_user_id = ? AND wallet_address IS NULL', (sleeper_user_id,))
 
                 else:
                     # Safe to simply update the stub row with the wallet address.
                     cursor.execute('''
                         UPDATE Users 
-                        SET wallet_address = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
+                        SET wallet_address = ?, updated_at = datetime('now')
                         WHERE sleeper_user_id = ? AND wallet_address IS NULL
-                    ''', (wallet_address, sleeper_username, display_name, avatar, sleeper_user_id))
+                    ''', (wallet_address, sleeper_user_id))
 
                 print(f"DEBUG: Merge/Consolidation operations affected wallet-row update with rowcount: {cursor.rowcount}")
 
@@ -1197,53 +1187,28 @@ def complete_sleeper_association():
                     return jsonify({'success': False, 'error': 'Failed to associate: merge operation affected no rows'}), 500
 
                 print(f"DEBUG: Successfully merged records for sleeper_user_id {sleeper_user_id} and wallet {wallet_address}")
-            else:
-                # Same wallet, already associated - perhaps update details
-                print(f"DEBUG: sleeper_user_id {sleeper_user_id} already associated with this wallet {wallet_address}. Updating details.")
-                cursor.execute('''
-                    UPDATE Users 
-                    SET username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                    WHERE wallet_address = ?
-                ''', (sleeper_username, display_name, avatar, wallet_address))
-                print(f"DEBUG: Update details rowcount: {cursor.rowcount}")
+
         else:
             # No existing record for this sleeper_user_id - check for existing by wallet_address
             cursor.execute('SELECT sleeper_user_id FROM Users WHERE wallet_address = ?', (wallet_address,))
             wallet_record = cursor.fetchone()
             
-            if wallet_record:
-                if wallet_record['sleeper_user_id']:
-                    print(f"DEBUG: Wallet {wallet_address} already associated with different sleeper_user_id {wallet_record['sleeper_user_id']}")
-                    return jsonify({'success': False, 'error': 'Wallet already associated with a different Sleeper account'}), 409
-                # Update existing wallet record with sleeper info
-                print(f"DEBUG: Updating existing wallet record {wallet_address} with sleeper_user_id {sleeper_user_id}")
-                cursor.execute('''
-                    UPDATE Users 
-                    SET sleeper_user_id = ?, username = ?, display_name = ?, avatar = ?, updated_at = datetime('now')
-                    WHERE wallet_address = ?
-                ''', (sleeper_user_id, sleeper_username, display_name, avatar, wallet_address))
-                print(f"DEBUG: Update wallet record rowcount: {cursor.rowcount}")
-            else:
+            
+                
+            
                 # Create new user record with both wallet and sleeper data
-                print(f"DEBUG: Creating new user record for wallet {wallet_address} and sleeper_user_id {sleeper_user_id}")
-                cursor.execute('''
-                    INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+            print(f"DEBUG: Creating new user record for wallet {wallet_address} and sleeper_user_id {sleeper_user_id}")
+            cursor.execute('''
+                INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, avatar, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
                 ''', (wallet_address, sleeper_user_id, sleeper_username, display_name, avatar))
-                print(f"DEBUG: Insert new user rowcount: {cursor.rowcount}")
+            print(f"DEBUG: Insert new user rowcount: {cursor.rowcount}")
         
         conn.commit()
-        print(f"DEBUG: Commit completed after association update/insert")
+        
         
         # Re-query to verify after commit
-        cursor.execute("SELECT sleeper_user_id FROM Users WHERE wallet_address = ?", (wallet_address,))
-        verify_user_after_commit = cursor.fetchone()
-        print(f"DEBUG: Verification after commit: {dict(verify_user_after_commit) if verify_user_after_commit else 'No record found'}")
-        
-        if not verify_user_after_commit or not verify_user_after_commit['sleeper_user_id']:
-            print(f"ERROR: sleeper_user_id not set after commit for {wallet_address}")
-            return jsonify({'success': False, 'error': 'Failed to set Sleeper user ID after commit'}), 500
-        
+       
         import time
         time.sleep(1)  # Brief delay to ensure WAL commit
         
