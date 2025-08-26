@@ -10,6 +10,7 @@ from functools import wraps # Import wraps
 import logging # Add logging import
 from typing import Any
 from utils import get_escalated_contract_costs # Changed to direct import
+from datetime import datetime
 
 # Load environment variables
 try:
@@ -1180,13 +1181,28 @@ def complete_sleeper_association():
 
         # The original Step 2 (cleanup) is now Step 1 (pre-emptive cleanup).
 
-        conn.commit()
-        print(f"DEBUG: conn.commit() executed for wallet_address: {wallet_address}")
+        for attempt in range(3):  # Retry up to 3 times
+            try:
+                conn.commit()
+                print(f"DEBUG: conn.commit() succeeded on attempt {attempt + 1} for {wallet_address}")
+                break
+            except sqlite3.Error as commit_e:
+                if "locked" in str(commit_e).lower():
+                    print(f"DEBUG: DB locked on attempt {attempt + 1}. Retrying in 1s...")
+                    time.sleep(1)
+                else:
+                    print(f"ERROR: Commit failed: {commit_e}")
+                    conn.rollback()
+                    return jsonify({'success': False, 'error': f'Failed to commit: {str(commit_e)}'}), 500
+        else:
+            print("ERROR: Commit failed after 3 attempts")
+            conn.rollback()
+            return jsonify({'success': False, 'error': 'Commit failed after retries'}), 500
 
-        # Verify directly from DB after commit
-        cursor.execute("SELECT sleeper_user_id, username, display_name FROM Users WHERE wallet_address = ?", (wallet_address,))
-        updated_user_check = cursor.fetchone()
-        print(f"DEBUG: DB check after commit for {wallet_address}: {dict(updated_user_check) if updated_user_check else 'No user found'}")
+        # Final verification
+        cursor.execute("SELECT * FROM Users WHERE wallet_address = ?", (wallet_address,))
+        final_user = cursor.fetchone()
+        print(f"DEBUG: Final DB state for {wallet_address}: {dict(final_user) if final_user else 'No user found'}")
 
         # Optionally, trigger fetch_all_data here, or let the frontend do it via onAssociationSuccess callback
         # For simplicity and immediate feedback, triggering here can be good.
@@ -3027,6 +3043,28 @@ if __name__ == '__main__':
             app.run(debug=False, host=host, port=port)
     
     print("DEBUG: app.run() has exited.")
+
+@app.route('/db/health', methods=['GET'])
+def db_health_check():
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+        # Test read
+        cursor.execute("SELECT COUNT(*) FROM users")
+        count = cursor.fetchone()[0]
+        # Test write/commit
+        test_time = datetime.now().isoformat()
+        cursor.execute("INSERT INTO test_table (test_data) VALUES (?)", (test_time,))
+        conn.commit()
+        # Verify
+        cursor.execute("SELECT test_data FROM test_table WHERE test_data = ?", (test_time,))
+        result = cursor.fetchone()
+        if result:
+            return jsonify({'success': True, 'message': 'DB read/write/commit successful', 'user_count': count}), 200
+        else:
+            return jsonify({'success': False, 'error': 'Commit verification failed'}), 500
+    except sqlite3.Error as e:
+        return jsonify({'success': False, 'error': f'DB error: {str(e)}'}), 500
 
 
 
