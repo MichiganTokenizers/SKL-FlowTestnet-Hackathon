@@ -1122,7 +1122,7 @@ def complete_sleeper_association():
         
         # If we don't have sleeper_user_id, get it from the username
         if not sleeper_user_id and sleeper_username:
-            sleeper_user_data = self.get_user(sleeper_username)
+            sleeper_user_data = sleeper_service.get_user(sleeper_username)  # Change self to sleeper_service
             print(f"DEBUG: sleeper_user_data from service: {sleeper_user_data}")
             if not sleeper_user_data:
                 print(f"DEBUG: Sleeper username '{sleeper_username}' not found by service")
