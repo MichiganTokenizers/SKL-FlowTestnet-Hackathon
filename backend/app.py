@@ -289,8 +289,8 @@ def init_db():
                             updated_at DATETIME,
                             commissioner_notes TEXT,
                             FOREIGN KEY (sleeper_league_id) REFERENCES LeagueMetadata(sleeper_league_id) ON DELETE CASCADE,
-                            FOREIGN KEY (initiator_team_id) REFERENCES rosters(sleeper_roster_id),
-                            FOREIGN KEY (recipient_team_id) REFERENCES rosters(sleeper_roster_id)
+                            FOREIGN KEY (initiator_team_id, sleeper_league_id) REFERENCES rosters(sleeper_roster_id, sleeper_league_id),
+                            FOREIGN KEY (recipient_team_id, sleeper_league_id) REFERENCES rosters(sleeper_roster_id, sleeper_league_id)
                             )''')
 
         cursor.execute('''CREATE TABLE IF NOT EXISTS trade_items (
@@ -300,10 +300,11 @@ def init_db():
                             to_team_id TEXT NOT NULL,
                             budget_amount REAL NOT NULL, -- Dollar amount being traded
                             season_year INTEGER NOT NULL, -- Which future year (e.g., 2026, 2027, 2028, 2029)
+                            sleeper_league_id TEXT NOT NULL,
                             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                             FOREIGN KEY (trade_id) REFERENCES trades(trade_id) ON DELETE CASCADE,
-                            FOREIGN KEY (from_team_id) REFERENCES rosters(sleeper_roster_id),
-                            FOREIGN KEY (to_team_id) REFERENCES rosters(sleeper_roster_id)
+                            FOREIGN KEY (from_team_id, sleeper_league_id) REFERENCES rosters(sleeper_roster_id, sleeper_league_id),
+                            FOREIGN KEY (to_team_id, sleeper_league_id) REFERENCES rosters(sleeper_roster_id, sleeper_league_id)
                             )''')
 
         cursor.execute('''CREATE TABLE IF NOT EXISTS trade_approvals (
@@ -2700,9 +2701,9 @@ def create_budget_trade():
                 
             cursor.execute('''
                 INSERT INTO trade_items (trade_id, from_team_id, to_team_id, 
-                                      budget_amount, season_year, created_at)
-                VALUES (?, ?, ?, ?, ?, datetime('now'))
-            ''', (trade_id, initiator_team_id, recipient_team_id, item['amount'], item['year']))
+                                      budget_amount, season_year, created_at, sleeper_league_id)
+                VALUES (?, ?, ?, ?, ?, datetime('now'), ?)
+            ''', (trade_id, initiator_team_id, recipient_team_id, item['amount'], item['year'], league_id))
         
         get_global_db_connection().commit()
         
@@ -2733,7 +2734,8 @@ def get_pending_trades(league_id):
                 recip_roster.team_name as recipient_team_name,
                 ti.item_id,
                 ti.budget_amount,
-                ti.season_year
+                ti.season_year,
+                ti.sleeper_league_id
             FROM trades t
             JOIN rosters init_roster ON t.initiator_team_id = init_roster.sleeper_roster_id
             JOIN rosters recip_roster ON t.recipient_team_id = recip_roster.sleeper_roster_id
