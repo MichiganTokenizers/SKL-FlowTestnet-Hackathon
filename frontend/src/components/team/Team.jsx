@@ -413,7 +413,7 @@ function Team() {
                                                                 ${remainingBudget.toFixed(0)}
                                                                 {rankInfo && (
                                                                     <div className="text-muted" style={{fontSize: '0.8rem', marginTop: '0.25rem'}}>
-                                                                        <strong>{`(Rank ${rankInfo.total_teams - rankInfo.rank + 1}/${rankInfo.total_teams})`}</strong>
+                                                                        <strong>{`(Rank ${rankInfo.rank}/${rankInfo.total_teams})`}</strong>
                                                                     </div>
                                                                 )}
                                                             </td>
