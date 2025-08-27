@@ -355,7 +355,7 @@ function Team() {
                                             </thead>
                                             <tbody>
                                                 <tr>
-                                                    <td className="text-start fw-bold">Contracts</td>
+                                                    <td className="text-start fw-bold">-Contracts</td>
                                                     {yearlyCostColumnHeaders.slice(1).map(year => {
                                                         const yearData = futureYearlyTotals[year];
                                                         const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
@@ -363,7 +363,7 @@ function Team() {
                                                     })}
                                                 </tr>
                                                 <tr>
-                                                    <td className="text-start fw-bold">Penalties</td>
+                                                    <td className="text-start fw-bold">-Penalties</td>
                                                     {yearlyCostColumnHeaders.slice(1).map(year => {
                                                         const yearData = futureYearlyTotals[year];
                                                         const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
@@ -371,7 +371,7 @@ function Team() {
                                                     })}
                                                 </tr>
                                                 <tr>
-                                                    <td className="text-start fw-bold">Trades</td>
+                                                    <td className="text-start fw-bold">-Trades</td>
                                                     {yearlyCostColumnHeaders.slice(1).map(year => {
                                                         const tradesTotal = teamData.team_yearly_trade_amounts && teamData.team_yearly_trade_amounts[year] 
                                                             ? teamData.team_yearly_trade_amounts[year] 
