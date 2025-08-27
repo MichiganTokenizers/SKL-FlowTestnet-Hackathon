@@ -11,7 +11,7 @@ import Home from './components/common/Home';
 import Profile from './components/profile/Profile';
 import League from './components/league/League';
 import Team from './components/team/Team';
-import Teams from './components/league/Teams';
+
 import { API_BASE_URL } from './config';
 
 // League Connect Component - Will be refactored or removed later
@@ -303,10 +303,25 @@ function AppContent() {
                             )}
                             {sessionToken && !isNewUser && currentUserDetails && selectedLeagueId && (
                                 <>
-                                    <li className="nav-item">
-                                        <Link className="nav-link" to={`/league/${selectedLeagueId}/teams`}>
+                                    <li className="nav-item dropdown">
+                                        <a className="nav-link dropdown-toggle" href="#" id="teamsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                                             Teams
-                                        </Link>
+                                        </a>
+                                        <ul className="dropdown-menu" aria-labelledby="teamsDropdown">
+                                            {leagues.find(l => l.league_id === selectedLeagueId)?.teams?.map(team => (
+                                                <li key={team.roster_id}>
+                                                    <Link 
+                                                        className="dropdown-item" 
+                                                        to={`/league/${selectedLeagueId}/team/${team.roster_id}`}
+                                                    >
+                                                        {team.team_name}
+                                                        {team.sleeper_user_id === currentUserDetails.sleeper_user_id && (
+                                                            <span className="badge bg-primary ms-2">Your Team</span>
+                                                        )}
+                                                    </Link>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </li>
                                 </>
                             )}
@@ -353,13 +368,7 @@ function AppContent() {
                             <Navigate to="/" replace />
                         )
                     } />
-                    <Route path="/league/:leagueId/teams" element={
-                        sessionToken && isAppReady && !isNewUser ? (
-                            <Teams />
-                        ) : (
-                            <Navigate to="/" replace />
-                        )
-                    } />
+
                     <Route path="/league/:leagueId/team/:teamId" element={
                         sessionToken && isAppReady && !isNewUser ? (
                             <Team />

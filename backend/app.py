@@ -728,14 +728,47 @@ def get_league_data_local():
         leagues_list = []
         if leagues_data:
             for row in leagues_data:
+                league_id = row['sleeper_league_id']
+                
+                # Fetch teams for this league
+                cursor.execute('''
+                    SELECT 
+                        r.sleeper_roster_id,
+                        r.team_name,
+                        u.display_name as manager_name,
+                        u.username,
+                        u.sleeper_user_id,
+                        r.wins,
+                        r.losses,
+                        r.ties
+                    FROM rosters r
+                    LEFT JOIN users u ON r.owner_id = u.sleeper_user_id
+                    WHERE r.sleeper_league_id = ?
+                    ORDER BY 
+                        CASE WHEN u.sleeper_user_id = ? THEN 0 ELSE 1 END,
+                        r.team_name
+                ''', (league_id, sleeper_user_id))
+                
+                teams_data = cursor.fetchall()
+                teams_list = []
+                for team_row in teams_data:
+                    teams_list.append({
+                        'roster_id': team_row['sleeper_roster_id'],
+                        'team_name': team_row['team_name'] or 'Unknown Team',
+                        'manager_name': team_row['manager_name'] or team_row['username'] or 'Unknown Manager',
+                        'username': team_row['username'],
+                        'sleeper_user_id': team_row['sleeper_user_id'],
+                        'record': f"{team_row['wins']}-{team_row['losses']}-{team_row['ties']}"
+                    })
+                
                 leagues_list.append({
-                    'league_id': row['sleeper_league_id'],
+                    'league_id': league_id,
                     'name': row['name'],
                     'season': row['season'],
                     'status': row['status'],
-                    'avatar': row['avatar'], # Added avatar
-                    'total_rosters': json.loads(row['settings']).get('total_rosters') if row['settings'] else None, # Example: extracting from settings
-                    # Add other relevant league details from LeagueMetadata as needed
+                    'avatar': row['avatar'],
+                    'total_rosters': json.loads(row['settings']).get('total_rosters') if row['settings'] else None,
+                    'teams': teams_list
                 })
             print(f"DEBUG: /league/local - Found {len(leagues_list)} leagues for wallet_address {wallet_address}.")
         else:
@@ -3020,45 +3053,7 @@ def get_league_teams_for_trades(league_id):
         app.logger.error(f"Error fetching league teams: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
-@app.route('/api/league/<league_id>/teams', methods=['GET'])
-@login_required
-def get_league_teams_list(league_id):
-    """Get all teams in a league for the teams listing page."""
-    try:
-        cursor = get_global_db_connection().cursor()
-        
-        cursor.execute('''
-            SELECT 
-                r.sleeper_roster_id,
-                r.team_name,
-                u.display_name as manager_name,
-                u.username,
-                u.sleeper_user_id,
-                r.wins,
-                r.losses,
-                r.ties
-            FROM rosters r
-            LEFT JOIN users u ON r.owner_id = u.sleeper_user_id
-            WHERE r.sleeper_league_id = ?
-            ORDER BY r.team_name
-        ''', (league_id,))
-        
-        teams = []
-        for row in cursor.fetchall():
-            teams.append({
-                'roster_id': row['sleeper_roster_id'],
-                'team_name': row['team_name'] or 'Unknown Team',
-                'manager_name': row['manager_name'] or row['username'] or 'Unknown Manager',
-                'username': row['username'],
-                'sleeper_user_id': row['sleeper_user_id'],
-                'record': f"{row['wins']}-{row['losses']}-{row['ties']}"
-            })
-        
-        return jsonify({'success': True, 'teams': teams})
-        
-    except Exception as e:
-        app.logger.error(f"Error fetching league teams: {str(e)}")
-        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @app.route('/api/teams/<team_id>/budget-status/<league_id>', methods=['GET'])
 @login_required

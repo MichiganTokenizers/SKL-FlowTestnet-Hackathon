@@ -2,13 +2,12 @@
 
 ## Active Tasks
 
-- [x] Change navbar from "My Team" to "Teams" with teams listing page (Completed: 2025-01-27)
-  - [x] Add backend endpoint `/api/league/<league_id>/teams` for fetching all teams
-  - [x] Create new Teams.jsx component for displaying all teams
-  - [x] Update navbar to show "Teams" instead of "My Team" button
-  - [x] Add routing for `/league/:leagueId/teams` path
-  - [x] Highlight current user's team in the teams list
-  - [x] Ensure each team links to their respective team page
+- [x] Change navbar from "My Team" to "Teams" dropdown menu (Completed: 2025-01-27)
+  - [x] Modified backend `/league/local` endpoint to include team information for each league
+  - [x] Updated navbar to show "Teams" as a dropdown menu (like "My Leagues")
+  - [x] Teams dropdown lists all teams with user's team first
+  - [x] Each team links directly to their respective team page
+  - [x] User's team highlighted with "Your Team" badge
 
 - [x ] Review and update `EndPoints_review.md` (Started: 2025-05-17)
 - [x] Restructure database based on dbRestructure.md (Started: 2025-05-21)
