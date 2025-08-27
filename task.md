@@ -2,6 +2,14 @@
 
 ## Active Tasks
 
+- [x] Change navbar from "My Team" to "Teams" with teams listing page (Completed: 2025-01-27)
+  - [x] Add backend endpoint `/api/league/<league_id>/teams` for fetching all teams
+  - [x] Create new Teams.jsx component for displaying all teams
+  - [x] Update navbar to show "Teams" instead of "My Team" button
+  - [x] Add routing for `/league/:leagueId/teams` path
+  - [x] Highlight current user's team in the teams list
+  - [x] Ensure each team links to their respective team page
+
 - [x ] Review and update `EndPoints_review.md` (Started: 2025-05-17)
 - [x] Restructure database based on dbRestructure.md (Started: 2025-05-21)
 - [x] Update `SleeperService.py` to align with new DB schema (Started: 2025-05-21)

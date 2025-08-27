@@ -3020,6 +3020,46 @@ def get_league_teams_for_trades(league_id):
         app.logger.error(f"Error fetching league teams: {str(e)}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
+@app.route('/api/league/<league_id>/teams', methods=['GET'])
+@login_required
+def get_league_teams(league_id):
+    """Get all teams in a league for the teams listing page."""
+    try:
+        cursor = get_global_db_connection().cursor()
+        
+        cursor.execute('''
+            SELECT 
+                r.sleeper_roster_id,
+                r.team_name,
+                u.display_name as manager_name,
+                u.username,
+                u.sleeper_user_id,
+                r.wins,
+                r.losses,
+                r.ties
+            FROM rosters r
+            LEFT JOIN users u ON r.owner_id = u.sleeper_user_id
+            WHERE r.sleeper_league_id = ?
+            ORDER BY r.team_name
+        ''', (league_id,))
+        
+        teams = []
+        for row in cursor.fetchall():
+            teams.append({
+                'roster_id': row['sleeper_roster_id'],
+                'team_name': row['team_name'] or 'Unknown Team',
+                'manager_name': row['manager_name'] or row['username'] or 'Unknown Manager',
+                'username': row['username'],
+                'sleeper_user_id': row['sleeper_user_id'],
+                'record': f"{row['wins']}-{row['losses']}-{row['ties']}"
+            })
+        
+        return jsonify({'success': True, 'teams': teams})
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching league teams: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/teams/<team_id>/budget-status/<league_id>', methods=['GET'])
 @login_required
 def get_team_budget_status(team_id, league_id):

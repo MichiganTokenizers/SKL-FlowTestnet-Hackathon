@@ -11,6 +11,7 @@ import Home from './components/common/Home';
 import Profile from './components/profile/Profile';
 import League from './components/league/League';
 import Team from './components/team/Team';
+import Teams from './components/league/Teams';
 import { API_BASE_URL } from './config';
 
 // League Connect Component - Will be refactored or removed later
@@ -246,37 +247,7 @@ function AppContent() {
         navigate('/league'); // Restore navigation to the league page
     };
 
-    const handleMyTeamClick = async () => {
-        console.log("DEBUG_MY_TEAM_CLICK: Attempting to navigate. Selected League ID is:", selectedLeagueId);
-        if (!selectedLeagueId) {
-            alert("Please select a league first.");
-            return;
-        }
-        if (!currentUserDetails || !currentUserDetails.sleeper_user_id) {
-            alert("User details not available. Cannot determine your team.");
-            return;
-        }
-        if (!sessionToken) {
-            alert("Session token not available. Please log in again.");
-            logout(); // Or navigate to login
-            return;
-        }
 
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/user/roster?league_id=${selectedLeagueId}`, {
-                headers: { 'Authorization': sessionToken }
-            });
-            const data = await response.json();
-            if (response.ok && data.success && data.roster_id) {
-                navigate(`/league/${selectedLeagueId}/team/${data.roster_id}`);
-            } else {
-                alert(data.error || "Could not find your team in the selected league.");
-            }
-        } catch (error) {
-            console.error('Error fetching roster ID for My Team click:', error);
-            alert('An error occurred while trying to find your team.');
-        }
-    };
 
     const handleAssociationSuccess = async () => {
         const currentToken = localStorage.getItem('sessionToken'); // Or use state: sessionToken
@@ -333,9 +304,9 @@ function AppContent() {
                             {sessionToken && !isNewUser && currentUserDetails && selectedLeagueId && (
                                 <>
                                     <li className="nav-item">
-                                        <button className="nav-link btn btn-link" onClick={handleMyTeamClick}>
-                                            My Team
-                                        </button>
+                                        <Link className="nav-link" to={`/league/${selectedLeagueId}/teams`}>
+                                            Teams
+                                        </Link>
                                     </li>
                                 </>
                             )}
@@ -378,6 +349,13 @@ function AppContent() {
                     <Route path="/league" element={
                         sessionToken && isAppReady && !isNewUser ? (
                             <League leagues={leagues} selectedLeagueId={selectedLeagueId} sessionToken={sessionToken} currentUserDetails={currentUserDetails} />
+                        ) : (
+                            <Navigate to="/" replace />
+                        )
+                    } />
+                    <Route path="/league/:leagueId/teams" element={
+                        sessionToken && isAppReady && !isNewUser ? (
+                            <Teams />
                         ) : (
                             <Navigate to="/" replace />
                         )
