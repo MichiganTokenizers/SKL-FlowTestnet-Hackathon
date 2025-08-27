@@ -341,7 +341,7 @@ function League(props) { // Accept props
                     <div className="card mb-4">
                         <div className="card-header d-flex justify-content-between align-items-center">
                             <h4 className="mb-0" style={{ color: 'black' }}>
-                                Pending Trades
+                                Pending Budget Trades
                                 {pendingTrades.length > 0 && (
                                     <span className="badge bg-warning text-dark ms-2">{pendingTrades.length}</span>
                                 )}
