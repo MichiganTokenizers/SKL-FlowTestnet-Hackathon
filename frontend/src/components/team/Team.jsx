@@ -379,23 +379,7 @@ function Team() {
                                                         return <td key={`trades-${year}`}>${tradesTotal.toFixed(0)}</td>;
                                                     })}
                                                 </tr>
-                                                <tr className="fw-bold table-group-divider">
-                                                    <td className="text-start">Total</td>
-                                                    {yearlyCostColumnHeaders.slice(1).map(year => {
-                                                        const yearData = futureYearlyTotals[year];
-                                                        const contractTotal = yearData ? (yearData.contractTotal || 0) : 0;
-                                                        const penaltyTotal = yearData ? (yearData.penaltyTotal || 0) : 0;
-                                                        const tradesTotal = teamData.team_yearly_trade_amounts && teamData.team_yearly_trade_amounts[year] 
-                                                            ? teamData.team_yearly_trade_amounts[year] 
-                                                            : 0;
-                                                        const overallTotalVal = contractTotal + penaltyTotal + tradesTotal; // Add trades (negative = received, positive = sent)
-                                                        return (
-                                                            <td key={`total-${year}`}>
-                                                                ${overallTotalVal.toFixed(0)}
-                                                            </td>
-                                                        );
-                                                    })}
-                                                </tr>
+
                                                 <tr className="fw-bold table-group-divider">
                                                     <td className="text-start">Remaining Budget</td>
                                                     {yearlyCostColumnHeaders.slice(1).map(year => {
