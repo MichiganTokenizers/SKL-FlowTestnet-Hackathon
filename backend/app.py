@@ -3022,7 +3022,7 @@ def get_league_teams_for_trades(league_id):
 
 @app.route('/api/league/<league_id>/teams', methods=['GET'])
 @login_required
-def get_league_teams(league_id):
+def get_league_teams_list(league_id):
     """Get all teams in a league for the teams listing page."""
     try:
         cursor = get_global_db_connection().cursor()
