@@ -1,7 +1,8 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
+import * as fcl from "@onflow/fcl";
 
-function Home({ sessionToken, onLogout }) {
+function Home({ sessionToken }) {
     // Collapsible state
     const [showInstructions, setShowInstructions] = useState(false);
     const [showRules, setShowRules] = useState(true);
@@ -166,6 +167,25 @@ function Home({ sessionToken, onLogout }) {
                 </div>
             )}
             */}
+            {!sessionToken && (
+                <div className="row justify-content-center mb-4">
+                    <div className="col-md-10 col-lg-8 text-center">
+                        <button 
+                            className="btn" 
+                            style={{
+                                backgroundColor: 'transparent',
+                                border: '1px solid white',
+                                color: 'white',
+                                padding: '0.5rem 1rem',
+                                fontSize: '1.1rem'
+                            }}
+                            onClick={() => fcl.logIn()}
+                        >
+                            Login with Flow
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
