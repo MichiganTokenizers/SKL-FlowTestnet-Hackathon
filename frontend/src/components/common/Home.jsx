@@ -45,16 +45,16 @@ function Home({ sessionToken }) {
                             <div className="card-body" style={{ textAlign: 'left' }}>
                                 <ul>
                                     <li>
-                                        <strong>Contract Lengths:</strong> All drafted players must be signed to a contract of <b>1 to 4 years</b> in length after the draft.
+                                        <strong>Contract Lengths:</strong> All drafted players must be signed to a contract of <b>1 to 4 years</b> in length after the draft. Each year of a contract increases in cost by 10% over the previous year (rounded up).
                                     </li>
                                     <li>
                                                                                  <strong>Contract Penalties:</strong> If a player is dropped or exits a contract early, a penalty of <b>25% of the contract value per remaining year</b> will be assessed. The penalty for each year is rounded normally to the nearest dollar.
                                     </li>
                                     <li>
-                                        <strong>Penalty Accrual:</strong> Penalties are not paid all at once. Instead, they accrue and are charged in each associated future year of the contract.
+                                        <strong>Penalty Accrual:</strong> Penalties for waived contracted players are 25% of each contract year, allocated to the corresponding budget year. i.e. A player on 2025 4 year contract initally $8 waived in-season will generate penalties of $2 for 2026, $2 for 2027, $3 for 2028, and $3 for 2029. Penalties are rounded normally.
                                     </li>
                                     <li>
-                                        <strong>Contract Escalation:</strong> Each year of a contract increases in cost by 10% over the previous year (rounded up).
+                                        <strong>Roster Configuration:</strong> 20 roster spots with starting positions: 2 QB (1QB, 1 QB/RB/WR/TE), 2 RB, 4 WR (3WR, 1 WR/TE), 1 TE, 1 RB/WR/TE, 1 DEF.
                                     </li>
                                     <li>
                                         <strong>Franchise Tag:</strong> Each team may designate one player as a franchise player before the season. The franchise tag contract amount is set to the <b>greater of</b>:
@@ -62,9 +62,6 @@ function Home({ sessionToken }) {
                                             <li>The average of the top 5 contracts at the same position from the previous year</li>
                                             <li>10% greater than the player's previous year contract</li>
                                         </ul>
-                                    </li>
-                                    <li>
-                                        <strong>Roster Configuration:</strong> 20 roster spots with starting positions: 1 QB, 2 RB, 3 WR, 1 RB/WR, 1 RB/TE, 1 TE, 1 RB/WR/TE, 1 QB/RB/WR/TE, 1 DEF.
                                     </li>
                                     <li>
                                         <strong>Transparency:</strong> All penalties, contracts, and league finances are tracked and viewable on the platform for full transparency.
