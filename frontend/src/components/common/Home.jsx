@@ -48,10 +48,7 @@ function Home({ sessionToken }) {
                                         <strong>Contract Lengths:</strong> All drafted players must be signed to a contract of <b>1 to 4 years</b> in length after the draft. Each year of a contract increases in cost by 10% over the previous year (rounded up).
                                     </li>
                                     <li>
-                                                                                 <strong>Contract Penalties:</strong> If a player is dropped or exits a contract early, a penalty of <b>25% of the contract value per remaining year</b> will be assessed. The penalty for each year is rounded normally to the nearest dollar.
-                                    </li>
-                                    <li>
-                                        <strong>Penalty Accrual:</strong> Penalties for waived contracted players are 25% of each contract year, allocated to the corresponding budget year. i.e. A player on 2025 4 year contract initally $8 waived in-season will generate penalties of $2 for 2026, $2 for 2027, $3 for 2028, and $3 for 2029. Penalties are rounded normally.
+                                        <strong>Contract Penalties:</strong> Penalties for waived contracted players are 25% of each contract year, allocated to the corresponding budget year. i.e. A player on 2025 4 year contract initally $8 waived in-season will generate penalties of $2 for 2026, $2 for 2027, $3 for 2028, and $3 for 2029. Penalties are rounded normally.
                                     </li>
                                     <li>
                                         <strong>Roster Configuration:</strong> 20 roster spots with starting positions: 2 QB (1QB, 1 QB/RB/WR/TE), 2 RB, 4 WR (3WR, 1 WR/TE), 1 TE, 1 RB/WR/TE, 1 DEF.
