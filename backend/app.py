@@ -590,13 +590,13 @@ def login():
                 print(f"Failed to fetch full Sleeper data in /auth/login: {full_data_response.get('error', 'Unknown error')}")
                 # Don't return error here, just log it. The user can still log in
 
-        if is_new_user:
-            cursor.execute('''
-                INSERT INTO Users (wallet_address, created_at, updated_at)
-                VALUES (?, datetime('now'), datetime('now'))
-            ''', (wallet_address,))
-            conn.commit()
-            print(f"Created new Users record for wallet: {wallet_address}")
+        # if is_new_user:
+        #     cursor.execute('''
+        #         INSERT INTO Users (wallet_address, created_at, updated_at)
+        #         VALUES (?, datetime('now'), datetime('now'))
+        #     ''', (wallet_address,))
+        #     conn.commit()
+        #     print(f"Created new Users record for wallet: {wallet_address}")
 
         return jsonify({
             'success': True,
