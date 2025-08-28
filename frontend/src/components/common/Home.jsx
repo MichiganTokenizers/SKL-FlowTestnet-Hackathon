@@ -60,9 +60,6 @@ function Home({ sessionToken }) {
                                             <li>10% greater than the player's previous year contract</li>
                                         </ul>
                                     </li>
-                                    <li>
-                                        <strong>Transparency:</strong> All penalties, contracts, and league finances are tracked and viewable on the platform for full transparency.
-                                    </li>
                                 </ul>
                             </div>
                         </div>
