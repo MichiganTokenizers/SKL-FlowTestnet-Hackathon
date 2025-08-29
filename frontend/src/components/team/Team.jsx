@@ -289,7 +289,7 @@ function Team() {
                     <div className="col-md-6">
                         <div className="card h-100">
                             <div className="card-body">
-                                <h5 className="card-title">{teamData.current_processing_year} Roster Analysis</h5>
+                                <h5 className="card-title">{teamData.current_processing_year} Roster Summary</h5>
                                 {teamData && teamData.current_processing_year && teamData.players_by_position ? (
                                     <div className="table-responsive">
                                         <table className="table table-sm table-bordered">

@@ -116,7 +116,7 @@ function TransactionsTable({ leagueId, sessionToken }) {
                 newTeams.push(details.team_names?.[newRosterId] || newRosterId);
                 // Find if it was dropped from somewhere (in trade, it's from the other team)
                 let oldRosterId = Object.entries(drops).find(([p]) => p === playerId)?.[1] || 'Traded';
-                oldTeams.push(details.team_names?.[oldRosterId] || oldRosterId);
+                oldTeams.push(details.team_names?.[oldRosterId] || (oldRosterId === 'Traded' ? 'Traded' : oldRosterId));
             });
 
             Object.entries(drops).forEach(([playerId, oldRosterId]) => {
@@ -257,8 +257,8 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                         <td>{formatDate(transaction.created_at)}</td>
                                         <td>{description}</td>
                                         <td>{player}</td>
-                                        <td>{oldTeams[index] || 'N/A'}</td>
-                                        <td>{newTeams[index] || 'N/A'}</td>
+                                        <td>{oldTeams[index] ? (oldTeams[index] === 'FA' ? 'FA' : `team ${oldTeams[index]}`) : 'N/A'}</td>
+                                        <td>{newTeams[index] ? (newTeams[index] === 'FA' ? 'FA' : `team ${newTeams[index]}`) : 'N/A'}</td>
                                         <td>{transaction.week ? transaction.week : 'Unknown'}</td>
                                     </tr>
                                 ));

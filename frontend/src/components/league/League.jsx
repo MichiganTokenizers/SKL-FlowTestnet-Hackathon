@@ -286,10 +286,10 @@ function League(props) { // Accept props
                                                     <td className="border-white">
                                                         {roster.roster_id ? (
                                                             <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`} style={{ color: 'black' }}>
-                                                                {roster.team_name || 'Unnamed Team'} ({roster.roster_id})
+                                                                {roster.team_name || 'Unnamed Team'} (team {roster.roster_id})
                                                             </Link>
                                                         ) : (
-                                                            <span>{roster.team_name || 'Unnamed Team'} ({roster.roster_id || 'N/A'})</span>
+                                                            <span>{roster.team_name || 'Unnamed Team'} (team {roster.roster_id || 'N/A'})</span>
                                                         )}
                                                     </td>
                                                     <td className="border-white">{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
