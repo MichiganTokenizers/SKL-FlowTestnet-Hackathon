@@ -399,9 +399,9 @@ function League(props) { // Accept props
                                                     </td>
                                                     <td>
                                                         <small className="text-muted">
-                                                            {new Date(trade.created_at).toLocaleDateString()}
+                                                            {new Date(trade.created_at + 'Z').toLocaleDateString()}
                                                             <br />
-                                                            {new Date(trade.created_at).toLocaleTimeString()}
+                                                            {new Date(trade.created_at + 'Z').toLocaleTimeString()}
                                                         </small>
                                                     </td>
                                                     {isCommissioner && (
