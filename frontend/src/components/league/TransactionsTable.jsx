@@ -160,7 +160,8 @@ function TransactionsTable({ leagueId, sessionToken }) {
         if (!dateString) return 'Unknown';
         
         try {
-            const date = new Date(dateString);
+            // Add 'Z' to force UTC interpretation, then convert to local time
+            const date = new Date(dateString + 'Z');
             return date.toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'short',
