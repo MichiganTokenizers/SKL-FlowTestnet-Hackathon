@@ -38,6 +38,10 @@
   - [x] Backend supports fetching 4-year costs and saving contract durations (Completed: 2025-07-28)
   - [x] Fix free agent display logic - show $0 for waived auction players (Completed: 2025-01-27)
 - [ ] Clean up routes upon login with Flow, seeing an error page before correct league page loads
+- [ ] Update transactions endpoint to pull all transactions with proper filtering (Started: 2025-01-27)
+  - [ ] Create new backend endpoint that filters for only trades and waives with penalties at database level
+  - [ ] Remove 15-transaction limit to show all relevant transactions
+  - [ ] Update frontend to use new filtered endpoint
 - [x] Detect players who have been waived from Sleeper team but still have an active contract during season
 - [ ] Build Trade Desk (big)
   - [x] Database schema for trades, trade_items, trade_approvals tables
