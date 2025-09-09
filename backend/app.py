@@ -1011,7 +1011,7 @@ def get_league_standings_local():
                 'wins': row['wins'],
                 'losses': row['losses'],
                 'ties': row['ties'],
-                'points_for': row['points_for'] or 0.0
+                'points_for': float(row['points_for']) if row['points_for'] is not None else 0.0
             })
         
         # Sort standings by wins (descending) first, then by points_for (descending) as tiebreaker

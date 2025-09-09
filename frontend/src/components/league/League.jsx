@@ -327,7 +327,7 @@ function League(props) { // Accept props
                                                         )}
                                                     </td>
                                                     <td className="border-white">{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
-                                                    <td className="border-white">{roster.points_for ? roster.points_for.toFixed(2) : '0.00'}</td>
+                                                    <td className="border-white">{roster.points_for ? Number(roster.points_for).toFixed(2) : '0.00'}</td>
                                                     <td className="border-white">0</td>
                                                 </tr>
                                             ))}
