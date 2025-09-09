@@ -8,6 +8,11 @@ import { API_BASE_URL } from '../../config';
 
 // Function to create team abbreviations
 const createTeamAbbreviation = (teamName, maxLength = 3) => {
+    // Ensure teamName is a string
+    if (typeof teamName !== 'string') {
+        teamName = String(teamName || '');
+    }
+    
     if (!teamName || teamName.length <= maxLength) {
         return teamName?.toUpperCase() || 'TBD';
     }
