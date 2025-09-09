@@ -45,7 +45,7 @@ function Home({ sessionToken }) {
                             <div className="card-body" style={{ textAlign: 'left' }}>
                                 <ul>
                                     <li>
-                                        <strong>Contract Lengths:</strong> All drafted players must be signed to a contract of <b>1 to 4 years</b> in length after the draft. Each year of a contract increases in cost by 10% (rounded up) over the previous year.
+                                        <strong>Contract Lengths:</strong> Drafted players are signed to contracts of <b>1 to 4 years</b> in length after the draft. Each year of a contract increases in cost by 10% (rounded up) over the previous year. Drafted players who are waived before the start of the season are not signed to a contract. 
                                     </li>
                                     <li>
                                         <strong>Contract Penalties:</strong> Penalties for waived contracted players are 25% of each contract year, allocated to the corresponding budget year. i.e. A player on 2025 4 year contract initally $8 waived in-season will generate penalties of $2 for 2026, $2 for 2027, $3 for 2028, and $3 for 2029. Penalties are rounded normally.
