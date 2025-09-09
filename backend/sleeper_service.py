@@ -668,7 +668,7 @@ class SleeperService:
                         wins = roster_settings.get("wins", 0)
                         losses = roster_settings.get("losses", 0)
                         ties = roster_settings.get("ties", 0)
-                        points_for = roster_settings.get("points_for", 0.0)
+                        points_for = roster_settings.get("fpts", 0.0)  # Changed from "points_for" to "fpts" to match Sleeper API
 
                         # self.logger.debug(f"SleeperService.fetch_all_data: Upserting roster_id {roster_id_for_upsert} (from API) for league {league_id} with team_name '{team_name_to_store}'.")
                         # print(f"DEBUG_SS_ROSTER_UPSERT: Attempting to upsert roster_id: {roster_id_for_upsert}, league_id: {league_id}, owner_id: {owner_id}, team_name: {team_name_to_store}")

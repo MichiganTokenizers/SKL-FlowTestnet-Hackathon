@@ -1014,8 +1014,8 @@ def get_league_standings_local():
                 'points_for': row['points_for'] or 0.0
             })
         
-        # Sorting is removed as statistical ranking is no longer the primary purpose.
-        # If a specific order is desired (e.g., by owner name), it can be added here.
+        # Sort standings by wins (descending) first, then by points_for (descending) as tiebreaker
+        simplified_roster_info.sort(key=lambda x: (-x['wins'], -x['points_for']))
 
         print(f"DEBUG: /league/standings/local - Successfully fetched {len(simplified_roster_info)} simplified roster details for league {league_id_from_request}.")
         return jsonify({
