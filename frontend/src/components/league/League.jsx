@@ -311,8 +311,6 @@ function League(props) { // Accept props
                                                                 <small className="text-muted ms-1">
                                                                     ({createTeamAbbreviation(roster.team_name || 'Unnamed Team')})
                                                                 </small>
-                                                                <br />
-                                                                <small className="text-muted">(team {roster.roster_id})</small>
                                                             </Link>
                                                         ) : (
                                                             <span>
@@ -320,8 +318,6 @@ function League(props) { // Accept props
                                                                 <small className="text-muted ms-1">
                                                                     ({createTeamAbbreviation(roster.team_name || 'Unnamed Team')})
                                                                 </small>
-                                                                <br />
-                                                                <small className="text-muted">(team {roster.roster_id || 'N/A'})</small>
                                                             </span>
                                                         )}
                                                     </td>
