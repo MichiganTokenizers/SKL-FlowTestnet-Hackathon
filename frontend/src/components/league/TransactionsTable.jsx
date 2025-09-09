@@ -283,11 +283,20 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                         if (!teamId || teamId === 'FA' || teamId === 'Traded') {
                                             return teamId || 'N/A';
                                         }
-                                        // If it's a numeric team ID, show as "Team X"
+                                        
+                                        // Check if we have a team name mapping for this roster ID
+                                        const teamName = transaction.details?.team_names?.[teamId];
+                                        if (teamName) {
+                                            // Use team name to create abbreviation
+                                            return createTeamAbbreviation(teamName);
+                                        }
+                                        
+                                        // If it's a numeric team ID and no team name mapping, show as "Team X"
                                         if (/^\d+$/.test(teamId)) {
                                             return `Team ${teamId}`;
                                         }
-                                        // If it's a team name, show abbreviation
+                                        
+                                        // If it's already a team name, show abbreviation
                                         return createTeamAbbreviation(teamId);
                                     };
                                     
