@@ -6,6 +6,27 @@ import { API_BASE_URL } from '../../config';
 // import RecentTransactionsTable from './RecentTransactionsTable'; // Import the new transactions table
 // import { Link, useNavigate } from 'react-router-dom'; // Link and useNavigate might not be needed directly if navigation is handled by App.jsx
 
+// Function to create team abbreviations
+const createTeamAbbreviation = (teamName, maxLength = 3) => {
+    if (!teamName || teamName.length <= maxLength) {
+        return teamName?.toUpperCase() || 'TBD';
+    }
+    
+    // Remove common words
+    const skipWords = ['the', 'and', 'of', 'for', 'in', 'on', 'at', 'to', 'a', 'an', 'team'];
+    const words = teamName.split(' ')
+        .filter(word => !skipWords.includes(word.toLowerCase()))
+        .filter(word => word.length > 0);
+    
+    if (words.length === 1) {
+        return words[0].substring(0, maxLength).toUpperCase();
+    }
+    
+    // Take first letter of each word
+    const abbreviation = words.map(word => word[0]).join('');
+    return abbreviation.substring(0, maxLength).toUpperCase();
+};
+
 function League(props) { // Accept props
     const { leagues, selectedLeagueId, sessionToken, currentUserDetails } = props; // Destructure props, add currentUserDetails
 
@@ -274,7 +295,7 @@ function League(props) { // Accept props
                                     <table className="table table-striped table-hover" style={{ backgroundColor: 'transparent' }}>
                                         <thead className="league-table-header" style={{ backgroundColor: 'transparent' }}>
                                             <tr>
-                                                <th className="border-white">Team Name</th>
+                                                <th className="border-white">Team</th>
                                                 <th className="border-white">Record (W-L-T)</th>
                                                 <th className="border-white">Total Points</th>
                                                 <th className="border-white">Transaction Count</th>
@@ -286,10 +307,22 @@ function League(props) { // Accept props
                                                     <td className="border-white">
                                                         {roster.roster_id ? (
                                                             <Link to={`/league/${selectedLeagueId}/team/${roster.roster_id}`} style={{ color: 'black' }}>
-                                                                {roster.team_name || 'Unnamed Team'} (team {roster.roster_id})
+                                                                {roster.team_name || 'Unnamed Team'} 
+                                                                <small className="text-muted ms-1">
+                                                                    ({createTeamAbbreviation(roster.team_name || 'Unnamed Team')})
+                                                                </small>
+                                                                <br />
+                                                                <small className="text-muted">(team {roster.roster_id})</small>
                                                             </Link>
                                                         ) : (
-                                                            <span>{roster.team_name || 'Unnamed Team'} (team {roster.roster_id || 'N/A'})</span>
+                                                            <span>
+                                                                {roster.team_name || 'Unnamed Team'} 
+                                                                <small className="text-muted ms-1">
+                                                                    ({createTeamAbbreviation(roster.team_name || 'Unnamed Team')})
+                                                                </small>
+                                                                <br />
+                                                                <small className="text-muted">(team {roster.roster_id || 'N/A'})</small>
+                                                            </span>
                                                         )}
                                                     </td>
                                                     <td className="border-white">{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>

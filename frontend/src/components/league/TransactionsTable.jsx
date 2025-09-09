@@ -1,6 +1,27 @@
 import { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../../config';
 
+// Function to create team abbreviations
+const createTeamAbbreviation = (teamName, maxLength = 3) => {
+    if (!teamName || teamName.length <= maxLength) {
+        return teamName?.toUpperCase() || 'TBD';
+    }
+    
+    // Remove common words
+    const skipWords = ['the', 'and', 'of', 'for', 'in', 'on', 'at', 'to', 'a', 'an', 'team'];
+    const words = teamName.split(' ')
+        .filter(word => !skipWords.includes(word.toLowerCase()))
+        .filter(word => word.length > 0);
+    
+    if (words.length === 1) {
+        return words[0].substring(0, maxLength).toUpperCase();
+    }
+    
+    // Take first letter of each word
+    const abbreviation = words.map(word => word[0]).join('');
+    return abbreviation.substring(0, maxLength).toUpperCase();
+};
+
 function TransactionsTable({ leagueId, sessionToken }) {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -239,8 +260,8 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                 <th>Date</th>
                                 <th>Description</th>
                                 <th>Player</th>
-                                <th>Team (old)</th>
-                                <th>Team (new)</th>
+                                <th>From</th>
+                                <th>To</th>
                                 <th>Week</th>
                             </tr>
                         </thead>
@@ -253,16 +274,34 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                 }
 
                                 // Multi-row for multiple players
-                                return players.map((player, index) => (
-                                    <tr key={`${transaction.transaction_id}-${index}`}>
-                                        <td>{formatDate(transaction.created_at)}</td>
-                                        <td>{description}</td>
-                                        <td>{player}</td>
-                                        <td>{oldTeams[index] ? (oldTeams[index] === 'FA' ? 'FA' : `team ${oldTeams[index]}`) : 'N/A'}</td>
-                                        <td>{newTeams[index] ? (newTeams[index] === 'FA' ? 'FA' : `team ${newTeams[index]}`) : 'N/A'}</td>
-                                        <td>{transaction.week ? transaction.week : 'Unknown'}</td>
-                                    </tr>
-                                ));
+                                return players.map((player, index) => {
+                                    const oldTeam = oldTeams[index];
+                                    const newTeam = newTeams[index];
+                                    
+                                    // Create team display with abbreviation
+                                    const getTeamDisplay = (teamId) => {
+                                        if (!teamId || teamId === 'FA' || teamId === 'Traded') {
+                                            return teamId || 'N/A';
+                                        }
+                                        // If it's a numeric team ID, show as "Team X"
+                                        if (/^\d+$/.test(teamId)) {
+                                            return `Team ${teamId}`;
+                                        }
+                                        // If it's a team name, show abbreviation
+                                        return createTeamAbbreviation(teamId);
+                                    };
+                                    
+                                    return (
+                                        <tr key={`${transaction.transaction_id}-${index}`}>
+                                            <td>{formatDate(transaction.created_at)}</td>
+                                            <td>{description}</td>
+                                            <td>{player}</td>
+                                            <td>{getTeamDisplay(oldTeam)}</td>
+                                            <td>{getTeamDisplay(newTeam)}</td>
+                                            <td>{transaction.week ? transaction.week : 'Unknown'}</td>
+                                        </tr>
+                                    );
+                                });
                             })}
                         </tbody>
                     </table>
