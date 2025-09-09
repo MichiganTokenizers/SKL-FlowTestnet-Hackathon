@@ -139,16 +139,24 @@ function TransactionsTable({ leagueId, sessionToken }) {
             
             Object.entries(adds).forEach(([playerId, newRosterId]) => {
                 players.push(details.player_names?.[playerId] || playerId);
-                newTeams.push(details.team_names?.[newRosterId] || newRosterId);
+                // Get team name and create abbreviation
+                const newTeamName = details.team_names?.[newRosterId];
+                const newTeamAbbr = newTeamName && newTeamName !== newRosterId ? createTeamAbbreviation(newTeamName) : `Team ${newRosterId}`;
+                newTeams.push(newTeamAbbr);
                 // Find if it was dropped from somewhere (in trade, it's from the other team)
                 let oldRosterId = Object.entries(drops).find(([p]) => p === playerId)?.[1] || 'Traded';
-                oldTeams.push(details.team_names?.[oldRosterId] || (oldRosterId === 'Traded' ? 'Traded' : oldRosterId));
+                const oldTeamName = details.team_names?.[oldRosterId];
+                const oldTeamAbbr = oldRosterId === 'Traded' ? 'Traded' : 
+                    (oldTeamName && oldTeamName !== oldRosterId ? createTeamAbbreviation(oldTeamName) : `Team ${oldRosterId}`);
+                oldTeams.push(oldTeamAbbr);
             });
 
             Object.entries(drops).forEach(([playerId, oldRosterId]) => {
                 if (!players.includes(playerId)) {
                     players.push(details.player_names?.[playerId] || playerId);
-                    oldTeams.push(details.team_names?.[oldRosterId] || oldRosterId);
+                    const oldTeamName = details.team_names?.[oldRosterId];
+                    const oldTeamAbbr = oldTeamName && oldTeamName !== oldRosterId ? createTeamAbbreviation(oldTeamName) : `Team ${oldRosterId}`;
+                    oldTeams.push(oldTeamAbbr);
                     newTeams.push('Traded');
                 }
             });
@@ -167,7 +175,9 @@ function TransactionsTable({ leagueId, sessionToken }) {
                 
                 if (has_contract) {
                     players.push(details.player_names?.[playerId] || playerId);
-                    oldTeams.push(details.team_names?.[oldRosterId] || oldRosterId);
+                    const oldTeamName = details.team_names?.[oldRosterId];
+                    const oldTeamAbbr = oldTeamName && oldTeamName !== oldRosterId ? createTeamAbbreviation(oldTeamName) : `Team ${oldRosterId}`;
+                    oldTeams.push(oldTeamAbbr);
                     newTeams.push('FA');
                 }
             });
@@ -283,26 +293,9 @@ function TransactionsTable({ leagueId, sessionToken }) {
                                     const oldTeam = oldTeams[index];
                                     const newTeam = newTeams[index];
                                     
-                                    // Create team display with abbreviation
-                                    const getTeamDisplay = (teamId) => {
-                                        if (!teamId || teamId === 'FA' || teamId === 'Traded') {
-                                            return teamId || 'N/A';
-                                        }
-                                        
-                                        // Check if we have a team name mapping for this roster ID
-                                        const teamName = transaction.details?.team_names?.[teamId];
-                                        if (teamName) {
-                                            // Use team name to create abbreviation
-                                            return createTeamAbbreviation(teamName);
-                                        }
-                                        
-                                        // If it's a numeric team ID and no team name mapping, show as "Team X"
-                                        if (/^\d+$/.test(teamId)) {
-                                            return `Team ${teamId}`;
-                                        }
-                                        
-                                        // If it's already a team name, show abbreviation
-                                        return createTeamAbbreviation(teamId);
+                                    // Team display is now already processed as abbreviations
+                                    const getTeamDisplay = (teamValue) => {
+                                        return teamValue || 'N/A';
                                     };
                                     
                                     return (
