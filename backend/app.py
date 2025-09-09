@@ -2750,44 +2750,6 @@ def get_league_transactions_by_week(league_id, week):
 
 # New endpoints for the transactions.jsx component
 
-@app.route('/league/<league_id>/teams', methods=['GET'])
-@login_required
-def get_league_teams(league_id):
-    """Get team mapping for a league."""
-    user = get_current_user()
-    if not user:
-        return jsonify({'success': False, 'error': 'User not authenticated'}), 401
-
-    try:
-        conn = get_global_db_connection()
-        cursor = conn.cursor()
-
-        # Verify user is part of this league
-        cursor.execute("SELECT 1 FROM UserLeagueLinks WHERE wallet_address = ? AND sleeper_league_id = ?", 
-                       (user['wallet_address'], league_id))
-        if not cursor.fetchone():
-            return jsonify({'success': False, 'error': 'User not authorized for this league'}), 403
-
-        # Get team mapping
-        cursor.execute("""
-            SELECT sleeper_roster_id, team_name 
-            FROM rosters 
-            WHERE sleeper_league_id = ?
-        """, (league_id,))
-        
-        teams = []
-        for row in cursor.fetchall():
-            teams.append({
-                'roster_id': row['sleeper_roster_id'],
-                'team_name': row['team_name']
-            })
-
-        return jsonify({'success': True, 'teams': teams}), 200
-
-    except Exception as e:
-        app.logger.error(f"Error fetching teams for league {league_id}: {str(e)}")
-        return jsonify({'success': False, 'error': f'Server error: {str(e)}'}), 500
-
 @app.route('/players', methods=['GET'])
 @login_required
 def get_all_players():

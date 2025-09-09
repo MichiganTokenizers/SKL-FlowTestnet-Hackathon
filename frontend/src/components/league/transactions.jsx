@@ -77,7 +77,7 @@ function Transactions({ leagueId, sessionToken }) {
 
     const fetchTeamMap = async () => {
         try {
-            const response = await fetch(`${API_BASE_URL}/league/${leagueId}/teams`, {
+            const response = await fetch(`${API_BASE_URL}/api/league/${leagueId}/teams`, {
                 headers: { 'Authorization': sessionToken }
             });
             const data = await response.json();
