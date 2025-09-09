@@ -347,7 +347,7 @@ function League(props) { // Accept props
                 <div className="mt-3">
                     <div className="card mb-4">
                         <div className="card-header d-flex justify-content-between align-items-center">
-                            <h4 className="mb-0" style={{ color: 'black' }}>League Transactions</h4>
+                            <h4 className="mb-0" style={{ color: 'black' }}>Trades and Waived Contracts</h4>
                             <button
                                 className="btn btn-link text-decoration-none"
                                 type="button"
