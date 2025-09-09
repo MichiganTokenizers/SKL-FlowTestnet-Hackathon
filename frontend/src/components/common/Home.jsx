@@ -51,7 +51,7 @@ function Home({ sessionToken }) {
                                         <strong>Contract Penalties:</strong> Penalties for waived contracted players are 25% of each contract year, allocated to the corresponding budget year. i.e. A player on 2025 4 year contract initally $8 waived in-season will generate penalties of $2 for 2026, $2 for 2027, $3 for 2028, and $3 for 2029. Penalties are rounded normally.
                                     </li>
                                     <li>
-                                        <strong>Roster Configuration:</strong> 20 roster spots with starting positions: 2 QB (1QB, 1 QB/RB/WR/TE), 2 RB, 4 WR (3WR, 1 WR/TE), 1 TE, 1 RB/WR/TE, 1 DEF.
+                                        <strong>Roster Configuration:</strong> 20 roster spots with starting positions: 2 QB (1QB, 1 QB/RB/WR/TE), 3 RB (2RB, 1 RB/WR/TE), 4 WR (3WR, 1 WR/TE), 1 TE, 1 DEF.
                                     </li>
                                     <li>
                                         <strong>Franchise Tag:</strong> Each team may designate one player as a franchise player before the season. The franchise tag contract amount is set to the <b>greater of</b>:
