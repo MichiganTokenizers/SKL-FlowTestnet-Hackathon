@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; // Import Link
 import LeagueFees from './LeagueFees'; // Import the new component
-import TransactionsTable from './TransactionsTable'; // Import the transactions table
+import Transactions from './transactions'; // Import the new transactions component
 import { API_BASE_URL } from '../../config';
 // import RecentTransactionsTable from './RecentTransactionsTable'; // Import the new transactions table
 // import { Link, useNavigate } from 'react-router-dom'; // Link and useNavigate might not be needed directly if navigation is handled by App.jsx
@@ -362,7 +362,7 @@ function League(props) { // Accept props
                         </div>
                         <div className="collapse show" id="collapseTransactions">
                             <div className="card-body">
-                                <TransactionsTable leagueId={selectedLeagueId} sessionToken={sessionToken} />
+                                <Transactions leagueId={selectedLeagueId} sessionToken={sessionToken} />
                             </div>
                         </div>
                     </div>
