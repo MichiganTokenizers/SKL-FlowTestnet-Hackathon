@@ -31,16 +31,12 @@ function Transactions({ leagueId, sessionToken }) {
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [currentWeek, setCurrentWeek] = useState(null);
-    const [selectedWeek, setSelectedWeek] = useState('all');
-    const [availableWeeks, setAvailableWeeks] = useState([]);
     const [teamMap, setTeamMap] = useState({});
     const [playerMap, setPlayerMap] = useState({});
     const [penalties, setPenalties] = useState({});
 
     useEffect(() => {
         if (leagueId && sessionToken) {
-            fetchCurrentWeek();
             fetchTeamMap();
             fetchPlayerMap();
             fetchPenalties();
@@ -48,32 +44,6 @@ function Transactions({ leagueId, sessionToken }) {
         }
     }, [leagueId, sessionToken]);
 
-    useEffect(() => {
-        if (selectedWeek !== 'all') {
-            fetchTransactionsByWeek(selectedWeek);
-        } else {
-            fetchTransactions();
-        }
-    }, [selectedWeek, leagueId, sessionToken]);
-
-    const fetchCurrentWeek = async () => {
-        try {
-            const response = await fetch(`${API_BASE_URL}/nfl/current-week`);
-            const data = await response.json();
-            
-            if (data.success && !data.is_offseason) {
-                setCurrentWeek(data.week);
-                // Generate available weeks (1-18 for regular season, 19+ for playoffs)
-                const weeks = [];
-                for (let i = 1; i <= Math.max(data.week || 18, 18); i++) {
-                    weeks.push(i);
-                }
-                setAvailableWeeks(weeks);
-            }
-        } catch {
-            console.error('Error fetching current week');
-        }
-    };
 
     const fetchTeamMap = async () => {
         try {
@@ -156,32 +126,6 @@ function Transactions({ leagueId, sessionToken }) {
         }
     };
 
-    const fetchTransactionsByWeek = async (week) => {
-        if (!leagueId || !sessionToken || week === 'all') return;
-        
-        setLoading(true);
-        setError(null);
-        
-        try {
-            const response = await fetch(`${API_BASE_URL}/league/${leagueId}/transactions/week/${week}`, {
-                headers: { 'Authorization': sessionToken }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                setTransactions(data.transactions || []);
-            } else {
-                setError(data.error || 'Failed to fetch transactions');
-                setTransactions([]);
-            }
-        } catch (err) {
-            setError('Error fetching transactions: ' + err.message);
-            setTransactions([]);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const getTransactionDetails = (transaction) => {
         const { type, adds, drops, leg, transaction_id } = transaction;
@@ -291,7 +235,7 @@ function Transactions({ leagueId, sessionToken }) {
                 <strong>Warning:</strong> {error}
                 <button 
                     className="btn btn-sm btn-outline-warning ms-2"
-                    onClick={() => selectedWeek === 'all' ? fetchTransactions() : fetchTransactionsByWeek(selectedWeek)}
+                    onClick={fetchTransactions}
                 >
                     Retry
                 </button>
@@ -319,34 +263,11 @@ function Transactions({ leagueId, sessionToken }) {
 
     return (
         <div>
-            {/* Week Filter */}
-            {availableWeeks.length > 0 && (
-                <div className="mb-3">
-                    <select 
-                        id="weekFilter" 
-                        className="form-select form-select-sm" 
-                        style={{ maxWidth: '200px' }}
-                        value={selectedWeek}
-                        onChange={(e) => setSelectedWeek(e.target.value)}
-                    >
-                        <option value="all">All Weeks</option>
-                        {availableWeeks.map(week => (
-                            <option key={week} value={week}>
-                                Week {week} {week === currentWeek ? '(Current)' : ''}
-                            </option>
-                        ))}
-                    </select>
-                </div>
-            )}
-
             {/* Transactions Table */}
             {allTransactionRows.length === 0 ? (
                 <div className="text-center py-3">
                     <p className="text-muted mb-0">
-                        {selectedWeek === 'all' 
-                            ? 'No relevant transactions found for this league.' 
-                            : `No relevant transactions found for Week ${selectedWeek}.`
-                        }
+                        No relevant transactions found for this league.
                     </p>
                 </div>
             ) : (
