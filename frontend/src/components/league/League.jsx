@@ -303,7 +303,7 @@ function League(props) { // Accept props
                                                 <th className="border-white">Team</th>
                                                 <th className="border-white">Record (W-L-T)</th>
                                                 <th className="border-white">Total Points</th>
-                                                <th className="border-white">Transaction Count</th>
+                                                <th className="border-white">Active Contracts</th>
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -328,7 +328,7 @@ function League(props) { // Accept props
                                                     </td>
                                                     <td className="border-white">{`${roster.wins}-${roster.losses}${roster.ties > 0 ? `-${roster.ties}` : ''}`}</td>
                                                     <td className="border-white">{roster.points_for || 0}</td>
-                                                    <td className="border-white">0</td>
+                                                    <td className="border-white">{roster.contract_count || 0}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

@@ -996,6 +996,17 @@ def get_league_standings_local():
         ''', (league_id_from_request,))
         rosters_data = cursor.fetchall()
 
+        # Get contract counts for each team
+        cursor.execute('''
+            SELECT 
+                team_id,
+                COUNT(*) as contract_count
+            FROM contracts 
+            WHERE sleeper_league_id = ? AND is_active = 1
+            GROUP BY team_id
+        ''', (league_id_from_request,))
+        contract_counts = {row['team_id']: row['contract_count'] for row in cursor.fetchall()}
+
         simplified_roster_info = []
         for row in rosters_data:
             # Use the directly fetched team_name, fallback to owner_display_name if it's null/empty
@@ -1011,7 +1022,8 @@ def get_league_standings_local():
                 'wins': row['wins'],
                 'losses': row['losses'],
                 'ties': row['ties'],
-                'points_for': float(row['points_for']) if row['points_for'] is not None else 0.0
+                'points_for': float(row['points_for']) if row['points_for'] is not None else 0.0,
+                'contract_count': contract_counts.get(row['sleeper_roster_id'], 0)
             })
         
         # Sort standings by wins (descending) first, then by points_for (descending) as tiebreaker
