@@ -2787,7 +2787,12 @@ def get_league_penalties(league_id):
         if not cursor.fetchone():
             return jsonify({'success': False, 'error': 'User not authorized for this league'}), 403
 
-        # Get penalties with contract and transaction info
+        # Get current year from season_curr table
+        cursor.execute("SELECT current_year FROM season_curr LIMIT 1")
+        current_year_row = cursor.fetchone()
+        current_year = current_year_row[0] if current_year_row else 2025
+        
+        # Get penalties with contract and transaction info - only future penalties
         cursor.execute("""
             SELECT 
                 c.player_id,
@@ -2799,9 +2804,10 @@ def get_league_penalties(league_id):
                 c.duration
             FROM penalties p
             JOIN contracts c ON p.contract_id = c.rowid
-            WHERE c.sleeper_league_id = ?
+            WHERE c.sleeper_league_id = ? 
+            AND p.penalty_year > ?
             ORDER BY p.created_at DESC
-        """, (league_id,))
+        """, (league_id, current_year))
         
         penalties = []
         for row in cursor.fetchall():
