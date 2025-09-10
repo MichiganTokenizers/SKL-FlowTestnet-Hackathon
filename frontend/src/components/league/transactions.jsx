@@ -118,7 +118,9 @@ function Transactions({ leagueId, sessionToken }) {
                     penalty_created_at: penalty.penalty_created_at,
                     draft_amount: penalty.draft_amount,
                     contract_year: penalty.contract_year,
-                    duration: penalty.duration
+                    duration: penalty.duration,
+                    team_id: penalty.team_id,
+                    team_name: penalty.team_name
                 };
             }
             
@@ -196,6 +198,7 @@ function Transactions({ leagueId, sessionToken }) {
                         <thead>
                             <tr>
                                 <th>Date Waived</th>
+                                <th>Team</th>
                                 <th>Player</th>
                                 <th>Contract Details</th>
                                 <th>Penalty Years</th>
@@ -206,6 +209,11 @@ function Transactions({ leagueId, sessionToken }) {
                             {penaltyGroups.map((group, index) => (
                                 <tr key={index}>
                                     <td>{formatDate(group.penalty_created_at)}</td>
+                                    <td>
+                                        <span className="fw-bold">
+                                            {group.team_name ? createTeamAbbreviation(group.team_name) : `Team ${group.team_id}`}
+                                        </span>
+                                    </td>
                                     <td>{group.player_name}</td>
                                     <td>
                                         <small>

@@ -2801,9 +2801,12 @@ def get_league_penalties(league_id):
                 p.created_at as penalty_created_at,
                 c.draft_amount,
                 c.contract_year,
-                c.duration
+                c.duration,
+                c.team_id,
+                r.team_name
             FROM penalties p
             JOIN contracts c ON p.contract_id = c.rowid
+            LEFT JOIN rosters r ON c.team_id = r.sleeper_roster_id AND c.sleeper_league_id = r.sleeper_league_id
             WHERE c.sleeper_league_id = ? 
             AND p.penalty_year > ?
             ORDER BY p.created_at DESC
@@ -2818,7 +2821,9 @@ def get_league_penalties(league_id):
                 'penalty_created_at': row['penalty_created_at'],
                 'draft_amount': row['draft_amount'],
                 'contract_year': row['contract_year'],
-                'duration': row['duration']
+                'duration': row['duration'],
+                'team_id': row['team_id'],
+                'team_name': row['team_name']
             })
 
         return jsonify({'success': True, 'penalties': penalties}), 200
