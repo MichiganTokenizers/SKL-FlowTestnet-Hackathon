@@ -489,8 +489,10 @@ class SleeperService:
                                 for dropped_player_id in dropped_player_ids:
                                     self.logger.info(f"SleeperService DEBUG: Processing dropped player {dropped_player_id} for roster {current_api_roster_id}")
                                     cursor.execute('''
-                                        SELECT rowid, player_id, draft_amount, duration, contract_year FROM contracts 
-                                        WHERE player_id = ? AND team_id = ? AND sleeper_league_id = ? AND is_active = 1
+                                        SELECT c.rowid, c.player_id, c.draft_amount, c.duration, c.contract_year 
+                                        FROM contracts c
+                                        JOIN rosters r ON c.team_id = r.sleeper_roster_id AND c.sleeper_league_id = r.sleeper_league_id
+                                        WHERE c.player_id = ? AND r.sleeper_roster_id = ? AND c.sleeper_league_id = ? AND c.is_active = 1
                                     ''', (dropped_player_id, current_api_roster_id, league_id))
                                     contract_to_penalize_row = cursor.fetchone()
                                     self.logger.info(f"SleeperService DEBUG: Dropped player {dropped_player_id} - Contract query result: {dict(contract_to_penalize_row) if contract_to_penalize_row else 'No active contract found'}")
