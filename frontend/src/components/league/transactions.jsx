@@ -210,9 +210,7 @@ function Transactions({ leagueId, sessionToken }) {
                                 <tr key={index}>
                                     <td>{formatDate(group.penalty_created_at)}</td>
                                     <td>
-                                        <span className="fw-bold">
-                                            {group.team_name ? createTeamAbbreviation(group.team_name) : `Team ${group.team_id}`}
-                                        </span>
+                                        {group.team_name ? createTeamAbbreviation(group.team_name) : `Team ${group.team_id}`}
                                     </td>
                                     <td>{group.player_name}</td>
                                     <td>
