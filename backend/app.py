@@ -2787,12 +2787,20 @@ def get_league_penalties(league_id):
         if not cursor.fetchone():
             return jsonify({'success': False, 'error': 'User not authorized for this league'}), 403
 
-        # Get penalties
+        # Get penalties with contract and transaction info
         cursor.execute("""
-            SELECT player_id, penalty_amount, transaction_id
+            SELECT 
+                c.player_id,
+                p.penalty_amount,
+                p.penalty_year,
+                p.created_at as penalty_created_at,
+                c.draft_amount,
+                c.contract_year,
+                c.duration
             FROM penalties p
             JOIN contracts c ON p.contract_id = c.rowid
             WHERE c.sleeper_league_id = ?
+            ORDER BY p.created_at DESC
         """, (league_id,))
         
         penalties = []
@@ -2800,7 +2808,11 @@ def get_league_penalties(league_id):
             penalties.append({
                 'player_id': row['player_id'],
                 'amount': row['penalty_amount'],
-                'transaction_id': row['transaction_id']
+                'penalty_year': row['penalty_year'],
+                'penalty_created_at': row['penalty_created_at'],
+                'draft_amount': row['draft_amount'],
+                'contract_year': row['contract_year'],
+                'duration': row['duration']
             })
 
         return jsonify({'success': True, 'penalties': penalties}), 200

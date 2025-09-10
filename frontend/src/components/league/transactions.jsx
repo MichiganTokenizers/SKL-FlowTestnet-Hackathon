@@ -28,19 +28,17 @@ const createTeamAbbreviation = (teamName, maxLength = 3) => {
 };
 
 function Transactions({ leagueId, sessionToken }) {
-    const [transactions, setTransactions] = useState([]);
+    const [penalties, setPenalties] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [teamMap, setTeamMap] = useState({});
     const [playerMap, setPlayerMap] = useState({});
-    const [penalties, setPenalties] = useState({});
 
     useEffect(() => {
         if (leagueId && sessionToken) {
             fetchTeamMap();
             fetchPlayerMap();
             fetchPenalties();
-            fetchTransactions();
         }
     }, [leagueId, sessionToken]);
 
@@ -80,6 +78,9 @@ function Transactions({ leagueId, sessionToken }) {
     };
 
     const fetchPenalties = async () => {
+        setLoading(true);
+        setError(null);
+        
         try {
             const response = await fetch(`${API_BASE_URL}/league/${leagueId}/penalties`, {
                 headers: { 'Authorization': sessionToken }
@@ -87,109 +88,45 @@ function Transactions({ leagueId, sessionToken }) {
             const data = await response.json();
             
             if (data.success) {
-                const penaltyMap = {};
-                data.penalties.forEach(penalty => {
-                    const key = `${penalty.player_id}_${penalty.transaction_id}`;
-                    penaltyMap[key] = penalty.amount;
-                });
-                setPenalties(penaltyMap);
-            }
-        } catch (err) {
-            console.error('Error fetching penalties:', err);
-        }
-    };
-
-    const fetchTransactions = async () => {
-        if (!leagueId || !sessionToken) return;
-        
-        setLoading(true);
-        setError(null);
-        
-        try {
-            const response = await fetch(`${API_BASE_URL}/league/${leagueId}/transactions/recent`, {
-                headers: { 'Authorization': sessionToken }
-            });
-            
-            const data = await response.json();
-            
-            if (data.success) {
-                setTransactions(data.transactions || []);
+                setPenalties(data.penalties || []);
             } else {
-                setError(data.error || 'Failed to fetch transactions');
-                setTransactions([]);
+                setError(data.error || 'Failed to fetch penalties');
+                setPenalties([]);
             }
         } catch (err) {
-            setError('Error fetching transactions: ' + err.message);
-            setTransactions([]);
+            setError('Error fetching penalties: ' + err.message);
+            setPenalties([]);
         } finally {
             setLoading(false);
         }
     };
 
 
-    const getTransactionDetails = (transaction) => {
-        const { type, adds, drops, leg, transaction_id } = transaction;
-        let players = [];
-        let descriptions = [];
-        let fromTeams = [];
-        let toTeams = [];
-        let totalPenalties = [];
 
-        if (type === 'trade') {
-            // Handle trades - only include players who are actually traded
-            if (adds && drops) {
-                // Find players that are both added and dropped (traded)
-                const tradedPlayers = [];
-                
-                Object.entries(adds).forEach(([playerId, toRosterId]) => {
-                    if (drops[playerId]) {
-                        const fromRosterId = drops[playerId];
-                        tradedPlayers.push({
-                            playerId,
-                            fromRosterId,
-                            toRosterId
-                        });
-                    }
-                });
-
-                tradedPlayers.forEach(({ playerId, fromRosterId, toRosterId }) => {
-                    players.push(playerMap[playerId] || playerId);
-                    descriptions.push('Trade');
-                    
-                    const fromTeamName = teamMap[fromRosterId];
-                    const toTeamName = teamMap[toRosterId];
-                    
-                    fromTeams.push(fromTeamName ? createTeamAbbreviation(fromTeamName) : `Team ${fromRosterId}`);
-                    toTeams.push(toTeamName ? createTeamAbbreviation(toTeamName) : `Team ${toRosterId}`);
-                    
-                    // Check for penalties
-                    const penaltyKey = `${playerId}_${transaction_id}`;
-                    const penaltyAmount = penalties[penaltyKey] || 0;
-                    totalPenalties.push(penaltyAmount);
-                });
+    // Group penalties by player to calculate totals
+    const groupPenaltiesByPlayer = () => {
+        const grouped = {};
+        
+        penalties.forEach(penalty => {
+            const playerId = penalty.player_id;
+            if (!grouped[playerId]) {
+                grouped[playerId] = {
+                    player_id: playerId,
+                    player_name: playerMap[playerId] || playerId,
+                    penalties: [],
+                    total_amount: 0,
+                    penalty_created_at: penalty.penalty_created_at,
+                    draft_amount: penalty.draft_amount,
+                    contract_year: penalty.contract_year,
+                    duration: penalty.duration
+                };
             }
-        } else if (type === 'free_agent' || type === 'waiver') {
-            // Handle waivers - only include players who were dropped and had contracts (penalties)
-            if (drops) {
-                Object.entries(drops).forEach(([playerId, fromRosterId]) => {
-                    // Check if this player had a contract (indicated by penalty)
-                    const penaltyKey = `${playerId}_${transaction_id}`;
-                    const penaltyAmount = penalties[penaltyKey] || 0;
-                    
-                    if (penaltyAmount > 0) {
-                        players.push(playerMap[playerId] || playerId);
-                        descriptions.push('Waive');
-                        
-                        const fromTeamName = teamMap[fromRosterId];
-                        fromTeams.push(fromTeamName ? createTeamAbbreviation(fromTeamName) : `Team ${fromRosterId}`);
-                        toTeams.push('FA');
-                        totalPenalties.push(penaltyAmount);
-                    }
-                });
-            }
-        }
-
-        return { players, descriptions, fromTeams, toTeams, totalPenalties, week: leg };
+            
+            grouped[playerId].penalties.push(penalty);
+            grouped[playerId].total_amount += penalty.amount;
+        });
+        
+        return Object.values(grouped);
     };
 
     const formatDate = (timestamp) => {
@@ -200,9 +137,7 @@ function Transactions({ leagueId, sessionToken }) {
             return date.toLocaleDateString('en-US', {
                 year: 'numeric',
                 month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
+                day: 'numeric'
             });
         } catch {
             return 'Invalid date';
@@ -222,9 +157,9 @@ function Transactions({ leagueId, sessionToken }) {
         return (
             <div className="text-center py-3">
                 <div className="spinner-border spinner-border-sm text-primary" role="status">
-                    <span className="visually-hidden">Loading transactions...</span>
+                    <span className="visually-hidden">Loading penalties...</span>
                 </div>
-                <span className="ms-2">Loading transactions...</span>
+                <span className="ms-2">Loading penalties...</span>
             </div>
         );
     }
@@ -235,7 +170,7 @@ function Transactions({ leagueId, sessionToken }) {
                 <strong>Warning:</strong> {error}
                 <button 
                     className="btn btn-sm btn-outline-warning ms-2"
-                    onClick={fetchTransactions}
+                    onClick={fetchPenalties}
                 >
                     Retry
                 </button>
@@ -243,31 +178,16 @@ function Transactions({ leagueId, sessionToken }) {
         );
     }
 
-    // Process all transactions and flatten the results
-    const allTransactionRows = [];
-    transactions.forEach(transaction => {
-        const { players, descriptions, fromTeams, toTeams, totalPenalties, week } = getTransactionDetails(transaction);
-        
-        players.forEach((player, index) => {
-            allTransactionRows.push({
-                date: transaction.created,
-                description: descriptions[index],
-                player: player,
-                from: fromTeams[index],
-                to: toTeams[index],
-                week: week,
-                penalty: totalPenalties[index] || 0
-            });
-        });
-    });
+    // Group penalties by player
+    const penaltyGroups = groupPenaltiesByPlayer();
 
     return (
         <div>
-            {/* Transactions Table */}
-            {allTransactionRows.length === 0 ? (
+            {/* Penalties Table */}
+            {penaltyGroups.length === 0 ? (
                 <div className="text-center py-3">
                     <p className="text-muted mb-0">
-                        No relevant transactions found for this league.
+                        No waived players with penalties found for this league.
                     </p>
                 </div>
             ) : (
@@ -275,25 +195,32 @@ function Transactions({ leagueId, sessionToken }) {
                     <table className="table table-striped table-hover">
                         <thead>
                             <tr>
-                                <th>Date</th>
-                                <th>Description</th>
+                                <th>Date Waived</th>
                                 <th>Player</th>
-                                <th>From</th>
-                                <th>To</th>
-                                <th>Week</th>
+                                <th>Contract Details</th>
+                                <th>Penalty Years</th>
                                 <th>Total Penalties</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {allTransactionRows.map((row, index) => (
+                            {penaltyGroups.map((group, index) => (
                                 <tr key={index}>
-                                    <td>{formatDate(row.date)}</td>
-                                    <td>{row.description}</td>
-                                    <td>{row.player}</td>
-                                    <td>{row.from}</td>
-                                    <td>{row.to}</td>
-                                    <td>{row.week || 'Unknown'}</td>
-                                    <td>{row.penalty > 0 ? formatCurrency(row.penalty) : '-'}</td>
+                                    <td>{formatDate(group.penalty_created_at)}</td>
+                                    <td>{group.player_name}</td>
+                                    <td>
+                                        <small>
+                                            ${group.draft_amount} for {group.duration} years<br/>
+                                            Started: {group.contract_year}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <small>
+                                            {group.penalties.map(p => p.penalty_year).join(', ')}
+                                        </small>
+                                    </td>
+                                    <td className="fw-bold text-danger">
+                                        {formatCurrency(group.total_amount)}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
