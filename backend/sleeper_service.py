@@ -876,7 +876,7 @@ class SleeperService:
         """
         Fetch all NFL players from Sleeper API and update the local players table.
         This should be called periodically (e.g., daily/weekly) rather than on every user action.
-        Skips player data update if the current NFL state is in-season.
+        Skips player data update if updated within last 7 days.
 
         Returns:
             Dict: Result of the operation with success status and message/error.
@@ -886,11 +886,19 @@ class SleeperService:
         try:
             cursor = self._get_db_cursor()
             
-            # Check if we should skip player data update based on season state
-            season_details = self._get_current_season_details()
-            if season_details and not season_details.get('is_offseason', True):
-                self.logger.info("SleeperService.update_all_sleeper_players: Skipping player data update - NFL season is currently in-season.")
-                return {"success": True, "message": "Skipped player data update - currently in-season"}
+            # Check if we should skip based on time (last update within 7 days)
+            cursor.execute('SELECT updated_at FROM season_curr LIMIT 1')
+            last_update_row = cursor.fetchone()
+            
+            if last_update_row and last_update_row['updated_at']:
+                from datetime import datetime, timedelta
+                try:
+                    last_update = datetime.fromisoformat(last_update_row['updated_at'].replace('Z', '+00:00'))
+                    if datetime.now() - last_update < timedelta(days=7):
+                        self.logger.info("SleeperService.update_all_sleeper_players: Skipping - updated within last 7 days")
+                        return {"success": True, "message": "Skipped - updated within last 7 days"}
+                except ValueError as e:
+                    self.logger.warning(f"SleeperService.update_all_sleeper_players: Error parsing updated_at timestamp: {e}. Proceeding with update.")
             
             all_players_api_data = self.get_players()
             if not all_players_api_data:
@@ -928,6 +936,14 @@ class SleeperService:
                         team=excluded.team,
                         updated_at=datetime('now')
                 ''', players_to_insert)
+                
+                # Update the season_curr table timestamp to track when player data was last updated
+                cursor.execute('''
+                    UPDATE season_curr 
+                    SET updated_at = datetime('now') 
+                    WHERE rowid = 1
+                ''')
+                
                 # self.conn.commit() # Commit changes if autocommit is not enabled
                 # self.logger.info(f"SleeperService.update_all_sleeper_players: Added/Updated {len(players_to_insert)} players to the database.")
                 # print(f"DEBUG (SleeperService): update_all_sleeper_players - Added/Updated {len(players_to_insert)} players.") # Keep print

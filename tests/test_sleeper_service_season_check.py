@@ -1,5 +1,5 @@
 """
-Test cases for SleeperService season-based player data update logic.
+Test cases for SleeperService time-based player data update logic.
 """
 import pytest
 import sqlite3
@@ -13,8 +13,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'backend'))
 from sleeper_service import SleeperService
 
 
-class TestSleeperServiceSeasonCheck:
-    """Test cases for season-based player data update logic."""
+class TestSleeperServiceTimeCheck:
+    """Test cases for time-based player data update logic."""
 
     def setup_method(self):
         """Set up test fixtures."""
@@ -52,12 +52,12 @@ class TestSleeperServiceSeasonCheck:
         """Clean up test fixtures."""
         self.conn.close()
 
-    def test_update_players_skipped_during_in_season(self):
-        """Test that player data update is skipped when NFL season is in-season."""
-        # Set up database to indicate in-season (IsOffSeason = 0)
+    def test_update_players_skipped_within_7_days(self):
+        """Test that player data update is skipped when updated within last 7 days."""
+        # Set up database to indicate offseason but recently updated
         self.conn.execute('''
             INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
-            VALUES (1, '2024', 0, datetime('now'))
+            VALUES (1, '2024', 1, datetime('now'))
         ''')
         self.conn.commit()
         
@@ -71,14 +71,42 @@ class TestSleeperServiceSeasonCheck:
             # Verify the result indicates skip
             assert result['success'] is True
             assert 'Skipped' in result['message']
-            assert 'currently in-season' in result['message']
+            assert 'updated within last 7 days' in result['message']
 
-    def test_update_players_proceeds_during_offseason(self):
-        """Test that player data update proceeds when NFL season is in offseason."""
-        # Set up database to indicate offseason (IsOffSeason = 1)
+    def test_update_players_proceeds_after_7_days(self):
+        """Test that player data update proceeds when last update was over 7 days ago."""
+        # Set up database with old timestamp (over 7 days ago)
         self.conn.execute('''
             INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
-            VALUES (1, '2024', 1, datetime('now'))
+            VALUES (1, '2024', 1, datetime('now', '-8 days'))
+        ''')
+        self.conn.commit()
+        
+        # Mock the get_players method to return test data
+        mock_players_data = {
+            '123': {
+                'full_name': 'Test Player',
+                'position': 'QB',
+                'team': 'TEST'
+            }
+        }
+        
+        with patch.object(self.sleeper_service, 'get_players', return_value=mock_players_data) as mock_get_players:
+            result = self.sleeper_service.update_all_sleeper_players()
+            
+            # Verify the method was called
+            mock_get_players.assert_called_once()
+            
+            # Verify the result indicates success
+            assert result['success'] is True
+            assert 'Successfully updated' in result['message']
+
+    def test_update_players_proceeds_during_in_season_after_7_days(self):
+        """Test that player data update proceeds during in-season if last update was over 7 days ago."""
+        # Set up database to indicate in-season but with old timestamp
+        self.conn.execute('''
+            INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
+            VALUES (1, '2024', 0, datetime('now', '-8 days'))
         ''')
         self.conn.commit()
         
@@ -103,7 +131,7 @@ class TestSleeperServiceSeasonCheck:
 
     def test_update_players_proceeds_when_no_season_data(self):
         """Test that player data update proceeds when no season data is available."""
-        # Don't insert any season data
+        # Don't insert any season data (no time check, proceeds with update)
         
         # Mock the get_players method to return test data
         mock_players_data = {
