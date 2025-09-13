@@ -186,7 +186,10 @@ class SleeperService:
                 self.logger.error(f"SleeperService.fetch_all_data: update_all_sleeper_players failed: {player_update_result.get('error', 'Unknown error')}. Player data may be incomplete.")
                 # Decide if this should be a hard stop or just a warning
             else:
-                self.logger.info(f"SleeperService.fetch_all_data: update_all_sleeper_players completed. Message: {player_update_result.get('message')}")
+                if "Skipped" in player_update_result.get('message', ''):
+                    self.logger.info(f"SleeperService.fetch_all_data: Player data update skipped - {player_update_result.get('message')}")
+                else:
+                    self.logger.info(f"SleeperService.fetch_all_data: update_all_sleeper_players completed. Message: {player_update_result.get('message')}")
             # --- End of player update call ---
             
             # Get the sleeper_user_id for this wallet address
@@ -873,6 +876,7 @@ class SleeperService:
         """
         Fetch all NFL players from Sleeper API and update the local players table.
         This should be called periodically (e.g., daily/weekly) rather than on every user action.
+        Skips player data update if the current NFL state is in-season.
 
         Returns:
             Dict: Result of the operation with success status and message/error.
@@ -881,6 +885,12 @@ class SleeperService:
         # print("DEBUG (SleeperService): Starting update_all_sleeper_players...") # Keep print
         try:
             cursor = self._get_db_cursor()
+            
+            # Check if we should skip player data update based on season state
+            season_details = self._get_current_season_details()
+            if season_details and not season_details.get('is_offseason', True):
+                self.logger.info("SleeperService.update_all_sleeper_players: Skipping player data update - NFL season is currently in-season.")
+                return {"success": True, "message": "Skipped player data update - currently in-season"}
             
             all_players_api_data = self.get_players()
             if not all_players_api_data:

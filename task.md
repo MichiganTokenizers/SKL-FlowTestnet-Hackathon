@@ -26,6 +26,10 @@
   - [ ] Refine `RecentTransactionsTable.jsx` - `renderTransactionDetails` function to correctly parse and display various transaction types based on `SleeperService.py` data structure (Discovered: 2025-07-30)
 - [x] Get nfl state for offseason inseason toggle from SLeeper API
 - [x] Disable draft data pull in `SleeperService.fetch_all_data` if league status is "InSeason" (or NFL state indicates active season). (Completed: 2025-01-27)
+- [x] Skip player data updates during in-season to avoid unnecessary API calls (Completed: 2025-01-27)
+  - [x] Modified `update_all_sleeper_players()` to check `season_curr.IsOffSeason` before making API calls
+  - [x] Updated `fetch_all_data()` to handle skipped player updates gracefully
+  - [x] Added comprehensive test coverage for season-based player update logic
 - [x] Build out Team Page functionality (Started: 2025-05-29) (Completed: 2025-07-28)
   - [x] 'My Team' link in navbar goes to logged-in user's team page (Completed: 2023-10-27)
   - [x] Team names in standings table link to respective team pages (Completed: 2023-10-27)
