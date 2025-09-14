@@ -157,6 +157,16 @@ def init_db():
             else:
                 print(f"Error adding points_for column: {e}")
 
+        # TEMPORARY: Add players_updated_at column to season_curr table if it doesn't exist
+        try:
+            cursor.execute("ALTER TABLE season_curr ADD COLUMN players_updated_at DATETIME")
+            print("Added missing players_updated_at column to season_curr table")
+        except sqlite3.OperationalError as e:
+            if "duplicate column name" in str(e):
+                print("players_updated_at column already exists - no action needed")
+            else:
+                print(f"Error adding players_updated_at column: {e}")
+
         # Check if tables exist and create them if they don't
         print("Checking existing tables and creating missing ones...")
         
@@ -298,7 +308,8 @@ def init_db():
         cursor.execute('''CREATE TABLE IF NOT EXISTS season_curr
                           (current_year TEXT,
                            IsOffSeason INTEGER,
-                           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                           players_updated_at DATETIME)''')
 
         # Create trade-related tables
         cursor.execute('''CREATE TABLE IF NOT EXISTS trades (

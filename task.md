@@ -27,11 +27,12 @@
 - [x] Get nfl state for offseason inseason toggle from SLeeper API
 - [x] Disable draft data pull in `SleeperService.fetch_all_data` if league status is "InSeason" (or NFL state indicates active season). (Completed: 2025-01-27)
 - [x] Implement time-based throttling for player data updates (Completed: 2025-01-27)
-  - [x] Added 7-day time check using existing `season_curr.updated_at` field
-  - [x] Player updates only occur if last update was over 7 days ago (regardless of season)
-  - [x] Updates `season_curr.updated_at` timestamp after successful player data update
+  - [x] Added `players_updated_at` field to `season_curr` table for dedicated player update tracking
+  - [x] Added 7-day time check using `season_curr.players_updated_at` field (separate from general season updates)
+  - [x] Player updates only occur if last player update was over 7 days ago (regardless of season)
+  - [x] Updates `season_curr.players_updated_at` timestamp after successful player data update
   - [x] Comprehensive test coverage for time-based throttling logic
-  - [x] Simplified implementation - removed in-season check, only uses time-based throttling
+  - [x] Migration script to add `players_updated_at` column to existing databases
 - [x] Build out Team Page functionality (Started: 2025-05-29) (Completed: 2025-07-28)
   - [x] 'My Team' link in navbar goes to logged-in user's team page (Completed: 2023-10-27)
   - [x] Team names in standings table link to respective team pages (Completed: 2023-10-27)

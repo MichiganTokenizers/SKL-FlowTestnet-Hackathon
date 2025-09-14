@@ -886,19 +886,19 @@ class SleeperService:
         try:
             cursor = self._get_db_cursor()
             
-            # Check if we should skip based on time (last update within 7 days)
-            cursor.execute('SELECT updated_at FROM season_curr LIMIT 1')
+            # Check if we should skip based on time (last player update within 7 days)
+            cursor.execute('SELECT players_updated_at FROM season_curr LIMIT 1')
             last_update_row = cursor.fetchone()
             
-            if last_update_row and last_update_row['updated_at']:
+            if last_update_row and last_update_row['players_updated_at']:
                 from datetime import datetime, timedelta
                 try:
-                    last_update = datetime.fromisoformat(last_update_row['updated_at'].replace('Z', '+00:00'))
+                    last_update = datetime.fromisoformat(last_update_row['players_updated_at'].replace('Z', '+00:00'))
                     if datetime.now() - last_update < timedelta(days=7):
-                        self.logger.info("SleeperService.update_all_sleeper_players: Skipping - updated within last 7 days")
-                        return {"success": True, "message": "Skipped - updated within last 7 days"}
+                        self.logger.info("SleeperService.update_all_sleeper_players: Skipping - players updated within last 7 days")
+                        return {"success": True, "message": "Skipped - players updated within last 7 days"}
                 except ValueError as e:
-                    self.logger.warning(f"SleeperService.update_all_sleeper_players: Error parsing updated_at timestamp: {e}. Proceeding with update.")
+                    self.logger.warning(f"SleeperService.update_all_sleeper_players: Error parsing players_updated_at timestamp: {e}. Proceeding with update.")
             
             all_players_api_data = self.get_players()
             if not all_players_api_data:
@@ -940,7 +940,7 @@ class SleeperService:
                 # Update the season_curr table timestamp to track when player data was last updated
                 cursor.execute('''
                     UPDATE season_curr 
-                    SET updated_at = datetime('now') 
+                    SET players_updated_at = datetime('now') 
                     WHERE rowid = 1
                 ''')
                 

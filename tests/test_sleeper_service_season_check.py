@@ -53,11 +53,11 @@ class TestSleeperServiceTimeCheck:
         self.conn.close()
 
     def test_update_players_skipped_within_7_days(self):
-        """Test that player data update is skipped when updated within last 7 days."""
-        # Set up database to indicate offseason but recently updated
+        """Test that player data update is skipped when players updated within last 7 days."""
+        # Set up database with recent players update
         self.conn.execute('''
-            INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
-            VALUES (1, '2024', 1, datetime('now'))
+            INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at, players_updated_at)
+            VALUES (1, '2024', 1, datetime('now'), datetime('now'))
         ''')
         self.conn.commit()
         
@@ -71,14 +71,14 @@ class TestSleeperServiceTimeCheck:
             # Verify the result indicates skip
             assert result['success'] is True
             assert 'Skipped' in result['message']
-            assert 'updated within last 7 days' in result['message']
+            assert 'players updated within last 7 days' in result['message']
 
     def test_update_players_proceeds_after_7_days(self):
-        """Test that player data update proceeds when last update was over 7 days ago."""
-        # Set up database with old timestamp (over 7 days ago)
+        """Test that player data update proceeds when players last updated over 7 days ago."""
+        # Set up database with old players timestamp (over 7 days ago)
         self.conn.execute('''
-            INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
-            VALUES (1, '2024', 1, datetime('now', '-8 days'))
+            INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at, players_updated_at)
+            VALUES (1, '2024', 1, datetime('now'), datetime('now', '-8 days'))
         ''')
         self.conn.commit()
         
@@ -102,11 +102,11 @@ class TestSleeperServiceTimeCheck:
             assert 'Successfully updated' in result['message']
 
     def test_update_players_proceeds_during_in_season_after_7_days(self):
-        """Test that player data update proceeds during in-season if last update was over 7 days ago."""
-        # Set up database to indicate in-season but with old timestamp
+        """Test that player data update proceeds during in-season if players last updated over 7 days ago."""
+        # Set up database to indicate in-season but with old players timestamp
         self.conn.execute('''
-            INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at)
-            VALUES (1, '2024', 0, datetime('now', '-8 days'))
+            INSERT INTO season_curr (rowid, current_year, IsOffSeason, updated_at, players_updated_at)
+            VALUES (1, '2024', 0, datetime('now'), datetime('now', '-8 days'))
         ''')
         self.conn.commit()
         
