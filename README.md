@@ -11,9 +11,9 @@ Supreme Keeper League is a cutting-edge fantasy football platform that combines 
 This project is **Built on Flow** and leverages the Flow ecosystem for:
 
 - **Secure Transactions**: All league fees and payouts processed through Flow blockchain
-- **Smart Contracts**: Automated contract management and penalty systems
-- **FlowConnect Integration**: Seamless wallet authentication and user experience
-- **Transparent Operations**: All league activities recorded on-chain for complete transparency
+- **Automated Sleeper Integration**: Automated penalty systems and user controlled contract management
+- **FlowConnect Integration**: Seamless wallet authentication for account functions 
+
 
 ### Flow Components Used
 - **@onflow/fcl**: Flow Client Library for blockchain interactions
@@ -23,23 +23,21 @@ This project is **Built on Flow** and leverages the Flow ecosystem for:
 
 ### Contract Addresses
 - **Flow Network**: Mainnet (`access.mainnet.nodes.onflow.org:9000`)
-- **Testnet**: Devnet (`access.devnet.nodes.onflow.org:9000`)
 - **Account Setup Contract**: See `setup_account.cdc`
 - **Flow Configuration**: See `flow.json`
 
 ## ✨ Key Features
 
 ### 🏆 League Management
-- **Keeper League Support**: Multi-year player contracts with escalating costs
+- **Supreme Keeper League Support**: Multi-year player contracts with escalating costs
 - **Franchise Tag System**: Designate one player per team with calculated tag values
 - **Penalty System**: Automated penalties for waived players with active contracts
 - **Real-time Analytics**: Positional spending ranks and future contract projections
 
 ### 💰 Financial Transparency
-- **Blockchain Payments**: League fees processed through Flow blockchain
+- **Blockchain Payments**: League fees processed through Flow blockchain, links to transactions posted
 - **Automated Payouts**: Smart contract-based prize distribution
-- **Contract Escalation**: 10% annual cost increases for multi-year contracts
-- **Budget Tracking**: Real-time salary cap management and future projections
+- **Budget Tracking**: Real-time auction budget management for team management over 4 years
 
 ### 🔄 Sleeper Integration
 - **One-time Data Sync**: Efficient data pull from Sleeper API
@@ -51,7 +49,7 @@ This project is **Built on Flow** and leverages the Flow ecosystem for:
 - **Flow Wallet Login**: Secure authentication via Flow blockchain
 - **Responsive Design**: Modern UI built with React and Bootstrap
 - **Real-time Updates**: Live league standings and transaction tracking
-- **Mobile Friendly**: Optimized for all device sizes
+
 
 ## 🛠️ Technology Stack
 
@@ -80,40 +78,6 @@ This project is **Built on Flow** and leverages the Flow ecosystem for:
 - Flow CLI
 - Flow wallet (Blocto, Ledger, or other compatible wallet)
 
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/[your-username]/supremekeeperleague-Flow.git
-   cd supremekeeperleague-Flow
-   ```
-
-2. **Install frontend dependencies**
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-3. **Install backend dependencies**
-   ```bash
-   cd ../backend
-   pip install -r requirements.txt
-   ```
-
-4. **Configure Flow**
-   - Update `flow.json` with your network configuration
-   - Deploy smart contracts using Flow CLI
-
-5. **Start the application**
-   ```bash
-   # Backend (Terminal 1)
-   cd backend
-   python app.py
-   
-   # Frontend (Terminal 2)
-   cd frontend
-   npm run dev
-   ```
 
 ## 📊 Database Schema
 
@@ -125,14 +89,6 @@ The application uses SQLite with the following key tables:
 - **Transactions**: All league activities and trades
 - **Penalties**: Automated penalty tracking
 
-## 🎮 Usage
-
-1. **Connect Wallet**: Authenticate using your Flow wallet
-2. **Associate Sleeper**: Link your Sleeper account for league data
-3. **Join League**: Connect to SKL-prefixed leagues
-4. **Manage Contracts**: Set up multi-year player contracts
-5. **Track Analytics**: Monitor spending and future commitments
-6. **Process Transactions**: Handle trades and league fees
 
 ## 🔧 Development
 
@@ -146,26 +102,6 @@ supremekeeperleague-Flow/
 ├── flow.json          # Flow configuration
 └── setup_account.cdc  # Account setup contract
 ```
-
-### Testing
-```bash
-# Run backend tests
-cd backend
-python -m pytest
-
-# Run frontend tests
-cd frontend
-npm test
-```
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our contributing guidelines and submit pull requests for any improvements.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
 ## 🔗 Links
 
 - **Flow Documentation**: https://docs.onflow.org/
