@@ -12,7 +12,7 @@
   "dependencies": {
     "@onflow/fcl": "^1.18.0",
     "@onflow/types": "^1.4.1",
-    "@tonconnect/sdk": "^3.1.0",
+    
     "bootstrap": "^5.3.6",
     "react": "^19.1.0",
     "react-bootstrap": "^2.10.10",

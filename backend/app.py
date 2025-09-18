@@ -147,25 +147,7 @@ def init_db():
         # Enable WAL mode is handled by get_global_db_connection() now
         # So, no specific PRAGMA call here unless to re-verify or if get_global_db_connection fails.
 
-        # TEMPORARY: Add missing points_for column if it doesn't exist
-        try:
-            cursor.execute("ALTER TABLE rosters ADD COLUMN points_for REAL DEFAULT 0.0")
-            print("Added missing points_for column to rosters table")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name" in str(e):
-                print("points_for column already exists - no action needed")
-            else:
-                print(f"Error adding points_for column: {e}")
-
-        # TEMPORARY: Add players_updated_at column to season_curr table if it doesn't exist
-        try:
-            cursor.execute("ALTER TABLE season_curr ADD COLUMN players_updated_at DATETIME")
-            print("Added missing players_updated_at column to season_curr table")
-        except sqlite3.OperationalError as e:
-            if "duplicate column name" in str(e):
-                print("players_updated_at column already exists - no action needed")
-            else:
-                print(f"Error adding players_updated_at column: {e}")
+        
 
         # Check if tables exist and create them if they don't
         print("Checking existing tables and creating missing ones...")
