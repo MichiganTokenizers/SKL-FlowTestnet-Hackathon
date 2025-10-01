@@ -158,6 +158,11 @@ function Transactions({ leagueId, sessionToken }) {
         }).format(amount);
     };
 
+    // Group penalties by player and memoize for performance
+    const penaltyGroups = useMemo(() => {
+        return groupPenaltiesByPlayer();
+    }, [penalties, playerMap]);
+
     if (loading) {
         return (
             <div className="text-center py-3">
@@ -182,11 +187,6 @@ function Transactions({ leagueId, sessionToken }) {
             </div>
         );
     }
-
-    // Group penalties by player and memoize for performance
-    const penaltyGroups = useMemo(() => {
-        return groupPenaltiesByPlayer();
-    }, [penalties, playerMap]);
 
     return (
         <div>
