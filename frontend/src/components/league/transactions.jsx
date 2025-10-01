@@ -139,8 +139,11 @@ function Transactions({ leagueId, sessionToken }) {
         return Object.values(grouped).sort((a, b) => {
             const aStr = a.penalty_created_at || '';
             const bStr = b.penalty_created_at || '';
-            // Simple string compare works for ISO-like format: YYYY-MM-DD HH:MM:SS
-            return bStr.localeCompare(aStr); // Descending (newest first)
+            // Direct string comparison works reliably for SQLite datetime format: YYYY-MM-DD HH:MM:SS
+            // For descending order: if b > a, return negative (b comes first)
+            if (bStr > aStr) return -1;
+            if (aStr > bStr) return 1;
+            return 0;
         });
     };
 
