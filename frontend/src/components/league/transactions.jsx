@@ -126,26 +126,21 @@ function Transactions({ leagueId, sessionToken }) {
             
             grouped[playerId].penalties.push(penalty);
             grouped[playerId].total_amount += penalty.amount;
+
+            // Keep the most recent penalty_created_at per player for sorting
+            const prevDateStr = grouped[playerId].penalty_created_at || '';
+            const currDateStr = penalty.penalty_created_at || '';
+            if (currDateStr > prevDateStr) {
+                grouped[playerId].penalty_created_at = currDateStr; // Lexicographic works for YYYY-MM-DD HH:MM:SS
+            }
         });
         
         // Sort by penalty_created_at in descending order (most recent first)
         return Object.values(grouped).sort((a, b) => {
-            // Parse SQLite datetime format (YYYY-MM-DD HH:MM:SS) more robustly
-            const parseSQLiteDate = (dateStr) => {
-                if (!dateStr) return new Date(0);
-                
-                // SQLite datetime format: YYYY-MM-DD HH:MM:SS
-                // Add 'Z' to treat as UTC if no timezone info
-                if (dateStr.includes(' ') && !dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
-                    return new Date(dateStr + 'Z');
-                }
-                return new Date(dateStr);
-            };
-            
-            const dateA = parseSQLiteDate(a.penalty_created_at);
-            const dateB = parseSQLiteDate(b.penalty_created_at);
-            
-            return dateB - dateA; // Descending order (newest first)
+            const aStr = a.penalty_created_at || '';
+            const bStr = b.penalty_created_at || '';
+            // Simple string compare works for ISO-like format: YYYY-MM-DD HH:MM:SS
+            return bStr.localeCompare(aStr); // Descending (newest first)
         });
     };
 
