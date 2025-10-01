@@ -106,7 +106,7 @@ function Transactions({ leagueId, sessionToken }) {
     // Group penalties by player to calculate totals
     const groupPenaltiesByPlayer = () => {
         const grouped = {};
-        
+
         penalties.forEach(penalty => {
             const playerId = penalty.player_id;
             if (!grouped[playerId]) {
@@ -123,27 +123,21 @@ function Transactions({ leagueId, sessionToken }) {
                     team_name: penalty.team_name
                 };
             }
-            
+
             grouped[playerId].penalties.push(penalty);
             grouped[playerId].total_amount += penalty.amount;
-
-            // Keep the most recent penalty_created_at per player for sorting
-            const prevDateStr = grouped[playerId].penalty_created_at || '';
-            const currDateStr = penalty.penalty_created_at || '';
-            if (currDateStr > prevDateStr) {
-                grouped[playerId].penalty_created_at = currDateStr; // Lexicographic works for YYYY-MM-DD HH:MM:SS
-            }
         });
-        
+
         // Sort by penalty_created_at in descending order (most recent first)
         return Object.values(grouped).sort((a, b) => {
             const aStr = a.penalty_created_at || '';
             const bStr = b.penalty_created_at || '';
-            // Direct string comparison works reliably for SQLite datetime format: YYYY-MM-DD HH:MM:SS
-            // For descending order: if b > a, return negative (b comes first)
-            if (bStr > aStr) return -1;
-            if (aStr > bStr) return 1;
-            return 0;
+
+            // Simple string comparison for descending order
+            // Since SQLite returns "YYYY-MM-DD HH:MM:SS" format, this works reliably
+            if (bStr < aStr) return -1;  // b is older, a comes first
+            if (bStr > aStr) return 1;   // b is newer, b comes first
+            return 0;                    // equal dates
         });
     };
 
