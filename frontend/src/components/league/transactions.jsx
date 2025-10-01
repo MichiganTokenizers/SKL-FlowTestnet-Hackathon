@@ -130,8 +130,21 @@ function Transactions({ leagueId, sessionToken }) {
         
         // Sort by penalty_created_at in descending order (most recent first)
         return Object.values(grouped).sort((a, b) => {
-            const dateA = new Date(a.penalty_created_at);
-            const dateB = new Date(b.penalty_created_at);
+            // Parse SQLite datetime format (YYYY-MM-DD HH:MM:SS) more robustly
+            const parseSQLiteDate = (dateStr) => {
+                if (!dateStr) return new Date(0);
+                
+                // SQLite datetime format: YYYY-MM-DD HH:MM:SS
+                // Add 'Z' to treat as UTC if no timezone info
+                if (dateStr.includes(' ') && !dateStr.includes('Z') && !dateStr.includes('+') && !dateStr.includes('-', 10)) {
+                    return new Date(dateStr + 'Z');
+                }
+                return new Date(dateStr);
+            };
+            
+            const dateA = parseSQLiteDate(a.penalty_created_at);
+            const dateB = parseSQLiteDate(b.penalty_created_at);
+            
             return dateB - dateA; // Descending order (newest first)
         });
     };
