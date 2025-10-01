@@ -126,11 +126,20 @@ function Transactions({ leagueId, sessionToken }) {
 
             grouped[playerId].penalties.push(penalty);
             grouped[playerId].total_amount += penalty.amount;
+
+            // Track most recent penalty_created_at per player (lexicographic works for YYYY-MM-DD HH:MM:SS)
+            const prevDateStr = grouped[playerId].penalty_created_at || '';
+            const currDateStr = penalty.penalty_created_at || '';
+            if (currDateStr > prevDateStr) {
+                grouped[playerId].penalty_created_at = currDateStr;
+            }
         });
 
-        // Sort by total_amount in descending order (highest penalties first)
+        // Sort by penalty_created_at in descending order (most recent first)
         return Object.values(grouped).sort((a, b) => {
-            return b.total_amount - a.total_amount; // Descending order (highest penalty first)
+            const aStr = a.penalty_created_at || '';
+            const bStr = b.penalty_created_at || '';
+            return bStr.localeCompare(aStr);
         });
     };
 
