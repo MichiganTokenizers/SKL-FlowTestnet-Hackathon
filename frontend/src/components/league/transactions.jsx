@@ -128,16 +128,9 @@ function Transactions({ leagueId, sessionToken }) {
             grouped[playerId].total_amount += penalty.amount;
         });
 
-        // Sort by penalty_created_at in descending order (most recent first)
+        // Sort by total_amount in descending order (highest penalties first)
         return Object.values(grouped).sort((a, b) => {
-            const aStr = a.penalty_created_at || '';
-            const bStr = b.penalty_created_at || '';
-
-            // Simple string comparison for descending order
-            // Since SQLite returns "YYYY-MM-DD HH:MM:SS" format, this works reliably
-            if (bStr < aStr) return -1;  // b is older, a comes first
-            if (bStr > aStr) return 1;   // b is newer, b comes first
-            return 0;                    // equal dates
+            return b.total_amount - a.total_amount; // Descending order (highest penalty first)
         });
     };
 
