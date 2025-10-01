@@ -128,7 +128,12 @@ function Transactions({ leagueId, sessionToken }) {
             grouped[playerId].total_amount += penalty.amount;
         });
         
-        return Object.values(grouped);
+        // Sort by penalty_created_at in descending order (most recent first)
+        return Object.values(grouped).sort((a, b) => {
+            const dateA = new Date(a.penalty_created_at);
+            const dateB = new Date(b.penalty_created_at);
+            return dateB - dateA; // Descending order (newest first)
+        });
     };
 
     const formatDate = (timestamp) => {

@@ -65,10 +65,7 @@ This project is **Built on Flow** and leverages the Flow ecosystem for:
 - **Sleeper API**: Fantasy football data integration
 - **Flow SDK**: Blockchain transaction processing
 
-### Blockchain
-- **Flow Network**: Scalable, developer-friendly blockchain
-- **Cadence**: Resource-oriented smart contract language
-- **FlowToken & FUSD**: Native and stable token support
+
 
 ## 🚀 Getting Started
 
@@ -108,10 +105,5 @@ supremekeeperleague-Flow/
 - **Sleeper API**: https://docs.sleeper.com/
 - **Project Planning**: See `planning.md` for detailed architecture
 
-## 🏆 ReWTF Program
-
-This project is participating in the Flow ReWTF (Reward the Flow) program, building in public and contributing to the Flow ecosystem. Follow our progress with `#ReWTF` and `@flow_blockchain`!
-
----
 
 
