@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { API_BASE_URL } from '../../config';
 
 // Function to create team abbreviations
@@ -183,8 +183,10 @@ function Transactions({ leagueId, sessionToken }) {
         );
     }
 
-    // Group penalties by player
-    const penaltyGroups = groupPenaltiesByPlayer();
+    // Group penalties by player and memoize for performance
+    const penaltyGroups = useMemo(() => {
+        return groupPenaltiesByPlayer();
+    }, [penalties, playerMap]);
 
     return (
         <div>
@@ -213,7 +215,7 @@ function Transactions({ leagueId, sessionToken }) {
                                 <tr key={index}>
                                     <td>{formatDate(group.penalty_created_at)}</td>
                                     <td>
-                                        {group.team_name ? createTeamAbbreviation(group.team_name) : `Team ${group.team_id}`
+                                        {group.team_name ? createTeamAbbreviation(group.team_name) : `Team ${group.team_id}`}
                                     </td>
                                     <td>{group.player_name}</td>
                                     <td>
