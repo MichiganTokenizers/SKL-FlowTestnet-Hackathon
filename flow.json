@@ -12,6 +12,18 @@
 				"type": "file",
 				"location": "emulator-account.pkey"
 			}
+		},
+		"testnet-account": {
+			"address": "0xdf978465ee6dcf32",
+			"key": {
+				"type": "file",
+				"location": "testnet-account.pkey"
+			}
+		}
+	},
+	"deployments": {
+		"testnet": {
+			"testnet-account": []
 		}
 	}
 }

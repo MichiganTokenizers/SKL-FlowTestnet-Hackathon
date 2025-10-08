@@ -1,6 +1,7 @@
 
 # flow
 emulator-account.pkey
+testnet-account.pkey
 imports
 *.db
 *.pyc
