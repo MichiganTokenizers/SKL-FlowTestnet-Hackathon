@@ -87,7 +87,7 @@ def log_cors_headers():
         if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
             response.headers['Access-Control-Allow-Origin'] = origin
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Wallet-Address'
         return response, 200
 
 @app.errorhandler(Exception)
@@ -102,7 +102,7 @@ def handle_exception(e):
     if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
         response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Wallet-Address'
     return response
 
 @app.after_request
@@ -112,7 +112,7 @@ def add_cors_headers(response):
     if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
         response.headers['Access-Control-Allow-Origin'] = origin
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Wallet-Address'
     print(f"Response headers after modification: {response.headers}")
     return response
 
@@ -413,7 +413,9 @@ def init_db():
 
 print("DEBUG: Database initialization skipped. Proceeding to define routes and helpers...")
 
-
+# Import and register admin routes
+from admin_routes import register_admin_routes
+register_admin_routes(app)
 
 def get_current_season():
     """Fetches the current season year and off-season status from the local season_curr table."""

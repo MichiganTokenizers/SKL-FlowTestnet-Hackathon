@@ -11,6 +11,7 @@ import Home from './components/common/Home';
 import Profile from './components/profile/Profile';
 import League from './components/league/League';
 import Team from './components/team/Team';
+import AdminDashboard from './components/admin/AdminDashboard';
 
 import { API_BASE_URL } from './config';
 
@@ -66,6 +67,7 @@ function AppContent() {
     const [flowUser, setFlowUser] = useState(null); // Added FCL user state
     const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
     const [isNewUser, setIsNewUser] = useState(false);
+    const [isAdmin, setIsAdmin] = useState(false); // Admin bypass flag
     const [leagues, setLeagues] = useState([]);
     const [selectedLeagueId, setSelectedLeagueId] = useState(null);
     const [currentUserDetails, setCurrentUserDetails] = useState(null);
@@ -152,7 +154,27 @@ function AppContent() {
             setSessionToken(currentToken); 
 
             const verifyAndSetStates = async () => {
-                await fetchUserLeagues(currentToken); 
+                // Check if admin user FIRST using session token
+                try {
+                    const adminRes = await fetch(`${API_BASE_URL}/admin/verify`, {
+                        headers: { 'Authorization': currentToken }
+                    });
+                    const adminData = await adminRes.json();
+                    console.log('🔍 Admin verification (page load):', adminData);
+                    if (adminData.is_admin) {
+                        setIsAdmin(true);
+                        setIsNewUser(false); // Admin bypasses Sleeper requirement
+                        setIsAppReady(true);
+                        console.log('✅ Admin verified on page load');
+                        return; // Exit early for admin
+                    }
+                } catch (e) {
+                    console.log('❌ Admin check failed:', e);
+                }
+
+                // Non-admin flow: fetch leagues and check association
+                await fetchUserLeagues(currentToken);
+
                 try {
                     const res = await fetch(`${API_BASE_URL}/auth/check_association`, { headers: { 'Authorization': currentToken }});
                     if (res.ok) {
@@ -160,14 +182,14 @@ function AppContent() {
                         if (checkData.success) {
                             setIsNewUser(checkData.needs_association);
                         } else {
-                            setIsNewUser(true); 
+                            setIsNewUser(true);
                         }
                     } else {
                         if (res.status === 401) logout();
-                        setIsNewUser(true); 
+                        setIsNewUser(true);
                     }
                 } catch {
-                    setIsNewUser(true); 
+                    setIsNewUser(true);
                 }
                 setIsAppReady(true); // Set app ready after all states are set
             };
@@ -193,9 +215,31 @@ function AppContent() {
                         const newSessionToken = loginData.sessionToken;
                         localStorage.setItem('sessionToken', newSessionToken);
                         setSessionToken(newSessionToken);
-                        setIsNewUser(loginData.isNewUser);
+
+                        // Check if admin user
+                        try {
+                            const adminRes = await fetch(`${API_BASE_URL}/admin/verify`, {
+                                headers: { 'X-Wallet-Address': flowUser.addr }
+                            });
+                            const adminData = await adminRes.json();
+                            console.log('Admin check response:', adminData);
+                            if (adminData.is_admin) {
+                                setIsAdmin(true);
+                                setIsNewUser(false); // Admin bypasses Sleeper requirement
+                                setIsAppReady(true); // Admin is ready immediately
+                                console.log('✅ Admin user detected, bypassing Sleeper association');
+                                return; // Exit early for admin
+                            } else {
+                                console.log('Not an admin user, following normal flow');
+                                setIsNewUser(loginData.isNewUser);
+                            }
+                        } catch (e) {
+                            console.log('Admin check failed, using normal flow:', e);
+                            setIsNewUser(loginData.isNewUser);
+                        }
+
                         setLoginProcessJustCompleted(true);
-                        
+
                         // If user has a Sleeper ID, fetch their leagues
                         if (!loginData.isNewUser && loginData.hasSleeperId) {
                             console.log("User has Sleeper ID, fetching leagues...");
@@ -343,7 +387,9 @@ function AppContent() {
                 <Routes>
                     <Route path="/" element={
                         sessionToken && isAppReady ? (
-                            isNewUser ? (
+                            isAdmin ? (
+                                <Navigate to="/home" replace />
+                            ) : isNewUser ? (
                                 <Navigate to="/associate-sleeper" replace />
                             ) : (
                                 <Navigate to="/league" replace />
@@ -362,7 +408,7 @@ function AppContent() {
                     } />
                     <Route path="/home" element={<Home sessionToken={sessionToken} onLogout={logout} />} />
                     <Route path="/league" element={
-                        sessionToken && isAppReady && !isNewUser ? (
+                        sessionToken && isAppReady && (!isNewUser || isAdmin) ? (
                             <League leagues={leagues} selectedLeagueId={selectedLeagueId} sessionToken={sessionToken} currentUserDetails={currentUserDetails} />
                         ) : (
                             <Navigate to="/" replace />
@@ -370,7 +416,7 @@ function AppContent() {
                     } />
 
                     <Route path="/league/:leagueId/team/:teamId" element={
-                        sessionToken && isAppReady && !isNewUser ? (
+                        sessionToken && isAppReady && (!isNewUser || isAdmin) ? (
                             <Team />
                         ) : (
                             <Navigate to="/" replace />
@@ -378,8 +424,15 @@ function AppContent() {
                     } />
                     <Route path="/sleeper-import" element={<SleeperImport />} />
                     <Route path="/associate-sleeper" element={
-                        sessionToken && isAppReady ? /* Also protect association route if needed, or handle differently */ 
+                        sessionToken && isAppReady ? /* Also protect association route if needed, or handle differently */
                         <AssociateSleeper onAssociationSuccess={handleAssociationSuccess} /> : <Navigate to="/" replace />
+                    } />
+                    <Route path="/admin" element={
+                        sessionToken ? (
+                            <AdminDashboard user={currentUserDetails} />
+                        ) : (
+                            <Navigate to="/" replace />
+                        )
                     } />
                     {/* <Route path="/league-connect" element={ // Commenting out LeagueConnect route
                         sessionToken && isAppReady && isNewUser ? (

@@ -1,14 +1,57 @@
 import { Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as fcl from "@onflow/fcl";
+import { API_BASE_URL } from '../../config';
 
 function Home({ sessionToken }) {
     // Collapsible state
     const [showInstructions, setShowInstructions] = useState(false);
     const [showRules, setShowRules] = useState(true);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [currentUser, setCurrentUser] = useState(null);
+
+    // Subscribe to Flow user
+    useEffect(() => {
+        const unsubscribe = fcl.currentUser.subscribe(setCurrentUser);
+        return () => unsubscribe();
+    }, []);
+
+    // Check if admin
+    useEffect(() => {
+        const checkAdmin = async () => {
+            if (currentUser && currentUser.addr) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/admin/verify`, {
+                        headers: { 'X-Wallet-Address': currentUser.addr }
+                    });
+                    const data = await response.json();
+                    setIsAdmin(data.is_admin);
+                } catch (error) {
+                    console.log('Admin check error:', error);
+                }
+            }
+        };
+        checkAdmin();
+    }, [currentUser]);
 
     return (
         <div className="container-fluid px-4 py-5">
+            {/* Admin Banner */}
+            {isAdmin && (
+                <div className="row justify-content-center mb-3">
+                    <div className="col-md-10 col-lg-8">
+                        <div className="alert alert-success d-flex justify-content-between align-items-center" role="alert">
+                            <div>
+                                <strong>🔑 Admin Access Detected</strong>
+                                <p className="mb-0">You have admin privileges. Access the admin dashboard to manage all leagues.</p>
+                            </div>
+                            <Link to="/admin" className="btn btn-success">
+                                Go to Admin Dashboard
+                            </Link>
+                        </div>
+                    </div>
+                </div>
+            )}
             {/* Welcome Title */}
             <div className="row justify-content-center mb-3">
                 <div className="col-md-10 col-lg-8">
