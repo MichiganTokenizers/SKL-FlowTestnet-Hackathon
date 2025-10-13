@@ -82,21 +82,45 @@ INSERT INTO LeagueFees (
 INSERT INTO rosters (sleeper_roster_id, sleeper_league_id, owner_id, team_name, wins, losses, ties, points_for, players, created_at, updated_at)
 VALUES
     -- Fake wallets (pre-paid) - ALL LOSERS, NO PRIZES
-    ('1', 'TEST_VAULT_001', 'fake_user_001', 'Dynasty Duds', 5, 9, 0, 1437.3, '[]', datetime('now'), datetime('now')),
-    ('2', 'TEST_VAULT_001', 'fake_user_002', 'Mediocre Managers', 4, 10, 0, 1491.9, '[]', datetime('now'), datetime('now')),
-    ('3', 'TEST_VAULT_001', 'fake_user_003', 'Playoff Pretenders', 3, 11, 0, 1546.5, '[]', datetime('now'), datetime('now')),
-    ('4', 'TEST_VAULT_001', 'fake_user_004', 'Touchdown Turnovers', 2, 12, 0, 1601.1, '[]', datetime('now'), datetime('now')),
-    ('5', 'TEST_VAULT_001', 'fake_user_005', 'Fantasy Failures', 1, 13, 0, 1655.7, '[]', datetime('now'), datetime('now')),
+    -- Mock Sleeper User IDs: 9001XXXXXXXX format (fake IDs starting with 9001)
+    ('1', 'TEST_VAULT_001', '900111111111111111', 'Dynasty Duds', 5, 9, 0, 1437.3, '[]', datetime('now'), datetime('now')),
+    ('2', 'TEST_VAULT_001', '900122222222222222', 'Mediocre Managers', 4, 10, 0, 1491.9, '[]', datetime('now'), datetime('now')),
+    ('3', 'TEST_VAULT_001', '900133333333333333', 'Playoff Pretenders', 3, 11, 0, 1546.5, '[]', datetime('now'), datetime('now')),
+    ('4', 'TEST_VAULT_001', '900144444444444444', 'Touchdown Turnovers', 2, 12, 0, 1601.1, '[]', datetime('now'), datetime('now')),
+    ('5', 'TEST_VAULT_001', '900155555555555555', 'Fantasy Failures', 1, 13, 0, 1655.7, '[]', datetime('now'), datetime('now')),
 
     -- Real Flow testnet wallets (will pay via UI) - ALL 4 PRIZE WINNERS!
-    ('6', 'TEST_VAULT_001', 'real_user_006', 'Regular Season Kings', 12, 2, 0, 1950.8, '[]', datetime('now'), datetime('now')),  -- Reg season winner
-    ('7', 'TEST_VAULT_001', 'real_user_007', 'Championship Champions', 11, 3, 0, 1875.2, '[]', datetime('now'), datetime('now')),  -- 1st place
-    ('8', 'TEST_VAULT_001', 'real_user_008', 'Runner-Up Rivals', 10, 4, 0, 1820.5, '[]', datetime('now'), datetime('now')),  -- 2nd place
-    ('9', 'TEST_VAULT_001', 'real_user_009', 'Third Place Threats', 9, 5, 0, 1765.9, '[]', datetime('now'), datetime('now')),  -- 3rd place
-    ('10', 'TEST_VAULT_001', 'real_user_010', 'Playoff Participants', 8, 6, 0, 1710.3, '[]', datetime('now'), datetime('now'));  -- Makes playoffs, no prize
+    -- Mock Sleeper User IDs: 9002XXXXXXXX format (real wallet IDs starting with 9002)
+    ('6', 'TEST_VAULT_001', '900266666666666666', 'Regular Season Kings', 12, 2, 0, 1950.8, '[]', datetime('now'), datetime('now')),  -- Reg season winner
+    ('7', 'TEST_VAULT_001', '900277777777777777', 'Championship Champions', 11, 3, 0, 1875.2, '[]', datetime('now'), datetime('now')),  -- 1st place
+    ('8', 'TEST_VAULT_001', '900288888888888888', 'Runner-Up Rivals', 10, 4, 0, 1820.5, '[]', datetime('now'), datetime('now')),  -- 2nd place
+    ('9', 'TEST_VAULT_001', '900299999999999999', 'Third Place Threats', 9, 5, 0, 1765.9, '[]', datetime('now'), datetime('now')),  -- 3rd place
+    ('10', 'TEST_VAULT_001', '900210101010101010', 'Playoff Participants', 8, 6, 0, 1710.3, '[]', datetime('now'), datetime('now'));  -- Makes playoffs, no prize
 
 -- =============================================================================
--- STEP 4: Link Wallets (5 fake paid + 5 real unpaid)
+-- STEP 4: Create Users (Link Wallet Addresses to Sleeper User IDs)
+-- =============================================================================
+
+-- Fake wallet users
+INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, created_at, updated_at)
+VALUES
+    ('0xFAKE1111111111111111111111111111', '900111111111111111', 'fake_user_001', 'Fake User 1', datetime('now'), datetime('now')),
+    ('0xFAKE2222222222222222222222222222', '900122222222222222', 'fake_user_002', 'Fake User 2', datetime('now'), datetime('now')),
+    ('0xFAKE3333333333333333333333333333', '900133333333333333', 'fake_user_003', 'Fake User 3', datetime('now'), datetime('now')),
+    ('0xFAKE4444444444444444444444444444', '900144444444444444', 'fake_user_004', 'Fake User 4', datetime('now'), datetime('now')),
+    ('0xFAKE5555555555555555555555555555', '900155555555555555', 'fake_user_005', 'Fake User 5 (Commissioner)', datetime('now'), datetime('now'));
+
+-- Real testnet wallet users
+INSERT INTO Users (wallet_address, sleeper_user_id, username, display_name, created_at, updated_at)
+VALUES
+    ('0xb647c8ffe7d05b51', '900266666666666666', 'SKLtest1', 'SKLtest1 (Wallet 1)', datetime('now'), datetime('now')),
+    ('0x447414116f2e51ef', '900277777777777777', 'SKLtest2', 'SKLtest2 (Wallet 2)', datetime('now'), datetime('now')),
+    ('0xa9f313f3c175ebb5', '900288888888888888', 'SKLtest3', 'SKLtest3 (Wallet 3)', datetime('now'), datetime('now')),
+    ('0x5bc0cf1d498be10b', '900299999999999999', 'SKLtest4', 'SKLtest4 (Wallet 4)', datetime('now'), datetime('now')),
+    ('0xbfa776c05871e1d4', '900210101010101010', 'SKLtest5', 'SKLtest5 (Wallet 5)', datetime('now'), datetime('now'));
+
+-- =============================================================================
+-- STEP 5: Link Wallets to League (UserLeagueLinks)
 -- =============================================================================
 
 -- Fake wallets - already paid (for testing vault deposit immediately)
