@@ -19,11 +19,13 @@ def admin_required(f):
         if not wallet_address:
             auth_header = request.headers.get('Authorization')
             if auth_header:
+                # Handle both "Bearer <token>" and direct token formats
+                token = auth_header.split(' ', 1)[1] if auth_header.startswith('Bearer ') else auth_header
                 try:
                     conn = sqlite3.connect('keeper.db')
                     conn.row_factory = sqlite3.Row
                     cursor = conn.cursor()
-                    cursor.execute("SELECT wallet_address FROM sessions WHERE session_token = ?", (auth_header,))
+                    cursor.execute("SELECT wallet_address FROM sessions WHERE session_token = ?", (token,))
                     session_data = cursor.fetchone()
                     if session_data:
                         wallet_address = session_data['wallet_address']
@@ -69,11 +71,13 @@ def register_admin_routes(app):
         if not wallet_address:
             auth_header = request.headers.get('Authorization')
             if auth_header:
+                # Handle both "Bearer <token>" and direct token formats
+                token = auth_header.split(' ', 1)[1] if auth_header.startswith('Bearer ') else auth_header
                 try:
                     conn = sqlite3.connect('keeper.db')
                     conn.row_factory = sqlite3.Row
                     cursor = conn.cursor()
-                    cursor.execute("SELECT wallet_address FROM sessions WHERE session_token = ?", (auth_header,))
+                    cursor.execute("SELECT wallet_address FROM sessions WHERE session_token = ?", (token,))
                     session_data = cursor.fetchone()
                     if session_data:
                         wallet_address = session_data['wallet_address']
@@ -892,10 +896,10 @@ def register_admin_routes(app):
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @app.route('/admin/league/<league_id>/vault/withdraw', methods=['POST'])
+    @app.route('/admin/league/<league_id>/vault/withdrawal-record', methods=['POST'])
     @admin_required
     def vault_withdrawal(league_id):
-        """Record vault withdrawal (Cadence transaction executed separately)"""
+        """Record vault withdrawal (Cadence transaction executed separately) - OLD ENDPOINT"""
         try:
             data = request.json
             vault_id = data.get('vault_id')
@@ -970,10 +974,10 @@ def register_admin_routes(app):
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
-    @app.route('/admin/league/<league_id>/payouts/execute', methods=['POST'])
+    @app.route('/admin/league/<league_id>/payouts/execute-record', methods=['POST'])
     @admin_required
     def execute_payout(league_id):
-        """Execute prize distribution (creates PayoutSchedule and PayoutDistributions)"""
+        """Execute prize distribution - LEGACY endpoint for manual record creation (creates PayoutSchedule and PayoutDistributions)"""
         try:
             data = request.json
             prize_pool = data.get('prize_pool')

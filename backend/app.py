@@ -86,7 +86,7 @@ def log_cors_headers():
         origin = request.headers.get('Origin', '')
         if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
             response.headers['Access-Control-Allow-Origin'] = origin
-        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, OPTIONS'
         response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Wallet-Address'
         return response, 200
 
@@ -101,7 +101,7 @@ def handle_exception(e):
     origin = request.headers.get('Origin', '')
     if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
         response.headers['Access-Control-Allow-Origin'] = origin
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Wallet-Address'
     return response
 
@@ -111,7 +111,7 @@ def add_cors_headers(response):
     origin = request.headers.get('Origin', '')
     if origin in ['http://localhost:5173', 'https://supremekeeperleague.com']:
         response.headers['Access-Control-Allow-Origin'] = origin
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, DELETE, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-Wallet-Address'
     print(f"Response headers after modification: {response.headers}")
     return response
@@ -457,8 +457,11 @@ def get_current_user():
         auth_header = request.headers.get('Authorization')
         if auth_header:
             # Frontend sends token directly as per App.jsx: headers: { 'Authorization': token }
-            # If it could be "Bearer <token>", add splitting logic here.
-            session_token_from_header = auth_header 
+            # But some clients send "Bearer <token>", so handle both formats
+            if auth_header.startswith('Bearer '):
+                session_token_from_header = auth_header.split(' ', 1)[1]
+            else:
+                session_token_from_header = auth_header 
 
             if session_token_from_header:
                 print(f"DEBUG: get_current_user - Found token in Authorization header: {session_token_from_header[:10]}...")
@@ -2621,6 +2624,646 @@ def execute_vault_deposit(league_id, season_year, cursor):
         import traceback
         app.logger.error(traceback.format_exc())
         return {'success': False, 'error': str(e)}
+
+def execute_vault_withdrawal_transaction(amount, league_id):
+    """Execute the Cadence transaction to withdraw FLOW from IncrementFi vault."""
+    import subprocess
+
+    try:
+        app.logger.info(f"💎 Executing vault withdrawal transaction: {amount} FLOW for league {league_id}")
+
+        # Path to the Cadence transaction script
+        script_path = os.path.join(os.path.dirname(__file__), 'scripts', 'withdraw_from_incrementfi.cdc')
+
+        # IncrementFi FLOW Money Market pool address on testnet
+        pool_address = '0x8aaca41f09eb1e3d'
+
+        # Build Flow CLI command using --args-json for proper type formatting
+        import json as json_module
+        args_json = json_module.dumps([
+            {"type": "UFix64", "value": str(amount)},
+            {"type": "Address", "value": pool_address},
+            {"type": "String", "value": league_id}
+        ])
+
+        cmd = [
+            'flow', 'transactions', 'send',
+            script_path,
+            '--args-json', args_json,
+            '--signer', 'testnet-account',
+            '--network', 'testnet',
+            '--yes'
+        ]
+
+        app.logger.info(f"🔧 Flow CLI command: {' '.join(cmd)}")
+
+        # Execute the transaction
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=os.path.dirname(os.path.dirname(__file__))  # Run from project root where flow.json is
+        )
+
+        if result.returncode == 0:
+            app.logger.info(f"✅ Vault withdrawal transaction succeeded!")
+            app.logger.info(f"Transaction output: {result.stdout}")
+
+            # Parse transaction ID from output
+            tx_id = None
+            for line in result.stdout.split('\n'):
+                if 'Transaction ID' in line or 'ID:' in line:
+                    tx_id = line.split(':')[-1].strip()
+                    break
+
+            return {
+                'success': True,
+                'transaction_id': tx_id,
+                'amount': amount,
+                'pool_address': pool_address,
+                'output': result.stdout
+            }
+        else:
+            app.logger.error(f"❌ Vault withdrawal transaction failed!")
+            app.logger.error(f"Error output: {result.stderr}")
+            return {
+                'success': False,
+                'error': result.stderr,
+                'output': result.stdout
+            }
+
+    except subprocess.TimeoutExpired:
+        app.logger.error(f"⏱️ Vault withdrawal transaction timed out after 60 seconds")
+        return {'success': False, 'error': 'Transaction timed out'}
+    except Exception as e:
+        app.logger.error(f"💥 Error executing vault withdrawal transaction: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return {'success': False, 'error': str(e)}
+
+def execute_prize_distribution_transaction(recipients, amounts, league_id):
+    """Execute the Cadence transaction to distribute prizes to multiple winners."""
+    import subprocess
+
+    try:
+        app.logger.info(f"🏆 Executing prize distribution transaction for league {league_id}")
+        app.logger.info(f"   Recipients: {len(recipients)}, Total: {sum(amounts)} FLOW")
+
+        # Path to the Cadence transaction script
+        script_path = os.path.join(os.path.dirname(__file__), 'scripts', 'distribute_prizes.cdc')
+
+        # Build Flow CLI command using --args-json for proper type formatting
+        import json as json_module
+        args_json = json_module.dumps([
+            {"type": "Array", "value": [{"type": "Address", "value": addr} for addr in recipients]},
+            {"type": "Array", "value": [{"type": "UFix64", "value": str(amt)} for amt in amounts]},
+            {"type": "String", "value": league_id}
+        ])
+
+        cmd = [
+            'flow', 'transactions', 'send',
+            script_path,
+            '--args-json', args_json,
+            '--signer', 'testnet-account',
+            '--network', 'testnet',
+            '--yes'
+        ]
+
+        app.logger.info(f"🔧 Flow CLI command: {' '.join(cmd)}")
+
+        # Execute the transaction
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=os.path.dirname(os.path.dirname(__file__))  # Run from project root where flow.json is
+        )
+
+        if result.returncode == 0:
+            app.logger.info(f"✅ Prize distribution transaction succeeded!")
+            app.logger.info(f"Transaction output: {result.stdout}")
+
+            # Parse transaction ID from output
+            tx_id = None
+            for line in result.stdout.split('\n'):
+                if 'Transaction ID' in line or 'ID:' in line:
+                    tx_id = line.split(':')[-1].strip()
+                    break
+
+            return {
+                'success': True,
+                'transaction_id': tx_id,
+                'recipients': recipients,
+                'amounts': amounts,
+                'output': result.stdout
+            }
+        else:
+            app.logger.error(f"❌ Prize distribution transaction failed!")
+            app.logger.error(f"Error output: {result.stderr}")
+            return {
+                'success': False,
+                'error': result.stderr,
+                'output': result.stdout
+            }
+
+    except subprocess.TimeoutExpired:
+        app.logger.error(f"⏱️ Prize distribution transaction timed out after 60 seconds")
+        return {'success': False, 'error': 'Transaction timed out'}
+    except Exception as e:
+        app.logger.error(f"💥 Error executing prize distribution transaction: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return {'success': False, 'error': str(e)}
+
+@app.route('/admin/league/<league_id>/vault/withdraw', methods=['POST'])
+@login_required
+def withdraw_from_vault(league_id):
+    """Manually trigger vault withdrawal from IncrementFi."""
+    user = get_current_user()
+
+    # Check if user is admin (for demo, we'll check if it's the SKL admin wallet)
+    admin_wallet = '0xdf978465ee6dcf32'
+    if user['wallet_address'].lower() != admin_wallet.lower():
+        return jsonify({'success': False, 'error': 'Admin access required'}), 403
+
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        # Get current season
+        season_year = get_current_season()['current_year']
+
+        # Check if vault deposit exists and hasn't been withdrawn
+        cursor.execute("""
+            SELECT ae.execution_id, ae.result_data, ae.status
+            FROM AgentExecutions ae
+            WHERE ae.agent_type = 'vault_deposit'
+            AND ae.execution_id LIKE ?
+            AND ae.status = 'completed'
+            ORDER BY ae.created_at DESC
+            LIMIT 1
+        """, (f'vault_deposit_{league_id}%',))
+
+        vault_deposit = cursor.fetchone()
+        if not vault_deposit:
+            return jsonify({'success': False, 'error': 'No completed vault deposit found for this league'}), 400
+
+        # Check if already withdrawn
+        cursor.execute("""
+            SELECT execution_id FROM AgentExecutions
+            WHERE agent_type = 'vault_withdrawal'
+            AND execution_id LIKE ?
+            AND status = 'completed'
+        """, (f'vault_withdrawal_{league_id}%',))
+
+        existing_withdrawal = cursor.fetchone()
+        if existing_withdrawal:
+            return jsonify({'success': False, 'error': 'Vault already withdrawn for this league'}), 400
+
+        # Get deposit amount from result_data
+        import json as json_module
+        deposit_data = json_module.loads(vault_deposit['result_data'])
+        deposit_amount = deposit_data.get('amount', 0)
+
+        app.logger.info(f"🔄 Triggering vault withdrawal for league {league_id}")
+        app.logger.info(f"   Deposit amount: {deposit_amount} FLOW")
+
+        # For now, withdraw the exact deposit amount (in production, query actual balance)
+        withdrawal_amount = deposit_amount
+
+        # Create withdrawal execution record
+        withdrawal_id = f"vault_withdrawal_{league_id}_{season_year}_{int(time.time())}"
+
+        cursor.execute("""
+            INSERT INTO AgentExecutions (
+                execution_id, agent_type, sleeper_league_id, season_year, execution_time, status, created_at, result_data
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            withdrawal_id,
+            'vault_withdrawal',
+            league_id,
+            season_year,
+            datetime.now().isoformat(),
+            'executing',
+            datetime.now().isoformat(),
+            json_module.dumps({
+                'league_id': league_id,
+                'season_year': season_year,
+                'withdrawal_amount': withdrawal_amount,
+                'currency': 'FLOW',
+                'vault_address': '0x8aaca41f09eb1e3d'
+            })
+        ))
+        conn.commit()
+
+        # Execute the actual blockchain transaction
+        tx_result = execute_vault_withdrawal_transaction(withdrawal_amount, league_id)
+
+        # Update execution record with result
+        if tx_result['success']:
+            cursor.execute("""
+                UPDATE AgentExecutions
+                SET status = 'completed',
+                    result_data = ?,
+                    updated_at = datetime('now')
+                WHERE execution_id = ?
+            """, (json_module.dumps({
+                'league_id': league_id,
+                'season_year': season_year,
+                'withdrawal_amount': withdrawal_amount,
+                'currency': 'FLOW',
+                'vault_address': '0x8aaca41f09eb1e3d',
+                'transaction_id': tx_result.get('transaction_id'),
+                'completed_at': datetime.now().isoformat()
+            }), withdrawal_id))
+            conn.commit()
+
+            app.logger.info(f"✅ Vault withdrawal completed: {withdrawal_id}")
+            app.logger.info(f"🔗 Transaction ID: {tx_result.get('transaction_id')}")
+
+            return jsonify({
+                'success': True,
+                'withdrawal_amount': withdrawal_amount,
+                'transaction_id': tx_result.get('transaction_id'),
+                'execution_id': withdrawal_id
+            })
+        else:
+            cursor.execute("""
+                UPDATE AgentExecutions
+                SET status = 'failed',
+                    result_data = ?,
+                    updated_at = datetime('now')
+                WHERE execution_id = ?
+            """, (json_module.dumps({
+                'league_id': league_id,
+                'error': tx_result.get('error'),
+                'failed_at': datetime.now().isoformat()
+            }), withdrawal_id))
+            conn.commit()
+
+            app.logger.error(f"❌ Vault withdrawal failed: {withdrawal_id}")
+            return jsonify({'success': False, 'error': tx_result.get('error')}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error withdrawing from vault for league {league_id}: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+    # Note: Using global connection, do not close it
+
+@app.route('/admin/league/<league_id>/payouts/preview', methods=['GET'])
+@login_required
+def preview_payouts(league_id):
+    """Preview prize distribution without executing."""
+    user = get_current_user()
+
+    # Check if user is admin
+    admin_wallet = '0xdf978465ee6dcf32'
+    if user['wallet_address'].lower() != admin_wallet.lower():
+        return jsonify({'success': False, 'error': 'Admin access required'}), 403
+
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        # Get current season
+        season_year = get_current_season()['current_year']
+
+        # Get placements for this league
+        cursor.execute("""
+            SELECT
+                lp.placement_type,
+                lp.roster_id,
+                r.owner_id,
+                u.wallet_address,
+                u.username
+            FROM LeaguePlacements lp
+            JOIN rosters r ON lp.roster_id = r.sleeper_roster_id AND lp.sleeper_league_id = r.sleeper_league_id
+            JOIN Users u ON r.owner_id = u.sleeper_user_id
+            WHERE lp.sleeper_league_id = ?
+            AND lp.season_year = ?
+            ORDER BY lp.final_rank
+        """, (league_id, season_year))
+
+        placements = cursor.fetchall()
+        if not placements:
+            return jsonify({'success': False, 'error': 'No placements found for this league'}), 400
+
+        # Get total prize pool (from vault deposit)
+        cursor.execute("""
+            SELECT result_data FROM AgentExecutions
+            WHERE agent_type = 'vault_deposit'
+            AND execution_id LIKE ?
+            AND status = 'completed'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (f'vault_deposit_{league_id}%',))
+
+        vault_record = cursor.fetchone()
+        if not vault_record:
+            return jsonify({'success': False, 'error': 'No vault deposit found'}), 400
+
+        import json as json_module
+        vault_data = json_module.loads(vault_record['result_data'])
+        total_prize_pool = vault_data.get('amount', 0)
+
+        # Calculate distributions (50%, 30%, 10%, 10%)
+        prize_splits = {
+            '1st_place': 0.50,
+            '2nd_place': 0.30,
+            '3rd_place': 0.10,
+            'regular_season_winner': 0.10
+        }
+
+        distributions = []
+        for placement in placements:
+            placement_type = placement['placement_type']
+            percentage = prize_splits.get(placement_type, 0)
+            amount = total_prize_pool * percentage
+
+            distributions.append({
+                'wallet_address': placement['wallet_address'],
+                'username': placement['username'],
+                'placement_type': placement_type,
+                'amount': amount,
+                'percentage': percentage * 100
+            })
+
+        return jsonify({
+            'success': True,
+            'total_prize_pool': total_prize_pool,
+            'distributions': distributions
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error previewing payouts for league {league_id}: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+    # Note: Using global connection, do not close it
+
+@app.route('/admin/league/<league_id>/payouts/execute', methods=['POST'])
+@login_required
+def execute_payouts(league_id):
+    """Execute prize distribution to winners."""
+    user = get_current_user()
+
+    # Check if user is admin
+    admin_wallet = '0xdf978465ee6dcf32'
+    if user['wallet_address'].lower() != admin_wallet.lower():
+        return jsonify({'success': False, 'error': 'Admin access required'}), 403
+
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        # Get current season
+        season_year = get_current_season()['current_year']
+
+        # Check if already executed
+        cursor.execute("""
+            SELECT payout_id FROM PayoutSchedules
+            WHERE sleeper_league_id = ?
+            AND season_year = ?
+            AND payout_status = 'completed'
+        """, (league_id, season_year))
+
+        existing_payout = cursor.fetchone()
+        if existing_payout:
+            return jsonify({'success': False, 'error': 'Prizes already distributed for this league'}), 400
+
+        # Get placements and calculate distributions (same as preview)
+        cursor.execute("""
+            SELECT
+                lp.placement_type,
+                lp.roster_id,
+                r.owner_id,
+                u.wallet_address,
+                u.username
+            FROM LeaguePlacements lp
+            JOIN rosters r ON lp.roster_id = r.sleeper_roster_id AND lp.sleeper_league_id = r.sleeper_league_id
+            JOIN Users u ON r.owner_id = u.sleeper_user_id
+            WHERE lp.sleeper_league_id = ?
+            AND lp.season_year = ?
+            ORDER BY lp.final_rank
+        """, (league_id, season_year))
+
+        placements = cursor.fetchall()
+        if not placements:
+            return jsonify({'success': False, 'error': 'No placements found'}), 400
+
+        # Get total prize pool
+        cursor.execute("""
+            SELECT result_data FROM AgentExecutions
+            WHERE agent_type = 'vault_deposit'
+            AND execution_id LIKE ?
+            AND status = 'completed'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (f'vault_deposit_{league_id}%',))
+
+        vault_record = cursor.fetchone()
+        if not vault_record:
+            return jsonify({'success': False, 'error': 'No vault deposit found'}), 400
+
+        import json as json_module
+        vault_data = json_module.loads(vault_record['result_data'])
+        total_prize_pool = vault_data.get('amount', 0)
+
+        # Calculate distributions
+        prize_splits = {
+            '1st_place': 0.50,
+            '2nd_place': 0.30,
+            '3rd_place': 0.10,
+            'regular_season_winner': 0.10
+        }
+
+        recipients = []
+        amounts = []
+        distributions_data = []
+
+        for placement in placements:
+            placement_type = placement['placement_type']
+            percentage = prize_splits.get(placement_type, 0)
+            amount = total_prize_pool * percentage
+
+            recipients.append(placement['wallet_address'])
+            amounts.append(amount)
+            distributions_data.append({
+                'wallet_address': placement['wallet_address'],
+                'username': placement['username'],
+                'placement_type': placement_type,
+                'amount': amount,
+                'percentage': percentage
+            })
+
+        app.logger.info(f"🏆 Executing prize distribution for league {league_id}")
+        app.logger.info(f"   Total pool: {total_prize_pool} FLOW")
+        app.logger.info(f"   Recipients: {len(recipients)}")
+
+        # Create payout schedule record
+        payout_id = f"payout_{league_id}_{season_year}_{int(time.time())}"
+
+        cursor.execute("""
+            INSERT INTO PayoutSchedules (
+                payout_id, sleeper_league_id, season_year,
+                payout_date, payout_status, total_prize_pool,
+                standings_finalized, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            payout_id,
+            league_id,
+            season_year,
+            datetime.now().isoformat(),
+            'executing',
+            total_prize_pool,
+            1,  # standings finalized
+            datetime.now().isoformat()
+        ))
+
+        # Create distribution records
+        for dist in distributions_data:
+            distribution_id = f"dist_{payout_id}_{dist['wallet_address']}"
+            cursor.execute("""
+                INSERT INTO PayoutDistributions (
+                    distribution_id, payout_id, wallet_address,
+                    payout_type, amount, percentage, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                distribution_id,
+                payout_id,
+                dist['wallet_address'],
+                dist['placement_type'],
+                dist['amount'],
+                dist['percentage'],
+                'pending',
+                datetime.now().isoformat()
+            ))
+
+        conn.commit()
+
+        # Execute the blockchain transaction
+        tx_result = execute_prize_distribution_transaction(recipients, amounts, league_id)
+
+        # Update records with result
+        if tx_result['success']:
+            # Update payout schedule
+            cursor.execute("""
+                UPDATE PayoutSchedules
+                SET payout_status = 'completed',
+                    execution_date = ?,
+                    updated_at = datetime('now')
+                WHERE payout_id = ?
+            """, (datetime.now().isoformat(), payout_id))
+
+            # Update all distributions with transaction ID
+            cursor.execute("""
+                UPDATE PayoutDistributions
+                SET status = 'completed',
+                    transaction_id = ?,
+                    updated_at = datetime('now')
+                WHERE payout_id = ?
+            """, (tx_result.get('transaction_id'), payout_id))
+
+            conn.commit()
+
+            app.logger.info(f"✅ Prize distribution completed: {payout_id}")
+            app.logger.info(f"🔗 Transaction ID: {tx_result.get('transaction_id')}")
+
+            return jsonify({
+                'success': True,
+                'transaction_id': tx_result.get('transaction_id'),
+                'total_distributed': total_prize_pool,
+                'distributions': distributions_data,
+                'payout_id': payout_id
+            })
+        else:
+            # Mark as failed
+            cursor.execute("""
+                UPDATE PayoutSchedules
+                SET payout_status = 'failed',
+                    updated_at = datetime('now')
+                WHERE payout_id = ?
+            """, (payout_id,))
+
+            cursor.execute("""
+                UPDATE PayoutDistributions
+                SET status = 'failed',
+                    error_message = ?,
+                    updated_at = datetime('now')
+                WHERE payout_id = ?
+            """, (tx_result.get('error'), payout_id))
+
+            conn.commit()
+
+            app.logger.error(f"❌ Prize distribution failed: {payout_id}")
+            return jsonify({'success': False, 'error': tx_result.get('error')}), 500
+
+    except Exception as e:
+        app.logger.error(f"Error executing payouts for league {league_id}: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+    # Note: Using global connection, do not close it
+
+@app.route('/admin/league/<league_id>/payouts/reset', methods=['DELETE'])
+@login_required
+def reset_payouts(league_id):
+    """Reset/delete payout records for a league (TESTING ONLY)."""
+    user = get_current_user()
+
+    # Check if user is admin
+    admin_wallet = '0xdf978465ee6dcf32'
+    if user['wallet_address'].lower() != admin_wallet.lower():
+        return jsonify({'success': False, 'error': 'Admin access required'}), 403
+
+    try:
+        conn = get_global_db_connection()
+        cursor = conn.cursor()
+
+        # Get current season
+        season_year = get_current_season()['current_year']
+
+        app.logger.info(f"🗑️  Resetting payout records for league {league_id}")
+
+        # Delete PayoutDistributions first (foreign key constraint)
+        cursor.execute("""
+            DELETE FROM PayoutDistributions
+            WHERE payout_id IN (
+                SELECT payout_id FROM PayoutSchedules
+                WHERE sleeper_league_id = ?
+                AND season_year = ?
+            )
+        """, (league_id, season_year))
+        distributions_deleted = cursor.rowcount
+
+        # Delete PayoutSchedules
+        cursor.execute("""
+            DELETE FROM PayoutSchedules
+            WHERE sleeper_league_id = ?
+            AND season_year = ?
+        """, (league_id, season_year))
+        schedules_deleted = cursor.rowcount
+
+        conn.commit()
+
+        app.logger.info(f"✅ Deleted {distributions_deleted} distributions and {schedules_deleted} payout schedules")
+
+        return jsonify({
+            'success': True,
+            'message': f'Deleted {schedules_deleted} payout schedule(s) and {distributions_deleted} distribution(s)',
+            'schedules_deleted': schedules_deleted,
+            'distributions_deleted': distributions_deleted
+        })
+
+    except Exception as e:
+        app.logger.error(f"Error resetting payouts for league {league_id}: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+    # Note: Using global connection, do not close it
 
 @app.route('/league/<league_id>/fees/record-payment', methods=['POST'])
 @login_required

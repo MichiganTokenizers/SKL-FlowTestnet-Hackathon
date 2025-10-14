@@ -9,6 +9,13 @@ const AdminDashboard = ({ user }) => {
   const [leagues, setLeagues] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
 
+  // Payout testing state
+  const [selectedLeague, setSelectedLeague] = useState('');
+  const [payoutPreview, setPayoutPreview] = useState(null);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+  const [payoutError, setPayoutError] = useState(null);
+  const [payoutSuccess, setPayoutSuccess] = useState(null);
+
   useEffect(() => {
     verifyAdmin();
   }, [user]);
@@ -60,6 +67,131 @@ const AdminDashboard = ({ user }) => {
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+    }
+  };
+
+  const handlePreviewPayouts = async () => {
+    if (!selectedLeague) {
+      setPayoutError('Please select a league');
+      return;
+    }
+
+    setPayoutLoading(true);
+    setPayoutError(null);
+    setPayoutSuccess(null);
+
+    try {
+      const sessionToken = localStorage.getItem('sessionToken');
+      const response = await fetch(`${API_BASE_URL}/admin/league/${selectedLeague}/payouts/preview`, {
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPayoutPreview(data);
+      } else {
+        setPayoutError(data.error || 'Failed to load payout preview');
+      }
+    } catch (error) {
+      console.error('Error previewing payouts:', error);
+      setPayoutError('Network error loading preview');
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  const handleExecutePayouts = async () => {
+    if (!selectedLeague) {
+      setPayoutError('Please select a league');
+      return;
+    }
+
+    if (!window.confirm('⚠️ WARNING: This will execute REAL blockchain transactions and send FLOW tokens to winner wallets. Are you sure you want to continue?')) {
+      return;
+    }
+
+    setPayoutLoading(true);
+    setPayoutError(null);
+    setPayoutSuccess(null);
+
+    try {
+      const sessionToken = localStorage.getItem('sessionToken');
+      const response = await fetch(`${API_BASE_URL}/admin/league/${selectedLeague}/payouts/execute`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPayoutSuccess({
+          message: 'Prize distribution executed successfully!',
+          transactionId: data.transaction_id,
+          payoutId: data.payout_id,
+          totalDistributed: data.total_distributed,
+          distributions: data.distributions
+        });
+        setPayoutPreview(null);
+      } else {
+        setPayoutError(data.error || 'Failed to execute payouts');
+      }
+    } catch (error) {
+      console.error('Error executing payouts:', error);
+      setPayoutError('Network error executing payouts');
+    } finally {
+      setPayoutLoading(false);
+    }
+  };
+
+  const handleResetPayouts = async () => {
+    if (!selectedLeague) {
+      setPayoutError('Please select a league');
+      return;
+    }
+
+    if (!window.confirm('⚠️ This will DELETE all payout records for this league from the database. This is for TESTING only. Continue?')) {
+      return;
+    }
+
+    setPayoutLoading(true);
+    setPayoutError(null);
+    setPayoutSuccess(null);
+
+    try {
+      const sessionToken = localStorage.getItem('sessionToken');
+      const response = await fetch(`${API_BASE_URL}/admin/league/${selectedLeague}/payouts/reset`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setPayoutSuccess({
+          message: 'Payout records deleted successfully! You can now test prize distribution again.',
+          transactionId: null,
+          payoutId: null,
+          totalDistributed: 0,
+          distributions: []
+        });
+        setPayoutPreview(null);
+      } else {
+        setPayoutError(data.error || 'Failed to reset payouts');
+      }
+    } catch (error) {
+      console.error('Error resetting payouts:', error);
+      setPayoutError('Network error resetting payouts');
+    } finally {
+      setPayoutLoading(false);
     }
   };
 
@@ -220,8 +352,144 @@ const AdminDashboard = ({ user }) => {
 
         {activeTab === 'payouts' && (
           <div className="payouts-tab">
-            <h2>Payout Scheduling</h2>
-            <p className="coming-soon">Coming soon: Automated payout distribution tools</p>
+            <h2>Prize Distribution Testing</h2>
+
+            <div className="payout-controls">
+              <div className="form-group">
+                <label htmlFor="league-select">Select League:</label>
+                <select
+                  id="league-select"
+                  value={selectedLeague}
+                  onChange={(e) => {
+                    setSelectedLeague(e.target.value);
+                    setPayoutPreview(null);
+                    setPayoutError(null);
+                    setPayoutSuccess(null);
+                  }}
+                  className="league-select"
+                >
+                  <option value="">-- Select a league --</option>
+                  {leagues.map(league => (
+                    <option key={league.sleeper_league_id} value={league.sleeper_league_id}>
+                      {league.name} ({league.sleeper_league_id})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="button-group">
+                <button
+                  onClick={handlePreviewPayouts}
+                  disabled={!selectedLeague || payoutLoading}
+                  className="btn-preview"
+                >
+                  {payoutLoading ? 'Loading...' : 'Preview Payouts'}
+                </button>
+
+                <button
+                  onClick={handleExecutePayouts}
+                  disabled={!selectedLeague || payoutLoading || !payoutPreview}
+                  className="btn-execute"
+                >
+                  {payoutLoading ? 'Executing...' : 'Execute Prize Distribution'}
+                </button>
+
+                <button
+                  onClick={handleResetPayouts}
+                  disabled={!selectedLeague || payoutLoading}
+                  className="btn-reset"
+                  title="Delete payout records for testing"
+                >
+                  {payoutLoading ? 'Resetting...' : 'Reset Payouts (Testing)'}
+                </button>
+              </div>
+            </div>
+
+            {payoutError && (
+              <div className="payout-error">
+                <strong>❌ Error:</strong> {payoutError}
+              </div>
+            )}
+
+            {payoutSuccess && (
+              <div className="payout-success">
+                <h3>✅ {payoutSuccess.message}</h3>
+                <div className="success-details">
+                  <p><strong>Transaction ID:</strong> {payoutSuccess.transactionId}</p>
+                  <p><strong>Payout ID:</strong> {payoutSuccess.payoutId}</p>
+                  <p><strong>Total Distributed:</strong> {payoutSuccess.totalDistributed} FLOW</p>
+                  <a
+                    href={`https://testnet.flowscan.org/transaction/${payoutSuccess.transactionId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="view-transaction"
+                  >
+                    View on Flow Testnet Explorer →
+                  </a>
+                </div>
+
+                <h4>Distributions:</h4>
+                <table className="distributions-table">
+                  <thead>
+                    <tr>
+                      <th>Winner</th>
+                      <th>Wallet Address</th>
+                      <th>Placement</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payoutSuccess.distributions.map((dist, index) => (
+                      <tr key={index}>
+                        <td>{dist.username}</td>
+                        <td><code>{dist.wallet_address}</code></td>
+                        <td>{dist.placement_type.replace('_', ' ')}</td>
+                        <td><strong>{dist.amount} FLOW</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {payoutPreview && !payoutSuccess && (
+              <div className="payout-preview">
+                <h3>Prize Distribution Preview</h3>
+                <p className="preview-info">
+                  <strong>Total Prize Pool:</strong> {payoutPreview.total_prize_pool} FLOW
+                </p>
+                <p className="preview-info">
+                  <strong>Number of Winners:</strong> {payoutPreview.distributions.length}
+                </p>
+
+                <table className="distributions-table">
+                  <thead>
+                    <tr>
+                      <th>Winner</th>
+                      <th>Wallet Address</th>
+                      <th>Placement</th>
+                      <th>Percentage</th>
+                      <th>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payoutPreview.distributions.map((dist, index) => (
+                      <tr key={index}>
+                        <td>{dist.username}</td>
+                        <td><code>{dist.wallet_address}</code></td>
+                        <td>{dist.placement_type.replace('_', ' ')}</td>
+                        <td>{dist.percentage}%</td>
+                        <td><strong>{dist.amount} FLOW</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <div className="preview-warning">
+                  ⚠️ Click "Execute Prize Distribution" to send these payments on Flow Testnet
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -210,6 +210,252 @@
   color: #7b1fa2;
 }
 
+/* Payout Testing Tab */
+.payouts-tab {
+  max-width: 1000px;
+}
+
+.payout-controls {
+  background: #f9f9f9;
+  padding: 24px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+  border: 1px solid #e0e0e0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: #333;
+}
+
+.league-select {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 16px;
+  border: 2px solid #ddd;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.league-select:hover {
+  border-color: #00ef8b;
+}
+
+.league-select:focus {
+  outline: none;
+  border-color: #00ef8b;
+  box-shadow: 0 0 0 3px rgba(0, 239, 139, 0.1);
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-preview,
+.btn-execute,
+.btn-reset {
+  flex: 1;
+  min-width: 200px;
+  padding: 14px 28px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-preview {
+  background: #2196f3;
+  color: white;
+}
+
+.btn-preview:hover:not(:disabled) {
+  background: #1976d2;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.btn-execute {
+  background: #00ef8b;
+  color: #000;
+}
+
+.btn-execute:hover:not(:disabled) {
+  background: #00d67a;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 239, 139, 0.3);
+}
+
+.btn-reset {
+  background: #ff9800;
+  color: white;
+}
+
+.btn-reset:hover:not(:disabled) {
+  background: #f57c00;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(255, 152, 0, 0.3);
+}
+
+.btn-preview:disabled,
+.btn-execute:disabled,
+.btn-reset:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Payout Messages */
+.payout-error {
+  background: #fff5f5;
+  border: 2px solid #ff4444;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  color: #c62828;
+}
+
+.payout-success {
+  background: #f0fff4;
+  border: 2px solid #00ef8b;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.payout-success h3 {
+  color: #00a05d;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.payout-success h4 {
+  color: #333;
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+.success-details {
+  background: white;
+  padding: 16px;
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+
+.success-details p {
+  margin: 8px 0;
+  color: #555;
+}
+
+.success-details strong {
+  color: #333;
+  margin-right: 8px;
+}
+
+.view-transaction {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: #00ef8b;
+  color: #000;
+  text-decoration: none;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: background 0.3s;
+}
+
+.view-transaction:hover {
+  background: #00d67a;
+}
+
+/* Payout Preview */
+.payout-preview {
+  background: #f9f9f9;
+  border: 2px solid #2196f3;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.payout-preview h3 {
+  color: #1976d2;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.preview-info {
+  margin: 8px 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.preview-warning {
+  background: #fff9e6;
+  border: 2px solid #ffc107;
+  border-radius: 6px;
+  padding: 16px;
+  margin-top: 20px;
+  color: #d68400;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Distributions Table */
+.distributions-table {
+  width: 100%;
+  margin-top: 16px;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.distributions-table th {
+  background: #f5f5f5;
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 1px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.distributions-table td {
+  padding: 14px 12px;
+  border-top: 1px solid #e0e0e0;
+  color: #333;
+}
+
+.distributions-table tr:hover {
+  background: #fafafa;
+}
+
+.distributions-table code {
+  background: #f5f5f5;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #666;
+  font-family: 'Courier New', monospace;
+}
+
+.distributions-table strong {
+  color: #00a05d;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .stats-grid {
@@ -232,5 +478,27 @@
   .leagues-table th,
   .leagues-table td {
     padding: 8px;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  .btn-preview,
+  .btn-execute {
+    min-width: 100%;
+  }
+
+  .distributions-table {
+    font-size: 14px;
+  }
+
+  .distributions-table th,
+  .distributions-table td {
+    padding: 8px;
+  }
+
+  .distributions-table code {
+    font-size: 11px;
   }
 }

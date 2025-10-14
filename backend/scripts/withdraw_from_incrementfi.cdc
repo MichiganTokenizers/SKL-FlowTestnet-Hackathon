@@ -5,6 +5,7 @@ import FungibleToken from 0x9a0766d93b6608b7
 import LendingInterfaces from 0x8bc9e24c307d249b
 import LendingConfig from 0x8bc9e24c307d249b
 import LendingComptroller from 0xc15e75b5f6b95e54
+import LendingPool from 0x8aaca41f09eb1e3d
 
 /// Transaction to withdraw FLOW tokens from IncrementFi Money Market (LendingPool)
 /// Used by SKL admin wallet to retrieve principal + yield for prize distribution
@@ -21,10 +22,13 @@ import LendingComptroller from 0xc15e75b5f6b95e54
 transaction(amount: UFix64, poolAddress: Address, leagueId: String) {
 
     let poolAddress: Address
+    let signerAddress: Address
     let receiverRef: &{FungibleToken.Receiver}
     let balanceBefore: UFix64
 
     prepare(signer: auth(BorrowValue, Storage) &Account) {
+        // Store signer address for execute phase
+        self.signerAddress = signer.address
         // Validate inputs
         if amount <= 0.0 {
             panic("Withdrawal amount must be greater than 0")
@@ -54,26 +58,24 @@ transaction(amount: UFix64, poolAddress: Address, leagueId: String) {
     }
 
     execute {
-        // Get reference to the LendingPool
-        let poolRef = getAccount(self.poolAddress)
-            .capabilities.get<&{LendingInterfaces.PoolPublic}>(/public/incrementLendingPool)
-            .borrow()
-            ?? panic("Could not borrow reference to LendingPool at address ".concat(self.poolAddress.toString()))
+        // Get reference to the LendingPool contract
+        // IncrementFi deploys LendingPool as a contract at the pool address
+        // We can access its public functions directly via contract import
+        let poolContract = getAccount(self.poolAddress).contracts.borrow<&LendingPool>(name: "LendingPool")
+            ?? panic("Could not borrow reference to LendingPool contract at address ".concat(self.poolAddress.toString()))
 
-        // Redeem (withdraw) FLOW from the pool
-        // The exact method may be 'redeem', 'withdraw', or 'redeemUnderlying'
-        // This returns a vault containing the withdrawn tokens
-        let withdrawnVault <- poolRef.redeem(amount: amount)
+        // Redeem underlying FLOW from the pool
+        // IncrementFi's redeemUnderlying() method withdraws the underlying token (FLOW)
+        // It takes the redeemer's address and the amount to withdraw
+        let withdrawnVault <- poolContract.redeemUnderlying(
+            redeemer: self.signerAddress,
+            amount: amount
+        )
 
         // Deposit the withdrawn tokens back to signer's vault
         self.receiverRef.deposit(from: <- withdrawnVault)
 
         log("SKL IncrementFi Withdrawal Completed Successfully")
         log("Tokens withdrawn from IncrementFi Money Market to SKL wallet")
-    }
-
-    post {
-        // Note: We can't easily verify the exact balance increase here due to Cadence limitations
-        // Backend should verify the balance after transaction completes
     }
 }
