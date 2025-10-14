@@ -2436,15 +2436,92 @@ def check_all_fees_paid(league_id, season_year, cursor):
         app.logger.error(f"Error checking fees paid status for league {league_id}: {str(e)}")
         return False
 
+def execute_vault_deposit_transaction(amount, league_id):
+    """Execute the Cadence transaction to deposit FLOW to IncrementFi vault."""
+    import subprocess
+
+    try:
+        app.logger.info(f"💎 Executing vault deposit transaction: {amount} FLOW for league {league_id}")
+
+        # Path to the Cadence transaction script
+        script_path = os.path.join(os.path.dirname(__file__), 'scripts', 'deposit_to_incrementfi.cdc')
+
+        # IncrementFi FLOW Money Market pool address on testnet
+        pool_address = '0x8aaca41f09eb1e3d'
+
+        # Build Flow CLI command using --args-json for proper type formatting
+        import json as json_module
+        args_json = json_module.dumps([
+            {"type": "UFix64", "value": str(amount)},
+            {"type": "Address", "value": pool_address},
+            {"type": "String", "value": league_id}
+        ])
+
+        cmd = [
+            'flow', 'transactions', 'send',
+            script_path,
+            '--args-json', args_json,
+            '--signer', 'testnet-account',
+            '--network', 'testnet',
+            '--yes'
+        ]
+
+        app.logger.info(f"🔧 Flow CLI command: {' '.join(cmd)}")
+
+        # Execute the transaction
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=os.path.dirname(os.path.dirname(__file__))  # Run from project root where flow.json is
+        )
+
+        if result.returncode == 0:
+            app.logger.info(f"✅ Vault deposit transaction succeeded!")
+            app.logger.info(f"Transaction output: {result.stdout}")
+
+            # Parse transaction ID from output
+            tx_id = None
+            for line in result.stdout.split('\n'):
+                if 'Transaction ID' in line or 'ID:' in line:
+                    tx_id = line.split(':')[-1].strip()
+                    break
+
+            return {
+                'success': True,
+                'transaction_id': tx_id,
+                'amount': amount,
+                'pool_address': pool_address,
+                'output': result.stdout
+            }
+        else:
+            app.logger.error(f"❌ Vault deposit transaction failed!")
+            app.logger.error(f"Error output: {result.stderr}")
+            return {
+                'success': False,
+                'error': result.stderr,
+                'output': result.stdout
+            }
+
+    except subprocess.TimeoutExpired:
+        app.logger.error(f"⏱️ Vault deposit transaction timed out after 60 seconds")
+        return {'success': False, 'error': 'Transaction timed out'}
+    except Exception as e:
+        app.logger.error(f"💥 Error executing vault deposit transaction: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return {'success': False, 'error': str(e)}
+
 def execute_vault_deposit(league_id, season_year, cursor):
     """Execute vault deposit to IncrementFi after all fees are collected."""
     try:
-        # Get total collected amount from LeaguePayments
+        # Get total amount from all paid teams (includes both real and fake wallets for testing)
         cursor.execute("""
-            SELECT SUM(amount) as total_collected
-            FROM LeaguePayments
-            WHERE sleeper_league_id = ? AND season_year = ?
-        """, (league_id, season_year))
+            SELECT SUM(fee_paid_amount) as total_collected
+            FROM UserLeagueLinks
+            WHERE sleeper_league_id = ? AND fee_payment_status = 'paid'
+        """, (league_id,))
         result = cursor.fetchone()
         total_amount = result['total_collected'] if result and result['total_collected'] else 0.0
 
@@ -2455,8 +2532,7 @@ def execute_vault_deposit(league_id, season_year, cursor):
         app.logger.info(f"🎯 All fees paid for league {league_id}! Total collected: {total_amount} FLOW")
         app.logger.info(f"🔄 Triggering automatic vault deposit to IncrementFi...")
 
-        # For now, we'll create an agent execution record for manual processing
-        # In production, this would execute the Cadence transaction automatically
+        # Create agent execution record
         execution_id = f"vault_deposit_{league_id}_{season_year}_{int(time.time())}"
 
         cursor.execute("""
@@ -2469,7 +2545,7 @@ def execute_vault_deposit(league_id, season_year, cursor):
             'vault_deposit',
             league_id,
             season_year,
-            'pending_execution',
+            'executing',
             datetime.now().isoformat(),
             json.dumps({
                 'amount': total_amount,
@@ -2480,15 +2556,65 @@ def execute_vault_deposit(league_id, season_year, cursor):
             })
         ))
 
-        app.logger.info(f"✅ Vault deposit execution queued: {execution_id}")
-        app.logger.info(f"📋 Admin action required: Execute deposit_to_incrementfi.cdc with {total_amount} FLOW")
+        # Execute the actual blockchain transaction
+        tx_result = execute_vault_deposit_transaction(total_amount, league_id)
 
-        return {
-            'success': True,
-            'execution_id': execution_id,
-            'amount': total_amount,
-            'message': f'Vault deposit queued: {total_amount} FLOW to IncrementFi'
-        }
+        # Update agent execution record with result
+        if tx_result['success']:
+            cursor.execute("""
+                UPDATE AgentExecutions
+                SET status = 'completed',
+                    result_data = ?,
+                    updated_at = datetime('now')
+                WHERE execution_id = ?
+            """, (json.dumps({
+                'amount': total_amount,
+                'currency': 'FLOW',
+                'vault_address': '0x8aaca41f09eb1e3d',
+                'vault_protocol': 'increment_fi',
+                'trigger_reason': 'all_fees_collected',
+                'transaction_id': tx_result.get('transaction_id'),
+                'completed_at': datetime.now().isoformat()
+            }), execution_id))
+
+            app.logger.info(f"✅ Vault deposit completed successfully: {execution_id}")
+            app.logger.info(f"💰 {total_amount} FLOW deposited to IncrementFi Money Market")
+            if tx_result.get('transaction_id'):
+                app.logger.info(f"🔗 Transaction ID: {tx_result['transaction_id']}")
+
+            return {
+                'success': True,
+                'execution_id': execution_id,
+                'amount': total_amount,
+                'transaction_id': tx_result.get('transaction_id'),
+                'message': f'Vault deposit completed: {total_amount} FLOW to IncrementFi'
+            }
+        else:
+            cursor.execute("""
+                UPDATE AgentExecutions
+                SET status = 'failed',
+                    result_data = ?,
+                    updated_at = datetime('now')
+                WHERE execution_id = ?
+            """, (json.dumps({
+                'amount': total_amount,
+                'currency': 'FLOW',
+                'vault_address': '0x8aaca41f09eb1e3d',
+                'vault_protocol': 'increment_fi',
+                'trigger_reason': 'all_fees_collected',
+                'error': tx_result.get('error'),
+                'failed_at': datetime.now().isoformat()
+            }), execution_id))
+
+            app.logger.error(f"❌ Vault deposit failed: {execution_id}")
+            app.logger.error(f"Error: {tx_result.get('error')}")
+
+            return {
+                'success': False,
+                'execution_id': execution_id,
+                'error': tx_result.get('error'),
+                'message': f'Vault deposit failed: {tx_result.get("error")}'
+            }
 
     except Exception as e:
         app.logger.error(f"Error executing vault deposit for league {league_id}: {str(e)}")

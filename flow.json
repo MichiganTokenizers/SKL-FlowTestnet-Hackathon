@@ -17,7 +17,10 @@
 			"address": "0xdf978465ee6dcf32",
 			"key": {
 				"type": "file",
-				"location": "testnet-account.pkey"
+				"location": "testnet-account.pkey",
+				"index": 0,
+				"signatureAlgorithm": "ECDSA_secp256k1",
+				"hashAlgorithm": "SHA2_256"
 			}
 		}
 	},
