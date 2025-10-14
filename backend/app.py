@@ -2410,6 +2410,92 @@ def set_league_fees(league_id):
         app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': f'An unexpected error occurred: {str(e)}'}), 500
 
+def check_all_fees_paid(league_id, season_year, cursor):
+    """Check if all teams in a league have paid their fees."""
+    try:
+        # Count total teams in the league
+        cursor.execute("""
+            SELECT COUNT(*) as total_teams
+            FROM UserLeagueLinks
+            WHERE sleeper_league_id = ?
+        """, (league_id,))
+        total_teams = cursor.fetchone()['total_teams']
+
+        # Count teams that have paid
+        cursor.execute("""
+            SELECT COUNT(*) as paid_teams
+            FROM UserLeagueLinks
+            WHERE sleeper_league_id = ? AND fee_payment_status = 'paid'
+        """, (league_id,))
+        paid_teams = cursor.fetchone()['paid_teams']
+
+        app.logger.info(f"League {league_id}: {paid_teams}/{total_teams} teams have paid")
+
+        return total_teams > 0 and paid_teams == total_teams
+    except Exception as e:
+        app.logger.error(f"Error checking fees paid status for league {league_id}: {str(e)}")
+        return False
+
+def execute_vault_deposit(league_id, season_year, cursor):
+    """Execute vault deposit to IncrementFi after all fees are collected."""
+    try:
+        # Get total collected amount from LeaguePayments
+        cursor.execute("""
+            SELECT SUM(amount) as total_collected
+            FROM LeaguePayments
+            WHERE sleeper_league_id = ? AND season_year = ?
+        """, (league_id, season_year))
+        result = cursor.fetchone()
+        total_amount = result['total_collected'] if result and result['total_collected'] else 0.0
+
+        if total_amount <= 0:
+            app.logger.error(f"Cannot execute vault deposit: No funds collected for league {league_id}")
+            return {'success': False, 'error': 'No funds collected'}
+
+        app.logger.info(f"🎯 All fees paid for league {league_id}! Total collected: {total_amount} FLOW")
+        app.logger.info(f"🔄 Triggering automatic vault deposit to IncrementFi...")
+
+        # For now, we'll create an agent execution record for manual processing
+        # In production, this would execute the Cadence transaction automatically
+        execution_id = f"vault_deposit_{league_id}_{season_year}_{int(time.time())}"
+
+        cursor.execute("""
+            INSERT INTO AgentExecutions (
+                execution_id, agent_type, sleeper_league_id, season_year,
+                status, trigger_time, result_data, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        """, (
+            execution_id,
+            'vault_deposit',
+            league_id,
+            season_year,
+            'pending_execution',
+            datetime.now().isoformat(),
+            json.dumps({
+                'amount': total_amount,
+                'currency': 'FLOW',
+                'vault_address': '0x8aaca41f09eb1e3d',
+                'vault_protocol': 'increment_fi',
+                'trigger_reason': 'all_fees_collected'
+            })
+        ))
+
+        app.logger.info(f"✅ Vault deposit execution queued: {execution_id}")
+        app.logger.info(f"📋 Admin action required: Execute deposit_to_incrementfi.cdc with {total_amount} FLOW")
+
+        return {
+            'success': True,
+            'execution_id': execution_id,
+            'amount': total_amount,
+            'message': f'Vault deposit queued: {total_amount} FLOW to IncrementFi'
+        }
+
+    except Exception as e:
+        app.logger.error(f"Error executing vault deposit for league {league_id}: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return {'success': False, 'error': str(e)}
+
 @app.route('/league/<league_id>/fees/record-payment', methods=['POST'])
 @login_required
 def record_payment_for_league(league_id):
@@ -2496,7 +2582,33 @@ def record_payment_for_league(league_id):
         conn.commit()
 
         app.logger.info(f"Payment recorded for wallet {payer_wallet_address} in league {league_id}: Amount={transaction_amount} {transaction_currency}, TxID={transaction_id}. New status: {new_payment_status}, Total Paid: {new_paid_amount}")
-        return jsonify({'success': True, 'message': 'Payment recorded successfully', 'new_payment_status': new_payment_status, 'new_paid_amount': new_paid_amount}), 200
+
+        # Check if all fees are now paid and trigger vault deposit if needed
+        vault_deposit_result = None
+        if check_all_fees_paid(league_id, current_season_year, cursor):
+            app.logger.info(f"🎉 All league fees collected for {league_id}! Triggering vault deposit...")
+            vault_deposit_result = execute_vault_deposit(league_id, current_season_year, cursor)
+            conn.commit()  # Commit the agent execution record
+
+            if vault_deposit_result and vault_deposit_result.get('success'):
+                app.logger.info(f"✅ Vault deposit triggered successfully: {vault_deposit_result.get('message')}")
+            else:
+                app.logger.error(f"❌ Failed to trigger vault deposit: {vault_deposit_result.get('error') if vault_deposit_result else 'Unknown error'}")
+
+        response_data = {
+            'success': True,
+            'message': 'Payment recorded successfully',
+            'new_payment_status': new_payment_status,
+            'new_paid_amount': new_paid_amount
+        }
+
+        # Include vault deposit info if it was triggered
+        if vault_deposit_result:
+            response_data['vault_deposit_triggered'] = vault_deposit_result.get('success', False)
+            response_data['vault_deposit_message'] = vault_deposit_result.get('message', '')
+            response_data['vault_deposit_amount'] = vault_deposit_result.get('amount', 0)
+
+        return jsonify(response_data), 200
 
     except sqlite3.Error as e:
         if conn: conn.rollback()

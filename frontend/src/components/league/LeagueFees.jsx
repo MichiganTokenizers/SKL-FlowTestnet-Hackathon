@@ -174,8 +174,8 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
             console.log('handleSetupVaults: Preparing fcl.mutate call...');
             const transactionId = await fcl.mutate({
                 cadence: `
-                    import FlowToken from 0x1654653399040a61
-                    import FungibleToken from 0xf233dcee88fe0abe
+                    import FlowToken from 0x7e60df042a9c0868
+                    import FungibleToken from 0x9a0766d93b6608b7
                     import EVMVMBridgedToken_2aabea2058b5ac2d339b163c6ab6f2b6d53aabed from 0x1e4aa0b87d10b141
 
                     transaction {
@@ -308,22 +308,22 @@ const LeagueFees = ({ leagueId, currentUser, sessionToken }) => {
                 // For Flow token payments
                 const transactionId = await fcl.mutate({
                     cadence: `
-                        import FlowToken from 0x1654653399040a61
-                        import FungibleToken from 0xf233dcee88fe0abe
+                        import FlowToken from 0x7e60df042a9c0868
+                        import FungibleToken from 0x9a0766d93b6608b7
 
                         transaction(amount: UFix64, recipient: Address) {
-                            let sentVault: @{FungibleToken.Vault}
+                            let sentVault: @FlowToken.Vault
 
                             prepare(signer: auth(BorrowValue, Storage) &Account) {
                                 let vaultRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(from: /storage/flowTokenVault)
                                     ?? panic("Could not borrow reference to the owner's Vault!")
-                                
-                                self.sentVault <- vaultRef.withdraw(amount: amount)
+
+                                self.sentVault <- vaultRef.withdraw(amount: amount) as! @FlowToken.Vault
                             }
 
                             execute {
                                 let recipientRef = getAccount(recipient)
-                                    .capabilities.get<&{FungibleToken.Receiver}>(/public/flowTokenReceiver)
+                                    .capabilities.get<&FlowToken.Vault>(/public/flowTokenReceiver)
                                     .borrow()
                                     ?? panic("Could not borrow receiver reference to the recipient's Vault")
 
