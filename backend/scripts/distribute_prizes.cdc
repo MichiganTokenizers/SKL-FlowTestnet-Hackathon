@@ -16,7 +16,7 @@ import FungibleToken from 0x9a0766d93b6608b7
 transaction(recipients: [Address], amounts: [UFix64], leagueId: String) {
 
     let paymentVaults: @[{FungibleToken.Vault}]
-    let senderRef: &FlowToken.Vault
+    let senderRef: auth(FungibleToken.Withdraw) &FlowToken.Vault
 
     prepare(signer: auth(BorrowValue, Storage) &Account) {
         // Validate inputs
@@ -28,7 +28,7 @@ transaction(recipients: [Address], amounts: [UFix64], leagueId: String) {
             panic("Must have at least one recipient")
         }
 
-        // Get reference to signer's FlowToken vault
+        // Get reference to signer's FlowToken vault with Withdraw authorization
         self.senderRef = signer.storage.borrow<auth(FungibleToken.Withdraw) &FlowToken.Vault>(
             from: /storage/flowTokenVault
         ) ?? panic("Could not borrow reference to the signer's FlowToken Vault")
