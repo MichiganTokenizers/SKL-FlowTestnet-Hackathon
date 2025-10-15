@@ -2625,6 +2625,211 @@ def execute_vault_deposit(league_id, season_year, cursor):
         app.logger.error(traceback.format_exc())
         return {'success': False, 'error': str(e)}
 
+def schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds, cursor):
+    """Schedule a Flow Agent to automatically deposit vault funds at a future time.
+
+    This uses the Forte upgrade's Agents & Actions for decentralized automation.
+    The agent runs on-chain without requiring the backend server to be running.
+    """
+    import subprocess
+
+    try:
+        # Get total amount from all paid teams
+        cursor.execute("""
+            SELECT SUM(fee_paid_amount) as total_collected
+            FROM UserLeagueLinks
+            WHERE sleeper_league_id = ? AND fee_payment_status = 'paid'
+        """, (league_id,))
+        result = cursor.fetchone()
+        total_amount = result['total_collected'] if result and result['total_collected'] else 0.0
+
+        # Get team counts
+        cursor.execute("""
+            SELECT COUNT(*) as total_teams
+            FROM UserLeagueLinks
+            WHERE sleeper_league_id = ?
+        """, (league_id,))
+        total_teams = cursor.fetchone()['total_teams']
+
+        cursor.execute("""
+            SELECT COUNT(*) as paid_teams
+            FROM UserLeagueLinks
+            WHERE sleeper_league_id = ? AND fee_payment_status = 'paid'
+        """, (league_id,))
+        paid_teams = cursor.fetchone()['paid_teams']
+
+        if total_amount <= 0:
+            app.logger.error(f"Cannot schedule agent: No funds collected for league {league_id}")
+            return {'success': False, 'error': 'No funds collected'}
+
+        app.logger.info(f"🤖 Scheduling Flow Agent for league {league_id}")
+        app.logger.info(f"💰 Total collected: {total_amount} FLOW from {paid_teams}/{total_teams} teams")
+        app.logger.info(f"⏰ Agent will execute in {execution_delay_seconds} seconds")
+
+        # Create agent execution record
+        execution_id = f"agent_{league_id}_{season_year}_{int(time.time())}"
+
+        cursor.execute("""
+            INSERT INTO AgentExecutions (
+                execution_id, agent_type, sleeper_league_id, season_year,
+                status, trigger_time, result_data, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        """, (
+            execution_id,
+            'vault_deposit_agent',
+            league_id,
+            season_year,
+            'scheduled',
+            datetime.now().isoformat(),
+            json.dumps({
+                'amount': total_amount,
+                'total_teams': total_teams,
+                'paid_teams': paid_teams,
+                'currency': 'FLOW',
+                'vault_address': '0x8aaca41f09eb1e3d',
+                'vault_protocol': 'increment_fi',
+                'execution_delay_seconds': execution_delay_seconds,
+                'scheduled_via': 'flow_agent_forte',
+                'trigger_reason': 'manual_admin_schedule'
+            })
+        ))
+
+        # Path to the Cadence scheduling transaction
+        script_path = os.path.join(os.path.dirname(__file__), 'cadence', 'transactions', 'schedule_vault_deposit_agent.cdc')
+
+        # IncrementFi FLOW Money Market pool address on testnet
+        pool_address = '0x8aaca41f09eb1e3d'
+
+        # Prepare transaction arguments
+        args = [
+            {
+                "type": "String",
+                "value": league_id
+            },
+            {
+                "type": "Address",
+                "value": pool_address
+            },
+            {
+                "type": "Int",
+                "value": str(total_teams)
+            },
+            {
+                "type": "Int",
+                "value": str(paid_teams)
+            },
+            {
+                "type": "UFix64",
+                "value": str(total_amount)
+            },
+            {
+                "type": "UFix64",
+                "value": str(float(execution_delay_seconds))
+            },
+            {
+                "type": "String",
+                "value": "Medium"
+            },
+            {
+                "type": "UInt64",
+                "value": "1000"
+            },
+            {
+                "type": "UFix64",
+                "value": "1.0"  # Fee amount for scheduled transaction
+            },
+            {
+                "type": "UFix64",
+                "value": "0.0"  # Capacity limit (0 = unlimited)
+            }
+        ]
+
+        # Execute the scheduling transaction
+        result = subprocess.run(
+            [
+                'flow', 'transactions', 'send',
+                script_path,
+                '--args-json', json.dumps(args),
+                '--signer', 'testnet-account',
+                '--network', 'testnet'
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+
+        if result.returncode == 0:
+            app.logger.info(f"✅ Agent scheduled successfully!")
+            app.logger.info(f"Transaction output: {result.stdout}")
+
+            # Parse transaction ID from output
+            tx_id = None
+            for line in result.stdout.split('\n'):
+                if 'Transaction ID' in line or 'ID:' in line:
+                    tx_id = line.split(':')[-1].strip()
+                    break
+
+            # Update execution record
+            cursor.execute("""
+                UPDATE AgentExecutions
+                SET status = 'scheduled',
+                    result_data = ?,
+                    updated_at = datetime('now')
+                WHERE execution_id = ?
+            """, (json.dumps({
+                'amount': total_amount,
+                'total_teams': total_teams,
+                'paid_teams': paid_teams,
+                'currency': 'FLOW',
+                'vault_address': pool_address,
+                'vault_protocol': 'increment_fi',
+                'execution_delay_seconds': execution_delay_seconds,
+                'schedule_transaction_id': tx_id,
+                'scheduled_via': 'flow_agent_forte',
+                'trigger_reason': 'manual_admin_schedule',
+                'scheduled_at': datetime.now().isoformat()
+            }), execution_id))
+
+            app.logger.info(f"🤖 Flow Agent scheduled: {execution_id}")
+            app.logger.info(f"💰 {total_amount} FLOW will be deposited to IncrementFi")
+            if tx_id:
+                app.logger.info(f"🔗 Schedule Transaction ID: {tx_id}")
+
+            return {
+                'success': True,
+                'execution_id': execution_id,
+                'amount': total_amount,
+                'schedule_transaction_id': tx_id,
+                'execution_delay_seconds': execution_delay_seconds,
+                'message': f'Flow Agent scheduled: {total_amount} FLOW to IncrementFi in {execution_delay_seconds}s'
+            }
+        else:
+            app.logger.error(f"❌ Agent scheduling failed!")
+            app.logger.error(f"Error output: {result.stderr}")
+
+            cursor.execute("""
+                UPDATE AgentExecutions
+                SET status = 'failed',
+                    error_message = ?,
+                    updated_at = datetime('now')
+                WHERE execution_id = ?
+            """, (result.stderr, execution_id))
+
+            return {
+                'success': False,
+                'error': result.stderr,
+                'output': result.stdout
+            }
+
+    except subprocess.TimeoutExpired:
+        app.logger.error(f"⏱️ Agent scheduling timed out after 60 seconds")
+        return {'success': False, 'error': 'Transaction timed out'}
+    except Exception as e:
+        app.logger.error(f"💥 Error scheduling agent: {str(e)}")
+        import traceback
+        app.logger.error(traceback.format_exc())
+        return {'success': False, 'error': str(e)}
+
 def execute_vault_withdrawal_transaction(amount, league_id):
     """Execute the Cadence transaction to withdraw FLOW from IncrementFi vault."""
     import subprocess
@@ -3208,10 +3413,10 @@ def execute_payouts(league_id):
         return jsonify({'success': False, 'error': str(e)}), 500
     # Note: Using global connection, do not close it
 
-@app.route('/admin/league/<league_id>/payouts/reset', methods=['DELETE'])
+@app.route('/admin/league/<league_id>/end-season', methods=['POST'])
 @login_required
-def reset_payouts(league_id):
-    """Reset/delete payout records for a league (TESTING ONLY)."""
+def end_season_and_distribute(league_id):
+    """End season: withdraw from vault and distribute prizes to winners."""
     user = get_current_user()
 
     # Check if user is admin
@@ -3226,40 +3431,288 @@ def reset_payouts(league_id):
         # Get current season
         season_year = get_current_season()['current_year']
 
-        app.logger.info(f"🗑️  Resetting payout records for league {league_id}")
+        app.logger.info(f"🏁 Starting end-of-season process for league {league_id}")
 
-        # Delete PayoutDistributions first (foreign key constraint)
+        # Step 1: Check for vault deposit
         cursor.execute("""
-            DELETE FROM PayoutDistributions
-            WHERE payout_id IN (
-                SELECT payout_id FROM PayoutSchedules
-                WHERE sleeper_league_id = ?
-                AND season_year = ?
-            )
-        """, (league_id, season_year))
-        distributions_deleted = cursor.rowcount
+            SELECT ae.execution_id, ae.result_data, ae.status
+            FROM AgentExecutions ae
+            WHERE ae.agent_type = 'vault_deposit'
+            AND ae.execution_id LIKE ?
+            AND ae.status = 'completed'
+            ORDER BY ae.created_at DESC
+            LIMIT 1
+        """, (f'vault_deposit_{league_id}%',))
 
-        # Delete PayoutSchedules
+        vault_deposit = cursor.fetchone()
+        if not vault_deposit:
+            return jsonify({'success': False, 'error': 'No completed vault deposit found for this league'}), 400
+
+        # Step 2: Check if already withdrawn
         cursor.execute("""
-            DELETE FROM PayoutSchedules
+            SELECT execution_id FROM AgentExecutions
+            WHERE agent_type = 'vault_withdrawal'
+            AND execution_id LIKE ?
+            AND status = 'completed'
+        """, (f'vault_withdrawal_{league_id}%',))
+
+        existing_withdrawal = cursor.fetchone()
+        withdrawal_tx_id = None
+
+        if existing_withdrawal:
+            app.logger.info(f"   Vault already withdrawn for this league")
+            # Get the transaction ID from existing withdrawal
+            cursor.execute("""
+                SELECT result_data FROM AgentExecutions
+                WHERE execution_id = ?
+            """, (existing_withdrawal['execution_id'],))
+            withdrawal_data = json.loads(cursor.fetchone()['result_data'])
+            withdrawal_tx_id = withdrawal_data.get('transaction_id')
+        else:
+            # Execute vault withdrawal
+            app.logger.info(f"💰 Step 1/2: Withdrawing from IncrementFi vault...")
+
+            import json as json_module
+            deposit_data = json_module.loads(vault_deposit['result_data'])
+            withdrawal_amount = deposit_data.get('amount', 0)
+
+            withdrawal_id = f"vault_withdrawal_{league_id}_{season_year}_{int(time.time())}"
+
+            cursor.execute("""
+                INSERT INTO AgentExecutions (
+                    execution_id, agent_type, sleeper_league_id, season_year, execution_time, status, created_at, result_data
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                withdrawal_id,
+                'vault_withdrawal',
+                league_id,
+                season_year,
+                datetime.now().isoformat(),
+                'executing',
+                datetime.now().isoformat(),
+                json_module.dumps({
+                    'league_id': league_id,
+                    'season_year': season_year,
+                    'withdrawal_amount': withdrawal_amount,
+                    'currency': 'FLOW',
+                    'vault_address': '0x8aaca41f09eb1e3d'
+                })
+            ))
+            conn.commit()
+
+            tx_result = execute_vault_withdrawal_transaction(withdrawal_amount, league_id)
+
+            if not tx_result['success']:
+                cursor.execute("""
+                    UPDATE AgentExecutions
+                    SET status = 'failed',
+                        result_data = ?,
+                        updated_at = datetime('now')
+                    WHERE execution_id = ?
+                """, (json_module.dumps({
+                    'league_id': league_id,
+                    'error': tx_result.get('error'),
+                    'failed_at': datetime.now().isoformat()
+                }), withdrawal_id))
+                conn.commit()
+
+                return jsonify({'success': False, 'error': f"Vault withdrawal failed: {tx_result.get('error')}"}), 500
+
+            cursor.execute("""
+                UPDATE AgentExecutions
+                SET status = 'completed',
+                    result_data = ?,
+                    updated_at = datetime('now')
+                WHERE execution_id = ?
+            """, (json_module.dumps({
+                'league_id': league_id,
+                'season_year': season_year,
+                'withdrawal_amount': withdrawal_amount,
+                'currency': 'FLOW',
+                'vault_address': '0x8aaca41f09eb1e3d',
+                'transaction_id': tx_result.get('transaction_id'),
+                'completed_at': datetime.now().isoformat()
+            }), withdrawal_id))
+            conn.commit()
+
+            withdrawal_tx_id = tx_result.get('transaction_id')
+            app.logger.info(f"✅ Vault withdrawal completed: {withdrawal_tx_id}")
+
+        # Step 3: Check if prizes already distributed
+        cursor.execute("""
+            SELECT payout_id FROM PayoutSchedules
             WHERE sleeper_league_id = ?
             AND season_year = ?
+            AND payout_status = 'completed'
         """, (league_id, season_year))
-        schedules_deleted = cursor.rowcount
+
+        existing_payout = cursor.fetchone()
+        if existing_payout:
+            return jsonify({'success': False, 'error': 'Prizes already distributed for this league'}), 400
+
+        # Step 4: Execute prize distribution
+        app.logger.info(f"🏆 Step 2/2: Distributing prizes to winners...")
+
+        # Get placements and calculate distributions
+        cursor.execute("""
+            SELECT
+                lp.placement_type,
+                lp.roster_id,
+                r.owner_id,
+                u.wallet_address,
+                u.username
+            FROM LeaguePlacements lp
+            JOIN rosters r ON lp.roster_id = r.sleeper_roster_id AND lp.sleeper_league_id = r.sleeper_league_id
+            JOIN Users u ON r.owner_id = u.sleeper_user_id
+            WHERE lp.sleeper_league_id = ?
+            AND lp.season_year = ?
+            ORDER BY lp.final_rank
+        """, (league_id, season_year))
+
+        placements = cursor.fetchall()
+        if not placements:
+            return jsonify({'success': False, 'error': 'No placements found for this league'}), 400
+
+        # Get total prize pool
+        cursor.execute("""
+            SELECT result_data FROM AgentExecutions
+            WHERE agent_type = 'vault_deposit'
+            AND execution_id LIKE ?
+            AND status = 'completed'
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (f'vault_deposit_{league_id}%',))
+
+        vault_record = cursor.fetchone()
+        vault_data = json_module.loads(vault_record['result_data'])
+        total_prize_pool = vault_data.get('amount', 0)
+
+        # Calculate distributions
+        prize_splits = {
+            '1st_place': 0.50,
+            '2nd_place': 0.30,
+            '3rd_place': 0.10,
+            'regular_season_winner': 0.10
+        }
+
+        recipients = []
+        amounts = []
+        distributions_data = []
+
+        for placement in placements:
+            placement_type = placement['placement_type']
+            percentage = prize_splits.get(placement_type, 0)
+            amount = total_prize_pool * percentage
+
+            recipients.append(placement['wallet_address'])
+            amounts.append(amount)
+            distributions_data.append({
+                'wallet_address': placement['wallet_address'],
+                'username': placement['username'],
+                'placement_type': placement_type,
+                'amount': amount,
+                'percentage': percentage
+            })
+
+        # Create payout schedule record
+        payout_id = f"payout_{league_id}_{season_year}_{int(time.time())}"
+
+        cursor.execute("""
+            INSERT INTO PayoutSchedules (
+                payout_id, sleeper_league_id, season_year,
+                payout_date, payout_status, total_prize_pool,
+                standings_finalized, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            payout_id,
+            league_id,
+            season_year,
+            datetime.now().isoformat(),
+            'executing',
+            total_prize_pool,
+            1,
+            datetime.now().isoformat()
+        ))
+
+        # Create distribution records
+        for dist in distributions_data:
+            distribution_id = f"dist_{payout_id}_{dist['wallet_address']}"
+            cursor.execute("""
+                INSERT INTO PayoutDistributions (
+                    distribution_id, payout_id, wallet_address,
+                    payout_type, amount, percentage, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                distribution_id,
+                payout_id,
+                dist['wallet_address'],
+                dist['placement_type'],
+                dist['amount'],
+                dist['percentage'],
+                'pending',
+                datetime.now().isoformat()
+            ))
 
         conn.commit()
 
-        app.logger.info(f"✅ Deleted {distributions_deleted} distributions and {schedules_deleted} payout schedules")
+        # Execute the blockchain transaction
+        tx_result = execute_prize_distribution_transaction(recipients, amounts, league_id)
 
-        return jsonify({
-            'success': True,
-            'message': f'Deleted {schedules_deleted} payout schedule(s) and {distributions_deleted} distribution(s)',
-            'schedules_deleted': schedules_deleted,
-            'distributions_deleted': distributions_deleted
-        })
+        # Update records with result
+        if tx_result['success']:
+            cursor.execute("""
+                UPDATE PayoutSchedules
+                SET payout_status = 'completed',
+                    execution_date = ?,
+                    updated_at = datetime('now')
+                WHERE payout_id = ?
+            """, (datetime.now().isoformat(), payout_id))
+
+            cursor.execute("""
+                UPDATE PayoutDistributions
+                SET status = 'completed',
+                    transaction_id = ?,
+                    updated_at = datetime('now')
+                WHERE payout_id = ?
+            """, (tx_result.get('transaction_id'), payout_id))
+
+            conn.commit()
+
+            app.logger.info(f"✅ Prize distribution completed: {payout_id}")
+            app.logger.info(f"🔗 Distribution Transaction ID: {tx_result.get('transaction_id')}")
+
+            return jsonify({
+                'success': True,
+                'withdrawal_transaction_id': withdrawal_tx_id,
+                'distribution_transaction_id': tx_result.get('transaction_id'),
+                'total_distributed': total_prize_pool,
+                'distributions': distributions_data,
+                'payout_id': payout_id,
+                'message': 'Season ended successfully: vault withdrawn and prizes distributed'
+            })
+        else:
+            # Mark as failed
+            cursor.execute("""
+                UPDATE PayoutSchedules
+                SET payout_status = 'failed',
+                    updated_at = datetime('now')
+                WHERE payout_id = ?
+            """, (payout_id,))
+
+            cursor.execute("""
+                UPDATE PayoutDistributions
+                SET status = 'failed',
+                    error_message = ?,
+                    updated_at = datetime('now')
+                WHERE payout_id = ?
+            """, (tx_result.get('error'), payout_id))
+
+            conn.commit()
+
+            return jsonify({'success': False, 'error': f"Prize distribution failed: {tx_result.get('error')}"}), 500
 
     except Exception as e:
-        app.logger.error(f"Error resetting payouts for league {league_id}: {str(e)}")
+        app.logger.error(f"Error in end-season process for league {league_id}: {str(e)}")
         import traceback
         app.logger.error(traceback.format_exc())
         return jsonify({'success': False, 'error': str(e)}), 500

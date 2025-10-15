@@ -149,51 +149,6 @@ const AdminDashboard = ({ user }) => {
     }
   };
 
-  const handleResetPayouts = async () => {
-    if (!selectedLeague) {
-      setPayoutError('Please select a league');
-      return;
-    }
-
-    if (!window.confirm('⚠️ This will DELETE all payout records for this league from the database. This is for TESTING only. Continue?')) {
-      return;
-    }
-
-    setPayoutLoading(true);
-    setPayoutError(null);
-    setPayoutSuccess(null);
-
-    try {
-      const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch(`${API_BASE_URL}/admin/league/${selectedLeague}/payouts/reset`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        setPayoutSuccess({
-          message: 'Payout records deleted successfully! You can now test prize distribution again.',
-          transactionId: null,
-          payoutId: null,
-          totalDistributed: 0,
-          distributions: []
-        });
-        setPayoutPreview(null);
-      } else {
-        setPayoutError(data.error || 'Failed to reset payouts');
-      }
-    } catch (error) {
-      console.error('Error resetting payouts:', error);
-      setPayoutError('Network error resetting payouts');
-    } finally {
-      setPayoutLoading(false);
-    }
-  };
 
   if (loading) {
     return <div className="admin-loading">Verifying admin access...</div>;
@@ -392,15 +347,6 @@ const AdminDashboard = ({ user }) => {
                   className="btn-execute"
                 >
                   {payoutLoading ? 'Executing...' : 'Execute Prize Distribution'}
-                </button>
-
-                <button
-                  onClick={handleResetPayouts}
-                  disabled={!selectedLeague || payoutLoading}
-                  className="btn-reset"
-                  title="Delete payout records for testing"
-                >
-                  {payoutLoading ? 'Resetting...' : 'Reset Payouts (Testing)'}
                 </button>
               </div>
             </div>

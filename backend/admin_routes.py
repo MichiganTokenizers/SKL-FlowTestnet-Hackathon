@@ -1031,4 +1031,104 @@ def register_admin_routes(app):
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    @app.route('/admin/league/<league_id>/schedule-agent', methods=['POST'])
+    @admin_required
+    def schedule_vault_deposit_agent_endpoint(league_id):
+        """Schedule a Flow Agent to automatically deposit vault funds (Forte upgrade)"""
+        try:
+            from app import schedule_vault_deposit_agent
+
+            data = request.json
+            season_year = data.get('season_year', 2025)
+            execution_delay_seconds = data.get('execution_delay_seconds', 3600)  # Default: 1 hour
+
+            # Validate execution delay
+            if execution_delay_seconds < 60:
+                return jsonify({'success': False, 'error': 'Execution delay must be at least 60 seconds'}), 400
+
+            if execution_delay_seconds > 604800:  # 7 days
+                return jsonify({'success': False, 'error': 'Execution delay cannot exceed 7 days (604800 seconds)'}), 400
+
+            conn = sqlite3.connect('keeper.db')
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # Schedule the agent
+            result = schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds, cursor)
+
+            conn.commit()
+            conn.close()
+
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'execution_id': result['execution_id'],
+                    'amount': result['amount'],
+                    'schedule_transaction_id': result.get('schedule_transaction_id'),
+                    'execution_delay_seconds': result['execution_delay_seconds'],
+                    'message': result['message']
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Unknown error scheduling agent')
+                }), 500
+
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
+    @app.route('/admin/league/<league_id>/agent-status', methods=['GET'])
+    @admin_required
+    def get_agent_status(league_id):
+        """Get status of scheduled agents for a league"""
+        try:
+            season_year = request.args.get('season_year', 2025)
+
+            conn = sqlite3.connect('keeper.db')
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # Get all agent executions for this league
+            cursor.execute("""
+                SELECT
+                    execution_id,
+                    agent_type,
+                    status,
+                    trigger_time,
+                    execution_time,
+                    result_data,
+                    error_message,
+                    created_at,
+                    updated_at
+                FROM AgentExecutions
+                WHERE sleeper_league_id = ?
+                    AND season_year = ?
+                    AND agent_type = 'vault_deposit_agent'
+                ORDER BY created_at DESC
+            """, (league_id, season_year))
+
+            agents = []
+            for row in cursor.fetchall():
+                agent_data = dict(row)
+                # Parse result_data JSON
+                if agent_data['result_data']:
+                    try:
+                        agent_data['result_data'] = json.loads(agent_data['result_data'])
+                    except:
+                        pass
+                agents.append(agent_data)
+
+            conn.close()
+
+            return jsonify({
+                'success': True,
+                'league_id': league_id,
+                'season_year': season_year,
+                'agents': agents,
+                'count': len(agents)
+            })
+
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     print("Admin routes registered successfully")

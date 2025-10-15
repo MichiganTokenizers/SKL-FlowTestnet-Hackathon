@@ -243,6 +243,12 @@
   background: white;
   cursor: pointer;
   transition: border-color 0.3s;
+  color: #000;
+}
+
+.league-select option {
+  color: #000;
+  background: white;
 }
 
 .league-select:hover {
