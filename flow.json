@@ -5,6 +5,11 @@
 		"testing": "127.0.0.1:3569",
 		"testnet": "access.devnet.nodes.onflow.org:9000"
 	},
+	"contracts": {
+		"SKLFeeCollectionSource": "./backend/cadence/contracts/SKLFeeCollectionSource.cdc",
+		"IncrementFiStakingSink": "./backend/cadence/contracts/IncrementFiStakingSink.cdc",
+		"IncrementFiStakingV2": "./backend/cadence/contracts/IncrementFiStakingV2.cdc"
+	},
 	"accounts": {
 		"emulator-account": {
 			"address": "f8d6e0586b0a20c7",
@@ -26,7 +31,11 @@
 	},
 	"deployments": {
 		"testnet": {
-			"testnet-account": []
+			"testnet-account": [
+				"SKLFeeCollectionSource",
+				"IncrementFiStakingSink",
+				"IncrementFiStakingV2"
+			]
 		}
 	}
 }

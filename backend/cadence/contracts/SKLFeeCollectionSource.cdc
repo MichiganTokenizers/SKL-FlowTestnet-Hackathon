@@ -46,7 +46,7 @@ access(all) contract SKLFeeCollectionSource {
         access(all) let leagueId: String
 
         /// Reference to the SKL admin vault where fees are collected
-        access(self) let vaultCap: Capability<&{FungibleToken.Provider, FungibleToken.Balance}>
+        access(self) let vaultCap: Capability<auth(FungibleToken.Withdraw) &{FungibleToken.Provider, FungibleToken.Balance}>
 
         /// Total number of teams in the league
         access(self) var totalTeams: Int
@@ -62,7 +62,7 @@ access(all) contract SKLFeeCollectionSource {
 
         init(
             leagueId: String,
-            vaultCap: Capability<&{FungibleToken.Provider, FungibleToken.Balance}>,
+            vaultCap: Capability<auth(FungibleToken.Withdraw) &{FungibleToken.Provider, FungibleToken.Balance}>,
             totalTeams: Int,
             paidTeams: Int,
             collectedAmount: UFix64
@@ -76,7 +76,7 @@ access(all) contract SKLFeeCollectionSource {
         }
 
         /// Get the total amount available to source
-        access(all) fun getAvailableAmount(): UFix64 {
+        access(all) view fun getAvailableAmount(): UFix64 {
             if !self.isReady() {
                 return 0.0
             }
@@ -84,7 +84,7 @@ access(all) contract SKLFeeCollectionSource {
         }
 
         /// Check if all fees are collected and ready to source
-        access(all) fun isReady(): Bool {
+        access(all) view fun isReady(): Bool {
             return self.allFeesPaid && self.collectedAmount > 0.0
         }
 
@@ -151,7 +151,7 @@ access(all) contract SKLFeeCollectionSource {
     /// Create a new FeeCollectionSource for a league
     access(all) fun createSource(
         leagueId: String,
-        vaultCap: Capability<&{FungibleToken.Provider, FungibleToken.Balance}>,
+        vaultCap: Capability<auth(FungibleToken.Withdraw) &{FungibleToken.Provider, FungibleToken.Balance}>,
         totalTeams: Int,
         paidTeams: Int,
         collectedAmount: UFix64

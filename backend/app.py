@@ -2625,11 +2625,11 @@ def execute_vault_deposit(league_id, season_year, cursor):
         app.logger.error(traceback.format_exc())
         return {'success': False, 'error': str(e)}
 
-def schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds, cursor):
-    """Schedule a Flow Agent to automatically deposit vault funds at a future time.
+def execute_staking_transaction(league_id, season_year, pool_id, cursor):
+    """Execute IncrementFi staking transaction for collected league fees.
 
-    This uses the Forte upgrade's Agents & Actions for decentralized automation.
-    The agent runs on-chain without requiring the backend server to be running.
+    Uses Flow Actions to stake league fees directly to IncrementFi pool.
+    Source (fee collection) → Sink (staking) in single atomic transaction.
     """
     import subprocess
 
@@ -2659,15 +2659,15 @@ def schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds
         paid_teams = cursor.fetchone()['paid_teams']
 
         if total_amount <= 0:
-            app.logger.error(f"Cannot schedule agent: No funds collected for league {league_id}")
+            app.logger.error(f"Cannot stake: No funds collected for league {league_id}")
             return {'success': False, 'error': 'No funds collected'}
 
-        app.logger.info(f"🤖 Scheduling Flow Agent for league {league_id}")
-        app.logger.info(f"💰 Total collected: {total_amount} FLOW from {paid_teams}/{total_teams} teams")
-        app.logger.info(f"⏰ Agent will execute in {execution_delay_seconds} seconds")
+        app.logger.info(f"🎯 Staking league fees to IncrementFi for {league_id}")
+        app.logger.info(f"💰 Total to stake: {total_amount} FLOW from {paid_teams}/{total_teams} teams")
+        app.logger.info(f"🏦 Pool ID: {pool_id}")
 
-        # Create agent execution record
-        execution_id = f"agent_{league_id}_{season_year}_{int(time.time())}"
+        # Create execution record
+        execution_id = f"staking_{league_id}_{season_year}_{int(time.time())}"
 
         cursor.execute("""
             INSERT INTO AgentExecutions (
@@ -2676,75 +2676,39 @@ def schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds
             ) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
         """, (
             execution_id,
-            'vault_deposit_agent',
+            'staking_deposit',
             league_id,
             season_year,
-            'scheduled',
+            'executing',
             datetime.now().isoformat(),
             json.dumps({
                 'amount': total_amount,
                 'total_teams': total_teams,
                 'paid_teams': paid_teams,
                 'currency': 'FLOW',
-                'vault_address': '0x8aaca41f09eb1e3d',
-                'vault_protocol': 'increment_fi',
-                'execution_delay_seconds': execution_delay_seconds,
-                'scheduled_via': 'flow_agent_forte',
-                'trigger_reason': 'manual_admin_schedule'
+                'pool_id': pool_id,
+                'staking_protocol': 'increment_fi',
+                'trigger_reason': 'all_fees_collected'
             })
         ))
 
-        # Path to the Cadence scheduling transaction
-        script_path = os.path.join(os.path.dirname(__file__), 'cadence', 'transactions', 'schedule_vault_deposit_agent.cdc')
+        # Path to the Cadence staking transaction (relative to project root)
+        # Using V2 with real IncrementFi liquid staking
+        script_path = os.path.join(os.path.dirname(__file__), 'cadence', 'transactions', 'stake_league_fees_v2.cdc')
 
-        # IncrementFi FLOW Money Market pool address on testnet
-        pool_address = '0x8aaca41f09eb1e3d'
+        # Project root directory (where flow.json is located)
+        project_root = os.path.dirname(os.path.dirname(__file__))
 
         # Prepare transaction arguments
         args = [
-            {
-                "type": "String",
-                "value": league_id
-            },
-            {
-                "type": "Address",
-                "value": pool_address
-            },
-            {
-                "type": "Int",
-                "value": str(total_teams)
-            },
-            {
-                "type": "Int",
-                "value": str(paid_teams)
-            },
-            {
-                "type": "UFix64",
-                "value": str(total_amount)
-            },
-            {
-                "type": "UFix64",
-                "value": str(float(execution_delay_seconds))
-            },
-            {
-                "type": "String",
-                "value": "Medium"
-            },
-            {
-                "type": "UInt64",
-                "value": "1000"
-            },
-            {
-                "type": "UFix64",
-                "value": "1.0"  # Fee amount for scheduled transaction
-            },
-            {
-                "type": "UFix64",
-                "value": "0.0"  # Capacity limit (0 = unlimited)
-            }
+            {"type": "String", "value": league_id},
+            {"type": "UInt64", "value": str(pool_id)},
+            {"type": "Int", "value": str(total_teams)},
+            {"type": "Int", "value": str(paid_teams)},
+            {"type": "UFix64", "value": str(total_amount)}
         ]
 
-        # Execute the scheduling transaction
+        # Execute the staking transaction from project root
         result = subprocess.run(
             [
                 'flow', 'transactions', 'send',
@@ -2755,14 +2719,15 @@ def schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds
             ],
             capture_output=True,
             text=True,
-            timeout=60
+            timeout=60,
+            cwd=project_root  # Run from project root where flow.json exists
         )
 
         if result.returncode == 0:
-            app.logger.info(f"✅ Agent scheduled successfully!")
+            app.logger.info(f"✅ Staking transaction successful!")
             app.logger.info(f"Transaction output: {result.stdout}")
 
-            # Parse transaction ID from output
+            # Parse transaction ID
             tx_id = None
             for line in result.stdout.split('\n'):
                 if 'Transaction ID' in line or 'ID:' in line:
@@ -2772,8 +2737,9 @@ def schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds
             # Update execution record
             cursor.execute("""
                 UPDATE AgentExecutions
-                SET status = 'scheduled',
+                SET status = 'completed',
                     result_data = ?,
+                    execution_time = ?,
                     updated_at = datetime('now')
                 WHERE execution_id = ?
             """, (json.dumps({
@@ -2781,31 +2747,28 @@ def schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds
                 'total_teams': total_teams,
                 'paid_teams': paid_teams,
                 'currency': 'FLOW',
-                'vault_address': pool_address,
-                'vault_protocol': 'increment_fi',
-                'execution_delay_seconds': execution_delay_seconds,
-                'schedule_transaction_id': tx_id,
-                'scheduled_via': 'flow_agent_forte',
-                'trigger_reason': 'manual_admin_schedule',
-                'scheduled_at': datetime.now().isoformat()
-            }), execution_id))
+                'pool_id': pool_id,
+                'staking_protocol': 'increment_fi',
+                'transaction_id': tx_id,
+                'completed_at': datetime.now().isoformat()
+            }), datetime.now().isoformat(), execution_id))
 
-            app.logger.info(f"🤖 Flow Agent scheduled: {execution_id}")
-            app.logger.info(f"💰 {total_amount} FLOW will be deposited to IncrementFi")
+            app.logger.info(f"✅ Staking completed: {execution_id}")
+            app.logger.info(f"💰 {total_amount} FLOW staked to IncrementFi pool {pool_id}")
             if tx_id:
-                app.logger.info(f"🔗 Schedule Transaction ID: {tx_id}")
+                app.logger.info(f"🔗 Transaction ID: {tx_id}")
 
             return {
                 'success': True,
                 'execution_id': execution_id,
                 'amount': total_amount,
-                'schedule_transaction_id': tx_id,
-                'execution_delay_seconds': execution_delay_seconds,
-                'message': f'Flow Agent scheduled: {total_amount} FLOW to IncrementFi in {execution_delay_seconds}s'
+                'transaction_id': tx_id,
+                'pool_id': pool_id,
+                'message': f'Staked {total_amount} FLOW to IncrementFi pool {pool_id}'
             }
         else:
-            app.logger.error(f"❌ Agent scheduling failed!")
-            app.logger.error(f"Error output: {result.stderr}")
+            app.logger.error(f"❌ Staking transaction failed!")
+            app.logger.error(f"Error: {result.stderr}")
 
             cursor.execute("""
                 UPDATE AgentExecutions
@@ -2822,10 +2785,10 @@ def schedule_vault_deposit_agent(league_id, season_year, execution_delay_seconds
             }
 
     except subprocess.TimeoutExpired:
-        app.logger.error(f"⏱️ Agent scheduling timed out after 60 seconds")
+        app.logger.error(f"⏱️ Staking transaction timed out after 60 seconds")
         return {'success': False, 'error': 'Transaction timed out'}
     except Exception as e:
-        app.logger.error(f"💥 Error scheduling agent: {str(e)}")
+        app.logger.error(f"💥 Error executing staking: {str(e)}")
         import traceback
         app.logger.error(traceback.format_exc())
         return {'success': False, 'error': str(e)}
@@ -3805,17 +3768,22 @@ def record_payment_for_league(league_id):
 
         app.logger.info(f"Payment recorded for wallet {payer_wallet_address} in league {league_id}: Amount={transaction_amount} {transaction_currency}, TxID={transaction_id}. New status: {new_payment_status}, Total Paid: {new_paid_amount}")
 
-        # Check if all fees are now paid and trigger vault deposit if needed
-        vault_deposit_result = None
+        # Check if all fees are now paid and trigger staking if needed
+        staking_result = None
         if check_all_fees_paid(league_id, current_season_year, cursor):
-            app.logger.info(f"🎉 All league fees collected for {league_id}! Triggering vault deposit...")
-            vault_deposit_result = execute_vault_deposit(league_id, current_season_year, cursor)
+            app.logger.info(f"🎉 All league fees collected for {league_id}! Triggering IncrementFi staking...")
+            staking_result = execute_staking_transaction(
+                league_id,
+                current_season_year,
+                pool_id=198,  # IncrementFi FLOW staking pool
+                cursor=cursor
+            )
             conn.commit()  # Commit the agent execution record
 
-            if vault_deposit_result and vault_deposit_result.get('success'):
-                app.logger.info(f"✅ Vault deposit triggered successfully: {vault_deposit_result.get('message')}")
+            if staking_result and staking_result.get('success'):
+                app.logger.info(f"✅ Staking triggered successfully: {staking_result.get('message')}")
             else:
-                app.logger.error(f"❌ Failed to trigger vault deposit: {vault_deposit_result.get('error') if vault_deposit_result else 'Unknown error'}")
+                app.logger.error(f"❌ Failed to trigger staking: {staking_result.get('error') if staking_result else 'Unknown error'}")
 
         response_data = {
             'success': True,

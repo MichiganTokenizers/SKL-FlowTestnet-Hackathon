@@ -16,6 +16,12 @@ const AdminDashboard = ({ user }) => {
   const [payoutError, setPayoutError] = useState(null);
   const [payoutSuccess, setPayoutSuccess] = useState(null);
 
+  // Staking testing state
+  const [stakingLeague, setStakingLeague] = useState('');
+  const [stakingLoading, setStakingLoading] = useState(false);
+  const [stakingError, setStakingError] = useState(null);
+  const [stakingSuccess, setStakingSuccess] = useState(null);
+
   useEffect(() => {
     verifyAdmin();
   }, [user]);
@@ -146,6 +152,55 @@ const AdminDashboard = ({ user }) => {
       setPayoutError('Network error executing payouts');
     } finally {
       setPayoutLoading(false);
+    }
+  };
+
+  const handleExecuteStaking = async () => {
+    if (!stakingLeague) {
+      setStakingError('Please select a league');
+      return;
+    }
+
+    if (!window.confirm('⚠️ WARNING: This will execute a REAL blockchain transaction to stake league fees to IncrementFi. Are you sure you want to continue?')) {
+      return;
+    }
+
+    setStakingLoading(true);
+    setStakingError(null);
+    setStakingSuccess(null);
+
+    try {
+      const sessionToken = localStorage.getItem('sessionToken');
+      const response = await fetch(`${API_BASE_URL}/admin/league/${stakingLeague}/stake-fees`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          season_year: 2025,
+          pool_id: 198  // IncrementFi FLOW staking pool
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setStakingSuccess({
+          message: 'Staking transaction executed successfully!',
+          transactionId: data.transaction_id,
+          executionId: data.execution_id,
+          amount: data.amount,
+          poolId: data.pool_id
+        });
+      } else {
+        setStakingError(data.error || 'Failed to execute staking');
+      }
+    } catch (error) {
+      console.error('Error executing staking:', error);
+      setStakingError('Network error executing staking transaction');
+    } finally {
+      setStakingLoading(false);
     }
   };
 
@@ -294,7 +349,96 @@ const AdminDashboard = ({ user }) => {
         {activeTab === 'automation' && (
           <div className="automation-tab">
             <h2>Automation & Agents</h2>
-            <p className="coming-soon">Coming soon: Create and manage Flow Agents for automated tasks</p>
+
+            <div className="staking-section">
+              <h3>🎯 Test IncrementFi Staking (Flow Actions)</h3>
+              <p className="section-description">
+                Test the automated staking of league fees to IncrementFi using Flow Actions connectors.
+                This demonstrates the Source → Sink pattern for DeFi automation.
+              </p>
+
+              <div className="staking-controls">
+                <div className="form-group">
+                  <label htmlFor="staking-league-select">Select League:</label>
+                  <select
+                    id="staking-league-select"
+                    value={stakingLeague}
+                    onChange={(e) => {
+                      setStakingLeague(e.target.value);
+                      setStakingError(null);
+                      setStakingSuccess(null);
+                    }}
+                    className="league-select"
+                  >
+                    <option value="">-- Select a league --</option>
+                    {leagues.map(league => (
+                      <option key={league.sleeper_league_id} value={league.sleeper_league_id}>
+                        {league.name} ({league.sleeper_league_id}) - {league.teams_paid || 0}/{league.total_teams || 0} paid
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="button-group">
+                  <button
+                    onClick={handleExecuteStaking}
+                    disabled={!stakingLeague || stakingLoading}
+                    className="btn-execute"
+                  >
+                    {stakingLoading ? 'Staking...' : '🚀 Execute Staking Transaction'}
+                  </button>
+                </div>
+              </div>
+
+              {stakingError && (
+                <div className="payout-error">
+                  <strong>❌ Error:</strong> {stakingError}
+                </div>
+              )}
+
+              {stakingSuccess && (
+                <div className="payout-success">
+                  <h3>✅ {stakingSuccess.message}</h3>
+                  <div className="success-details">
+                    <p><strong>Transaction ID:</strong> {stakingSuccess.transactionId}</p>
+                    <p><strong>Execution ID:</strong> {stakingSuccess.executionId}</p>
+                    <p><strong>Amount Staked:</strong> {stakingSuccess.amount} FLOW</p>
+                    <p><strong>IncrementFi Pool ID:</strong> {stakingSuccess.poolId}</p>
+                    <a
+                      href={`https://testnet.flowscan.io/transaction/${stakingSuccess.transactionId}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="view-transaction"
+                    >
+                      View on Flow Testnet Explorer →
+                    </a>
+                  </div>
+
+                  <div className="staking-info">
+                    <h4>📊 What just happened:</h4>
+                    <ul>
+                      <li>✅ SKLFeeCollectionSource aggregated {stakingSuccess.amount} FLOW from league fees</li>
+                      <li>✅ IncrementFiStakingSink received the tokens via Flow Actions</li>
+                      <li>✅ Tokens staked to IncrementFi pool #{stakingSuccess.poolId}</li>
+                      <li>✅ League treasury will now earn staking rewards!</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="automation-info">
+              <h4>📝 About Flow Actions Staking</h4>
+              <p>
+                This feature demonstrates the <strong>Flow Actions pattern</strong> from the Forte upgrade:
+              </p>
+              <ul>
+                <li><strong>Source:</strong> SKLFeeCollectionSource - Aggregates collected league fees</li>
+                <li><strong>Sink:</strong> IncrementFiStakingSink - Stakes tokens to IncrementFi</li>
+                <li><strong>Composability:</strong> Single transaction combines both actions atomically</li>
+                <li><strong>Automation:</strong> Can be triggered automatically when all fees are paid</li>
+              </ul>
+            </div>
           </div>
         )}
 
