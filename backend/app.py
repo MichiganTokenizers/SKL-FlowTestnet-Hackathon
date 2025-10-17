@@ -2693,16 +2693,19 @@ def execute_staking_transaction(league_id, season_year, pool_id, cursor):
         ))
 
         # Path to the Cadence staking transaction (relative to project root)
-        # Using V2 with real IncrementFi liquid staking
-        script_path = os.path.join(os.path.dirname(__file__), 'cadence', 'transactions', 'stake_league_fees_v2.cdc')
+        # Using native Flow staking (bypasses IncrementFi epoch sync issues)
+        script_path = os.path.join(os.path.dirname(__file__), 'cadence', 'transactions', 'stake_league_fees_native.cdc')
 
         # Project root directory (where flow.json is located)
         project_root = os.path.dirname(os.path.dirname(__file__))
 
-        # Prepare transaction arguments
+        # Use a default validator node ID (verification node with active stake)
+        node_id = "6a86dbcd3bced438480e626fd56e2d4fb8811222671cc24949dcde7f6817123b"
+
+        # Prepare transaction arguments for native staking
         args = [
             {"type": "String", "value": league_id},
-            {"type": "UInt64", "value": str(pool_id)},
+            {"type": "String", "value": node_id},  # Node ID instead of pool ID
             {"type": "Int", "value": str(total_teams)},
             {"type": "Int", "value": str(paid_teams)},
             {"type": "UFix64", "value": str(total_amount)}

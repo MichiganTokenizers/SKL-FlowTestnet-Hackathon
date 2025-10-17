@@ -8,7 +8,8 @@
 	"contracts": {
 		"SKLFeeCollectionSource": "./backend/cadence/contracts/SKLFeeCollectionSource.cdc",
 		"IncrementFiStakingSink": "./backend/cadence/contracts/IncrementFiStakingSink.cdc",
-		"IncrementFiStakingV2": "./backend/cadence/contracts/IncrementFiStakingV2.cdc"
+		"IncrementFiStakingV2": "./backend/cadence/contracts/IncrementFiStakingV2.cdc",
+		"FlowNativeStakingSink": "./backend/cadence/contracts/FlowNativeStakingSink.cdc"
 	},
 	"accounts": {
 		"emulator-account": {
@@ -34,7 +35,8 @@
 			"testnet-account": [
 				"SKLFeeCollectionSource",
 				"IncrementFiStakingSink",
-				"IncrementFiStakingV2"
+				"IncrementFiStakingV2",
+				"FlowNativeStakingSink"
 			]
 		}
 	}

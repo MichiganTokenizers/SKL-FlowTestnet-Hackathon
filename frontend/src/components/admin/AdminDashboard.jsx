@@ -161,7 +161,7 @@ const AdminDashboard = ({ user }) => {
       return;
     }
 
-    if (!window.confirm('⚠️ WARNING: This will execute a REAL blockchain transaction to stake league fees to IncrementFi. Are you sure you want to continue?')) {
+    if (!window.confirm('⚠️ WARNING: This will execute a REAL blockchain transaction to stake league fees to a Flow validator node. Are you sure you want to continue?')) {
       return;
     }
 
@@ -178,8 +178,7 @@ const AdminDashboard = ({ user }) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          season_year: 2025,
-          pool_id: 198  // IncrementFi FLOW staking pool
+          season_year: 2025
         })
       });
 
@@ -191,7 +190,7 @@ const AdminDashboard = ({ user }) => {
           transactionId: data.transaction_id,
           executionId: data.execution_id,
           amount: data.amount,
-          poolId: data.pool_id
+          nodeId: data.node_id
         });
       } else {
         setStakingError(data.error || 'Failed to execute staking');
@@ -351,9 +350,9 @@ const AdminDashboard = ({ user }) => {
             <h2>Automation & Agents</h2>
 
             <div className="staking-section">
-              <h3>🎯 Test IncrementFi Staking (Flow Actions)</h3>
+              <h3>🎯 Test Native Flow Staking (Flow Actions)</h3>
               <p className="section-description">
-                Test the automated staking of league fees to IncrementFi using Flow Actions connectors.
+                Test the automated staking of league fees to Flow validator nodes using Flow Actions connectors.
                 This demonstrates the Source → Sink pattern for DeFi automation.
               </p>
 

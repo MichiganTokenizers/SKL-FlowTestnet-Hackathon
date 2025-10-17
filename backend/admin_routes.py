@@ -1131,4 +1131,43 @@ def register_admin_routes(app):
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)}), 500
 
+    @app.route('/admin/league/<league_id>/stake-fees', methods=['POST'])
+    @admin_required
+    def stake_league_fees_endpoint(league_id):
+        """Execute staking transaction for league fees (IncrementFi)"""
+        try:
+            from app import execute_staking_transaction
+
+            data = request.json
+            season_year = data.get('season_year', 2025)
+            pool_id = data.get('pool_id', 198)  # Default FLOW pool on IncrementFi
+
+            conn = sqlite3.connect('keeper.db')
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            # Execute staking
+            result = execute_staking_transaction(league_id, season_year, pool_id, cursor)
+
+            conn.commit()
+            conn.close()
+
+            if result['success']:
+                return jsonify({
+                    'success': True,
+                    'execution_id': result['execution_id'],
+                    'amount': result['amount'],
+                    'transaction_id': result.get('transaction_id'),
+                    'pool_id': result['pool_id'],
+                    'message': result['message']
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': result.get('error', 'Unknown error')
+                }), 500
+
+        except Exception as e:
+            return jsonify({'success': False, 'error': str(e)}), 500
+
     print("Admin routes registered successfully")
